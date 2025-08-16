@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Lesson, LessonContent } from '../types';
 import type { Point, QuestionBlock, Food } from './types';
 import { COLS, ROWS, COLORS } from './constants';
@@ -27,7 +27,56 @@ export function useSnakeLogic({ lesson, courseId, completedLessons, setCompleted
   const base = Number.isFinite(requested) && requested > 0 ? requested : defaultByDiff;
   const initialSpeed: number = Math.min(MAX_TICK, Math.max(MIN_TICK, base));
 
-  const blocks = Array.isArray(content.blocks) ? (content.blocks as QuestionBlock[]) : [];
+  // Baue Frageblöcke mit robuster Erkennung:
+  // 1) content.blocks (kanonisch)
+  // 2) content.questions (legacy: { question/prompt/title, answers/options, correct/correctIndex })
+  // 3) lesson.questions (MC-Form: allAnswers + correctAnswer(s))
+  const blocks: QuestionBlock[] = useMemo(() => {
+    const fromContent = Array.isArray((content as any).blocks) ? ((content as any).blocks as QuestionBlock[]) : [];
+    if (fromContent && fromContent.length) return fromContent;
+
+    // 2) content.questions
+    const cq = Array.isArray((content as any)?.questions) ? ((content as any).questions as Array<Record<string, unknown>>) : [];
+    if (cq.length) {
+      const toText = (v: unknown) => (typeof v === 'string' ? v : String(v ?? ''));
+      const builtFromContentQs: QuestionBlock[] = cq.map((raw) => {
+        const question = toText((raw as any).question ?? (raw as any).prompt ?? (raw as any).title).trim();
+        const answersArr = Array.isArray((raw as any).answers) ? (raw as any).answers
+          : (Array.isArray((raw as any).options) ? (raw as any).options : (Array.isArray((raw as any).allAnswers) ? (raw as any).allAnswers : []));
+        const answers = (answersArr as unknown[]).map(toText).map(s=>s.trim()).filter(Boolean).slice(0,4);
+        let correctIdx: number | null = null;
+        const cIdx = (raw as any).correctIndex ?? (raw as any).correct;
+        if (typeof cIdx === 'number' && Number.isFinite(cIdx)) correctIdx = Math.max(0, Math.min(answers.length-1, Math.floor(cIdx)));
+        if (correctIdx == null) {
+          const corrList = Array.isArray((raw as any).correctAnswers) ? (raw as any).correctAnswers as unknown[]
+            : ((raw as any).correctAnswer ? [(raw as any).correctAnswer] : []);
+          const corrText = (corrList as unknown[]).map(toText).map(s=>s.trim()).filter(Boolean);
+          const found = answers.findIndex(a => corrText.includes(a));
+          correctIdx = found >= 0 ? found : 0;
+        }
+        return { question, answers, correct: Math.max(0, Math.min(answers.length-1, correctIdx)) } as QuestionBlock;
+      }).filter(b => b.question && b.answers.length >= 2);
+      if (builtFromContentQs.length) return builtFromContentQs;
+    }
+
+    // 3) lesson.questions (MC-Form)
+    const qs = Array.isArray((lesson as any)?.questions) ? ((lesson as any).questions as Array<Record<string, unknown>>) : [];
+    if (qs.length) {
+      const dedupe = (arr: unknown[]) => Array.from(new Set((arr||[]).map(v=>String(v??'').trim()))).filter(Boolean) as string[];
+      const built: QuestionBlock[] = qs.map((qRaw) => {
+        const question = String((qRaw.question ?? '') as string).trim();
+        const all = Array.isArray(qRaw.allAnswers) ? dedupe(qRaw.allAnswers as unknown[]) : [];
+        const corr = Array.isArray(qRaw.correctAnswers) ? dedupe(qRaw.correctAnswers as unknown[]) : (qRaw.correctAnswer ? dedupe([qRaw.correctAnswer]) : []);
+        // Index der ersten korrekten Antwort in allAnswers, sonst 0
+        const idx = all.findIndex(a => corr.includes(a));
+        const correct = idx >= 0 ? idx : 0;
+        const answers = all.slice(0,4);
+        return { question, answers, correct };
+      }).filter(b => b.question && Array.isArray(b.answers) && b.answers.length >= 2);
+      if (built.length) return built;
+    }
+    return [];
+  }, [content, lesson]);
 
   const [snake, setSnake] = useState<Point[]>([{ x: 5, y: 8 }]);
   const [dir, setDir] = useState<Point>({ x: 1, y: 0 });

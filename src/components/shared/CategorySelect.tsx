@@ -2,7 +2,7 @@
 import React from 'react';
 
 export const CATEGORY_OPTIONS = [
-  'Mathematik','Musik','Deutsch','Englisch','Geographie','Geschichte','Physik','Chemie','Biologie','Kunst','sonstiges'
+  'Mathematik','Musik','Deutsch','Englisch','Geographie','Geschichte','Physik','Chemie','Biologie','Kunst','Informatik','sonstiges'
 ] as const;
 
 interface Props {

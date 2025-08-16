@@ -266,8 +266,8 @@ function CreateLessonTab({ courseId, onLessonCreated: _onLessonCreated }: { cour
     { type: 'memory', name: '🧠 Memory', description: 'Paare von Karten (Text/Bild/Audio) finden' },
     { type: 'lueckentext', name: '🧩 Lückentext', description: 'Markdown mit *Antwort*-Lücken (Input oder Drag)' },
     { type: 'ordering', name: '🔢 Reihenfolge', description: 'Schritte/Ereignisse in korrekte Reihenfolge bringen' },
-    { type: 'text-answer', name: '✍️ Text-Antwort', description: 'Freitext-Antwort mit Teilantworten & Case-Sensitivity' },
-    { type: 'snake', name: '🐍 Snake', description: 'Minigame – erreiche Punkteziel für Abschluss' }
+  { type: 'text-answer', name: '✍️ Text-Antwort', description: 'Freitext-Antwort mit Teilantworten & Case-Sensitivity' },
+  { type: 'minigame', name: '🎮 Minigame', description: 'Erreiche das Punkteziel – Spieltyp wählbar (Snake, Auto, Flugzeug, PacMan, Space Impact)' }
   ];
 
   return (
@@ -381,6 +381,7 @@ function getLessonTypeIcon(type: string) {
     case 'lueckentext': return '🧩';
     case 'ordering': return '🔢';
     case 'text-answer': return '✍️';
+  case 'minigame': return '🎮';
     default: return '📦';
   }
 }
@@ -397,6 +398,7 @@ function getLessonTypeName(type: string) {
     case 'lueckentext': return 'Lückentext';
     case 'ordering': return 'Reihenfolge';
     case 'text-answer': return 'Text-Antwort';
+  case 'minigame': return 'Minigame';
     default: return type;
   }
 }

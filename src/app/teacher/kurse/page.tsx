@@ -9,7 +9,7 @@ interface TeacherClass { _id:string; name:string; courseAccess?: 'class'|'all'; 
 interface CourseDB { _id:string; title:string; description?:string; category?:string; isPublished?:boolean; author?:string; }
 
 const CATEGORIES = [
-  "Mathematik","Musik","Deutsch","Englisch","Geographie","Geschichte","Physik","Chemie","Biologie","Kunst","sonstiges"
+  "Mathematik","Musik","Deutsch","Englisch","Geographie","Geschichte","Physik","Chemie","Biologie","Kunst","Informatik","sonstiges"
 ];
 
 export default function TeacherCoursesPage(){

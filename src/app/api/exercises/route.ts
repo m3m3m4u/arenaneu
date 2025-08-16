@@ -98,12 +98,26 @@ export async function PATCH(req: NextRequest) {
     if (!session?.user) return NextResponse.json({ success: false, error: 'Nicht authentifiziert' }, { status: 401 });
     await dbConnect();
     const body = await req.json();
-  const { lessonId, title, type, content, questions } = body || {};
+  const { lessonId, title, type, content, questions, courseId: moveToCourseId } = body || {};
     if (!lessonId) return NextResponse.json({ success: false, error: 'lessonId fehlt' }, { status: 400 });
     const lesson = await Lesson.findById(lessonId);
     if (!lesson || !lesson.isExercise) return NextResponse.json({ success: false, error: 'Übung nicht gefunden' }, { status: 404 });
 
     if (title) lesson.title = String(title);
+    // Optional: Migration einer Übung zu einer Kurslektion
+    if (moveToCourseId && typeof moveToCourseId === 'string' && moveToCourseId.trim()) {
+      const targetCourseId = String(moveToCourseId).trim();
+      try {
+        const Course = (await import('@/models/Course')).default;
+        const c = await Course.findById(targetCourseId).select('category').lean();
+        lesson.courseId = targetCourseId;
+        lesson.isExercise = false;
+        if (c?.category) lesson.category = c.category;
+      } catch {
+        // Falls Kurs nicht gefunden wird, brechen wir mit Fehler ab
+        return NextResponse.json({ success: false, error: 'Ziel-Kurs nicht gefunden' }, { status: 400 });
+      }
+    }
     if (type) {
   const allowed = ["text","single-choice","multiple-choice","video","markdown","matching","memory","lueckentext","ordering","text-answer","minigame","snake"] as const;
       const nextType = (type === 'snake' ? 'minigame' : type) as (typeof allowed)[number];
@@ -113,8 +127,8 @@ export async function PATCH(req: NextRequest) {
     }
     if (content && typeof content === 'object') lesson.content = content;
     if (Array.isArray(questions)) lesson.questions = questions;
-    await lesson.save();
-    return NextResponse.json({ success: true, exercise: lesson });
+  await lesson.save();
+  return NextResponse.json({ success: true, exercise: lesson });
   } catch (e) {
     return NextResponse.json({ success: false, error: 'Fehler beim Aktualisieren' }, { status: 500 });
   }

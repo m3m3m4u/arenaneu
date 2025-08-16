@@ -48,7 +48,9 @@ export async function PUT(
     await dbConnect();
     
   const body = await request.json();
-  const { title, type, category } = (body || {}) as { title?: string; type?: string; category?: string };
+  const { title, type: typeRaw, category } = (body || {}) as { title?: string; type?: string; category?: string };
+  // Legacy-Alias: snake/minigame vereinheitlichen
+  const type = typeRaw === 'snake' ? 'minigame' : typeRaw;
 
     // Sicherstellen, dass die Lektion zum Kurs gehört
     const existing = await Lesson.findOne({ _id: lessonId, courseId });
@@ -116,7 +118,7 @@ export async function PUT(
       );
     }
 
-    if (type === 'single-choice') {
+  if (type === 'single-choice') {
       const questions = (body as { questions?: unknown[] }).questions;
       if (!Array.isArray(questions) || questions.length === 0) {
         return NextResponse.json(
@@ -296,10 +298,11 @@ export async function PUT(
       }
   update.content = { items, count: items.length, raw: rawText };
       update.questions = [];
-    } else if (type === 'snake') {
+    } else if (type === 'snake' || type === 'minigame') {
       // Vereinfachte Snake-Konfiguration (Fragenblöcke + Zielscore + Difficulty + initialSpeedMs)
       const contentObj = (body as { content?: any }).content || {};
-    const persistedType = type === 'snake' ? 'minigame' : type;
+      // Typ immer kanonisch als 'minigame' speichern
+      update.type = 'minigame';
     const targetScore = Number(contentObj.targetScore) || Number(contentObj.content?.targetScore) || 10;
       const difficultyRaw = String(contentObj.difficulty || '').toLowerCase();
       const difficulty: 'einfach'|'mittel'|'schwer' = difficultyRaw === 'schwer' ? 'schwer' : (difficultyRaw === 'einfach' ? 'einfach' : 'mittel');
@@ -315,8 +318,30 @@ export async function PUT(
         }))
         .filter((b: any) => b.question && b.answers.length >= 2 && b.correct < b.answers.length)
         .slice(0,50);
-      update.content = { targetScore, difficulty, initialSpeedMs, ...(blocks.length ? { blocks } : {}) };
-      update.questions = [];
+  update.content = { targetScore, difficulty, initialSpeedMs, ...(blocks.length ? { blocks } : {}) };
+      // Optional: mitgesendete Fragen übernehmen oder aus blocks ableiten
+      const providedQuestions = (body as { questions?: unknown[] }).questions;
+      if (Array.isArray(providedQuestions) && providedQuestions.length) {
+        const toText = (v: unknown) => (typeof v === 'string' ? v : String(v ?? ''));
+        const uniq = (arr: string[]) => Array.from(new Set((arr || []).map(a => toText(a).trim()))).filter(Boolean);
+        update.questions = (providedQuestions as unknown[]).map((qUnknown) => {
+          const q = (qUnknown ?? {}) as Record<string, unknown>;
+          const question = toText(q.question).trim();
+          const mediaLink = (q.mediaLink as string) || (q.media as string) || undefined;
+          const corrects = Array.isArray(q.correctAnswers) && q.correctAnswers.length
+            ? uniq((q.correctAnswers as unknown[]).map(toText))
+            : (q.correctAnswer ? [toText(q.correctAnswer).trim()] : []);
+          const providedAll = Array.isArray(q.allAnswers) ? (q.allAnswers as unknown[]) : [];
+          const wrongRaw = Array.isArray(q.wrongAnswers) ? (q.wrongAnswers as unknown[]) : [];
+          const all = uniq((providedAll.length ? providedAll : [...corrects, ...wrongRaw.map(toText)]).map(toText));
+          const wrong = all.filter(a => !corrects.includes(a));
+          return { question, mediaLink, correctAnswer: corrects[0] || undefined, correctAnswers: corrects.length>1?corrects:undefined, wrongAnswers: wrong, allAnswers: all };
+        });
+      } else if (blocks.length) {
+        update.questions = blocks.map((b: any) => ({ question: b.question, mediaLink: undefined, correctAnswer: b.answers[b.correct], correctAnswers: [b.answers[b.correct]], wrongAnswers: b.answers.filter((a: string, i: number) => i !== b.correct), allAnswers: b.answers }));
+      } else {
+        update.questions = [];
+      }
     } else if (type === 'text-answer') {
       const contentObj = (body as { content?: any }).content || {};
       const raw = String(contentObj.raw || '').replace(/\r/g,'');

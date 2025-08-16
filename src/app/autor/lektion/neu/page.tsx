@@ -48,7 +48,9 @@ function extractYouTubeIdClient(input: string): string | null {
 function NeueLektionPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const type = searchParams.get("type") || "text";
+  const typeRaw = searchParams.get("type") || "text";
+  // Legacy-Alias: snake => minigame (UI konsolidieren)
+  const type = typeRaw === 'snake' ? 'minigame' : typeRaw;
   const courseId = searchParams.get("courseId");
   const pathname = usePathname();
   const inTeacher = pathname?.startsWith('/teacher/');
@@ -143,8 +145,9 @@ function NeueLektionPageInner() {
         return { markdown: "Die Hauptstadt von *Österreich* ist Wien." , mode: 'input'};
       case "ordering":
         return { items: ["Schritt 1", "Schritt 2", "Schritt 3"] };
-      case "text-answer":
+  case "text-answer":
         return { question: "", answer: "", partials: [], caseSensitive: false };
+  case "snake": // Legacy – fällt auf minigame zurück
   case "minigame":
         return { questions: "Frage 1\nRichtige Antwort\nFalsch A\nFalsch B\nFalsch C\n\nFrage 2\nRichtig\nFalsch\nFalsch\nFalsch", targetScore: 10, difficulty: 'mittel' } as SnakeContent;
       default:
@@ -169,7 +172,8 @@ function NeueLektionPageInner() {
     try {
       const payload: { title: string; type: string; content: any; text?: string; category?: string } = {
         title: lessonData.title,
-        type: lessonData.type,
+        // Kanonischer Typ: snake => minigame
+        type: (lessonData.type === 'snake' ? 'minigame' : lessonData.type),
         content: (lessonData.content as any) || {}
       };
       // Standalone Kategorie (falls später Kurs optional) placeholder: derzeit kein eigener State vorhanden
@@ -286,7 +290,7 @@ function NeueLektionPageInner() {
         payload.content.answer = first.answers[0];
       }
 
-  if (lessonData.type === 'minigame') {
+  if (lessonData.type === 'minigame' || lessonData.type === 'snake') {
         const c = (lessonData.content as any) || {} as SnakeContent;
         const raw = String(c.questions || '').replace(/\r/g,'');
         if (!raw.trim()) {
@@ -312,7 +316,13 @@ function NeueLektionPageInner() {
   const targetScore = Number(c.targetScore) || 10;
   const difficulty: 'einfach'|'mittel'|'schwer' = c.difficulty === 'schwer' ? 'schwer' : (c.difficulty === 'einfach' ? 'einfach' : 'mittel');
   const speed = difficulty === 'schwer' ? 140 : (difficulty === 'einfach' ? 220 : 180);
-  payload.content = { blocks, targetScore, initialSpeedMs: speed, difficulty };
+        payload.content = { blocks, targetScore, initialSpeedMs: speed, difficulty };
+        // Redundante Sicherung: auch als questions speichern, damit Player Fallback hat
+        (payload as any).questions = blocks.map(b => ({
+          question: b.question,
+          allAnswers: b.answers,
+          correctAnswers: [b.answers[b.correct]]
+        }));
       }
 
       // Wenn kein Kurs gewählt ist, lege eine eigenständige Übung im exercise-pool an
@@ -478,6 +488,7 @@ function NeueLektionPageInner() {
                 <option value="Chemie">Chemie</option>
                 <option value="Biologie">Biologie</option>
                 <option value="Kunst">Kunst</option>
+                <option value="Informatik">Informatik</option>
                 <option value="sonstiges">sonstiges</option>
               </select>
               <p className="text-[11px] text-gray-500 mt-1">Wird kein Kurs gewählt, kannst du hier ein Fach setzen.</p>
@@ -503,7 +514,7 @@ function NeueLektionPageInner() {
           {type === "lueckentext" && <LueckentextForm lessonData={lessonData} setLessonData={setLessonData} />}
           {type === "ordering" && <OrderingForm lessonData={lessonData} setLessonData={setLessonData} />}
           {type === "text-answer" && <TextAnswerForm lessonData={lessonData} setLessonData={setLessonData} />}
-          {type === "minigame" && renderSnake()}
+          {(type === "minigame" /* alias snake wird oben konvertiert */) && renderSnake()}
         </div>
 
         {/* Aktionen */}

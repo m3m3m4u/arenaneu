@@ -177,7 +177,7 @@ export default function EditLessonPage() {
         const wrong = answersRaw.slice(1).map(a => a.trim()).filter(Boolean);
         if (!correct) continue;
         qs.push({ question: qText, mediaLink: media || undefined, correctAnswer: correct, wrongAnswers: wrong, allAnswers: [correct, ...wrong].sort(() => Math.random()-0.5) });
-      } else if (lesson?.type === 'snake') {
+  } else if (lesson?.type === 'snake' || lesson?.type === 'minigame') {
         const cleaned = answersRaw.map(l=>l.replace(/^\*/, '').trim()).filter(a=>a);
         if (cleaned.length < 2) continue;
         const answers = cleaned.slice(0,4);
@@ -459,7 +459,7 @@ export default function EditLessonPage() {
       setSaving(true);
       try {
         const initialSpeedMs = snakeDifficulty === 'schwer' ? 140 : (snakeDifficulty === 'einfach' ? 220 : 180);
-  const res = await fetch(`/api/kurs/${lesson.courseId}/lektionen/${lessonId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), type: 'minigame', content: { blocks, targetScore: snakeTargetScore, difficulty: snakeDifficulty, initialSpeedMs }, category }) });
+  const res = await fetch(`/api/kurs/${lesson.courseId}/lektionen/${lessonId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), type: 'minigame', content: { blocks, targetScore: snakeTargetScore, difficulty: snakeDifficulty, initialSpeedMs }, questions: blocks.map(b=>({ question:b.question, allAnswers:b.answers, correctAnswers:[b.answers[b.correct]] })), category }) });
         let data: any = null;
         try { data = await res.json(); } catch { /* ignore parse */ }
         if ((res.ok && data?.success) || (!res.ok && data?.success)) {
