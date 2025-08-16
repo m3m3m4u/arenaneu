@@ -1,0 +1,25 @@
+*{box-sizing:border-box;font-family:system-ui,Arial,sans-serif;margin:0;padding:0}
+body{background:#05070d;color:#eee;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px;min-height:100vh}
+#hud{width:960px;max-width:100%;background:#101826;padding:8px 12px;border:2px solid #2c3e50;border-radius:8px;display:grid;grid-template-columns:1fr auto;grid-template-areas:"frage status" "antworten antworten";gap:6px}
+#frage{grid-area:frage;font-size:1.15rem;font-weight:600}
+#antworten{grid-area:antworten;display:flex;gap:8px;justify-content:space-between}
+#antworten .antwort{flex:1;padding:8px 6px;border-radius:6px;text-align:center;font-weight:600;letter-spacing:.5px;font-size:.9rem;position:relative;overflow:hidden;min-height:46px}
+#antworten .antwort.correct-hint::after{content:"✔";position:absolute;right:6px;top:4px;font-size:.8rem;opacity:.75}
+#status{grid-area:status;display:flex;gap:16px;align-items:center;font-size:.85rem;justify-content:flex-end}
+#status button{background:#2d3d55;color:#eee;border:1px solid #456282;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:.75rem;font-weight:600;letter-spacing:.5px;transition:.15s}
+#status button:hover{background:#38506e}
+#status button.active{background:#8d3; color:#102}
+canvas#game.paused{filter:grayscale(.7) brightness(.6)}
+.pause-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-size:72px;font-weight:700;color:#fff;text-shadow:0 0 18px #000,0 0 4px #000;letter-spacing:4px;font-family:system-ui,Arial,sans-serif;mix-blend-mode:screen;}
+body{position:relative}
+canvas#game{background:#000 url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><circle cx=%222%22 cy=%222%22 r=%222%22 fill=%22%23102840%22 opacity=%220.5%22/><circle cx=%2225%22 cy=%2230%22 r=%221%22 fill=%22%23154266%22 opacity=%220.4%22/></svg>') repeat;border:2px solid #2c3e50;border-radius:8px;image-rendering:pixelated}
+#anleitung{font-size:.75rem;opacity:.7}
+.badge{background:#222;padding:2px 6px;border-radius:4px;font-size:.65rem;margin-left:4px;text-transform:uppercase;letter-spacing:.5px}
+.color-red{background:#e53935;color:#fff}
+.color-blue{background:#1e88e5;color:#fff}
+.color-green{background:#43a047;color:#fff}
+.color-yellow{background:#fdd835;color:#212}
+.flash{animation:flash .3s ease-in-out 2}
+@keyframes flash{0%,100%{filter:brightness(1)}50%{filter:brightness(2)}}
+#game.shake{animation:shake .35s linear}
+@keyframes shake{0%,100%{transform:translate(0,0)}25%{transform:translate(4px,0)}50%{transform:translate(-4px,0)}75%{transform:translate(2px,0)}}
