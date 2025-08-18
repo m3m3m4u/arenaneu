@@ -1,5 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect } from "react";
+import CategorySelect from '@/components/shared/CategorySelect';
+import { resolveMediaPath, isImagePath, isAudioPath } from '@/lib/media';
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 
 // Leichtgewichtige Form-State-Typen für diese Seite
@@ -20,7 +22,7 @@ type SnakeContent = { questions: string; targetScore: number; difficulty: 'einfa
 
 export default function NeueLektionPage() {
   return (
-    <Suspense fallback={<main className="max-w-4xl mx-auto mt-10 p-6">Lädt…</main>}>
+  <Suspense fallback={<main className="max-w-6xl mx-auto mt-10 p-6">Lädt…</main>}>
       <NeueLektionPageInner />
     </Suspense>
   );
@@ -130,10 +132,10 @@ function NeueLektionPageInner() {
           questions: []
         };
       case "multiple-choice":
-        return { text: "Frage 1 [optional: /media/bilder/bild.jpg or /media/audio/clip.mp3]\n*richtige Antwort\nfalsche Antwort\n*weitere richtige Antwort\n\nFrage 2\n*Richtig\nFalsch" };
+        return { text: "Frage 1 [beispiel.jpg]\n*richtige Antwort\nfalsche Antwort\n*weitere richtige Antwort\n\nFrage 2\n*Richtig\nFalsch" };
       case "markdown":
         return {
-          markdown: "# Überschrift\n\nHier kannst du **Markdown** verwenden.\n\n- Punkt 1\n- Punkt 2\n\n![Bildbeschreibung](https://placekitten.com/400/200)\n\n[Link](https://example.com)"
+          markdown: "# Überschrift\n\nHier kannst du **Markdown** verwenden.\n\n- Punkt 1\n- Punkt 2\n\n![Beispielbild](beispiel.jpg)\n\n[Audio](beispiel.mp3)"
         };
       case "matching":
         return { text: "1+2|3\n1-1|0\n1+8|9\n\n2+5|7\n1+2|3\n1-1|0" };
@@ -181,7 +183,7 @@ function NeueLektionPageInner() {
       if (!courseId && standaloneCat) payload.category = standaloneCat;
 
       // Multiple-Choice: Text in Fragen normalisieren (für Exercises-API, die kein Text-Parsing übernimmt)
-      if (lessonData.type === 'multiple-choice') {
+  if (lessonData.type === 'multiple-choice') {
         const mc = (lessonData.content as MultipleChoiceContent | undefined);
         const text = (mc?.text || '').trim();
         if (text) {
@@ -192,13 +194,13 @@ function NeueLektionPageInner() {
             let qText = lines[0];
             let media = '';
             const m = qText.match(/^(.+?)\s*\[(.+?)\]$/);
-            if (m) { qText = m[1].trim(); media = m[2].trim(); }
+    if (m) { qText = m[1].trim(); media = resolveMediaPath(m[2].trim()); }
             const ans = lines.slice(1);
             const corrects = ans.filter(a=>a.startsWith('*')).map(a=>a.replace(/^\*+/, '').trim());
             const wrongs = ans.filter(a=>!a.startsWith('*')).map(a=>a.trim());
             const all = [...corrects, ...wrongs].filter(Boolean);
             if (!qText || corrects.length === 0 || all.length < 2) return null;
-            return { question: qText, mediaLink: media || undefined, correctAnswers: corrects, wrongAnswers: wrongs, allAnswers: all };
+    return { question: qText, mediaLink: media || undefined, correctAnswers: corrects, wrongAnswers: wrongs, allAnswers: all };
           }).filter(Boolean) as Array<{ question: string; mediaLink?: string; correctAnswers: string[]; wrongAnswers: string[]; allAnswers: string[] }>;
           (payload as any).questions = questions;
           delete (payload as any).text;
@@ -214,7 +216,16 @@ function NeueLektionPageInner() {
         if (text) {
           const blocks = text.split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean);
           const toPairs = (block: string) => block.split(/\n+/).map(l=>l.trim()).filter(Boolean).slice(0,5)
-            .map(line => { const [l, r] = line.split('|'); return { l: String(l||'').trim(), r: String(r||'').trim() }; })
+            .map(line => {
+              const [l, r] = line.split('|');
+              const L = String(l||'').trim();
+              const R = String(r||'').trim();
+              // Nur Bilder/Audio automatisch auf /uploads/... mappen; 
+              // reiner Text bleibt unverändert
+              const Lr = (isImagePath(L) || isAudioPath(L)) ? resolveMediaPath(L) : L;
+              const Rr = (isImagePath(R) || isAudioPath(R)) ? resolveMediaPath(R) : R;
+              return { l: Lr, r: Rr };
+            })
             .filter(p => p.l && p.r);
           const shuffle = <T,>(arr: T[]) => arr.map(v=>[Math.random(),v] as const).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
           const questions = blocks.map(b => {
@@ -223,7 +234,6 @@ function NeueLektionPageInner() {
             const lefts = pairs.map(p=>p.l);
             const rights = pairs.map(p=>p.r);
             const all = shuffle([...lefts, ...rights]);
-            const mediaPair = pairs.find(p=>/\.(jpg|jpeg|png|gif|webp|mp3|wav|ogg|m4a)$/i.test(p.l)||/\.(jpg|jpeg|png|gif|webp|mp3|wav|ogg|m4a)$/i.test(p.r));
             return {
               question: 'Finde die passenden Paare',
               mediaLink: undefined,
@@ -254,6 +264,18 @@ function NeueLektionPageInner() {
       if (lessonData.type === 'lueckentext') {
         const c = (lessonData.content as any) || {};
         payload.content = { markdown: c.markdown || '', mode: c.mode === 'drag' ? 'drag' : 'input' };
+      }
+      if (lessonData.type === 'markdown') {
+        // Normalisiere Medienpfade in Markdown (Dateinamen => /uploads/...)
+        const c = (lessonData.content as any) || {};
+        let md: string = String(c.markdown || '');
+        // Ersetze Bild- und Link-Ziele, wenn sie wie Dateinamen aussehen
+        // ![alt](path) und [text](path)
+        md = md.replace(/(!\[[^\]]*\]\(|\[[^\]]*\]\()\s*([^\s)]+)\s*\)/g, (full, prefix, url) => {
+          const resolved = resolveMediaPath(String(url || ''));
+          return `${prefix}${resolved})`;
+        });
+        payload.content = { markdown: md };
       }
       if (lessonData.type === 'ordering') {
         const c = (lessonData.content as any) || {};
@@ -437,7 +459,7 @@ function NeueLektionPageInner() {
   };
 
   return (
-    <main className="max-w-4xl mx-auto mt-10 p-6">
+  <main className="max-w-6xl mx-auto mt-10 p-6">
       <div className="mb-6">
   <a href={courseId ? (inTeacher ? `/teacher/kurs/${courseId}` : `/autor/kurs/${courseId}`) : (inTeacher ? '/teacher' : '/autor')} className="text-blue-600 hover:underline">
           ← Zurück {courseId ? "zum Kurs" : "zum Autorentool"}
@@ -472,25 +494,10 @@ function NeueLektionPageInner() {
           {!courseId && (
             <div className="mb-4">
               <label className="block text-sm font-medium mb-1">Fach / Kategorie (optional)</label>
-              <select
-                value={(lessonData as any).category || ''}
-                onChange={(e)=> setLessonData(prev => ({...prev, category: e.target.value} as any))}
-                className="w-full p-3 border rounded"
-              >
-                <option value="">— wählen —</option>
-                <option value="Mathematik">Mathematik</option>
-                <option value="Deutsch">Deutsch</option>
-                <option value="Englisch">Englisch</option>
-                <option value="Musik">Musik</option>
-                <option value="Geographie">Geographie</option>
-                <option value="Geschichte">Geschichte</option>
-                <option value="Physik">Physik</option>
-                <option value="Chemie">Chemie</option>
-                <option value="Biologie">Biologie</option>
-                <option value="Kunst">Kunst</option>
-                <option value="Informatik">Informatik</option>
-                <option value="sonstiges">sonstiges</option>
-              </select>
+              <div>
+                {/* Zentraler CategorySelect */}
+                <CategorySelect value={(lessonData as any).category || ''} onChange={(v: string)=> setLessonData(prev => ({...prev, category: v} as any))} includeEmpty emptyLabel="— wählen —" label="" labelClassName="sr-only" selectClassName="w-full p-3 border rounded" />
+              </div>
               <p className="text-[11px] text-gray-500 mt-1">Wird kein Kurs gewählt, kannst du hier ein Fach setzen.</p>
             </div>
           )}
@@ -828,7 +835,10 @@ function MarkdownLessonForm({ lessonData, setLessonData }: { lessonData: LessonF
             className="w-full p-3 border rounded h-80 font-mono"
             placeholder="# Überschrift\n\nText, Bilder, Links, Listen …"
           />
-          <p className="text-xs text-gray-500 mt-2">Unterstützt GitHub Flavored Markdown (GFM) inkl. Tabellen, Checklists, Codeblöcke, Links und Bilder.</p>
+          <p className="text-xs text-gray-500 mt-2">
+            Unterstützt GitHub Flavored Markdown (GFM). Bilder/Audio werden automatisch aus <code className="bg-gray-100 px-1 rounded">/uploads</code> geladen,
+            wenn du nur Dateinamen angibst, z. B. <code className="bg-gray-100 px-1 rounded">beispiel.jpg</code> oder <code className="bg-gray-100 px-1 rounded">beispiel.mp3</code>.
+          </p>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Vorschau</label>
@@ -861,7 +871,33 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
   }, []);
   if (!MD) return <div className="text-gray-400">Lade Vorschau…</div>;
   const Comp = MD;
-  return <Comp remarkPlugins={gfm ? [gfm] : []}>{markdown}</Comp>;
+  // Renderer für Bilder und Links: Dateinamen => /uploads, Audio-Links => Player
+  const components = {
+    h1: (props: any) => <h1 className="text-2xl font-bold mb-3 mt-1" {...props} />,
+    h2: (props: any) => <h2 className="text-xl font-semibold mb-2 mt-4" {...props} />,
+    h3: (props: any) => <h3 className="text-lg font-semibold mb-2 mt-3" {...props} />,
+    h4: (props: any) => <h4 className="text-base font-semibold mb-2 mt-3" {...props} />,
+    p: (props: any) => <p className="mb-2" {...props} />,
+    ul: (props: any) => <ul className="list-disc pl-6 mb-2" {...props} />,
+    ol: (props: any) => <ol className="list-decimal pl-6 mb-2" {...props} />,
+    li: (props: any) => <li className="list-item" {...props} />,
+    code: (props: any) => <code className="bg-gray-100 px-1 py-0.5 rounded text-[85%]" {...props} />,
+    pre: (props: any) => <pre className="bg-gray-900 text-white p-3 rounded mb-3 overflow-auto text-sm" {...props} />,
+    img: (props: any) => {
+      const src: string = resolveMediaPath(String(props.src || ''));
+      const alt = props.alt || '';
+      // eslint-disable-next-line @next/next/no-img-element
+      return <img src={src} alt={alt} className="max-w-full" />;
+    },
+    a: (props: any) => {
+      const href: string = resolveMediaPath(String(props.href || ''));
+      if (isAudioPath(href)) {
+        return <audio controls className="w-full max-w-md"><source src={href} /></audio>;
+      }
+      return <a href={href} target="_blank" rel="noopener noreferrer">{props.children}</a>;
+    }
+  } as const;
+  return <Comp remarkPlugins={gfm ? [gfm] : []} components={components as any}>{markdown}</Comp>;
 }
 
 // Multiple Choice Form
@@ -883,7 +919,7 @@ function MultiChoiceForm({ lessonData, setLessonData }: { lessonData: LessonForm
       let q = lines[0];
       let media = '';
       const m = q.match(/^(.+?)\s*\[(.+?)\]$/);
-      if (m) { q = m[1].trim(); media = m[2].trim(); }
+      if (m) { q = m[1].trim(); media = resolveMediaPath(m[2].trim()); }
       const ans = lines.slice(1);
       const corrects = ans.filter((a: string) => a.startsWith('*')).map((a: string) => a.replace(/^\*+/, '').trim());
       const wrongs = ans.filter((a: string) => !a.startsWith('*'));
@@ -900,9 +936,9 @@ function MultiChoiceForm({ lessonData, setLessonData }: { lessonData: LessonForm
           value={((lessonData.content as MultipleChoiceContent) || { text: '' }).text || ''}
           onChange={(e) => update(e.target.value)}
           className="w-full h-64 p-3 border rounded font-mono text-sm"
-          placeholder={`Frage 1 [/media/bilder/bild.jpg]\n*richtige Antwort\nfalsche Antwort\n*weitere richtige Antwort\n\nFrage 2\n*Richtig\nFalsch`}
+          placeholder={`Frage 1 [beispiel.jpg]\n*richtige Antwort\nfalsche Antwort\n*weitere richtige Antwort\n\nFrage 2\n*Richtig\nFalsch`}
         />
-        <p className="text-xs text-gray-500 mt-2">Bilder/Audio über [Pfad] am Ende der Fragezeile. Mehrere richtige Antworten mit * markieren.</p>
+  <p className="text-xs text-gray-500 mt-2">Mehrere richtige Antworten mit * markieren.</p>
       </div>
 
       <div>
@@ -915,7 +951,16 @@ function MultiChoiceForm({ lessonData, setLessonData }: { lessonData: LessonForm
               <div key={i} className="border rounded p-3 bg-gray-50">
                 <div className="font-semibold mb-2">Frage {i + 1}: {p.question}</div>
                 {p.mediaLink && (
-                  <div className="mb-2 text-sm text-gray-600">📎 {p.mediaLink}</div>
+                  <div className="mb-2 p-2 bg-gray-100 rounded border">
+                    {isImagePath(p.mediaLink) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={resolveMediaPath(p.mediaLink)} alt="Frage Media" className="max-w-full max-h-48 object-contain border rounded bg-white" />
+                    ) : isAudioPath(p.mediaLink) ? (
+                      <audio controls className="w-full max-w-md"><source src={resolveMediaPath(p.mediaLink)} /></audio>
+                    ) : (
+                      <a href={resolveMediaPath(p.mediaLink)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">📎 {resolveMediaPath(p.mediaLink)}</a>
+                    )}
+                  </div>
                 )}
                 <div className="space-y-1">
                   {p.all.map((a: string, idx: number) => (
@@ -950,14 +995,12 @@ function MatchingLessonForm({ lessonData, setLessonData }: {
         <h4 className="font-semibold text-blue-800 mb-2">🔗 Paare finden – Eingabeformat</h4>
         <p className="text-sm text-blue-900">
           Je Aufgabe ein Block. Blöcke durch eine Leerzeile trennen. Jede Zeile ist ein Paar: LINKS|RECHTS. Max. 5 Paare pro Block.<br/>
-          Beispiel:<br/>
-          1+2|3<br/>
-          1-1|0<br/>
-          1+8|9<br/>
+          Links/Rechts können Text, Bilder (.jpg/.png/.gif/.webp) oder Audio (.mp3/.wav/.ogg/.m4a) sein. Dateinamen werden automatisch aus <code className="bg-blue-100 px-1 rounded">/uploads</code> geladen.
           <br/>
-          2+5|7<br/>
-          1+2|3<br/>
-          1-1|0
+          Beispiel:<br/>
+          Hund|beispiel.jpg<br/>
+          Ton|beispiel.mp3<br/>
+          1+8|9
         </p>
       </div>
 
@@ -967,7 +1010,7 @@ function MatchingLessonForm({ lessonData, setLessonData }: {
           className="w-full p-3 border rounded h-56"
           value={content.text || ''}
           onChange={(e) => setText(e.target.value)}
-          placeholder={"1+2|3\n1-1|0\n1+8|9\n\n2+5|7\n1+2|3\n1-1|0"}
+          placeholder={"Hund|beispiel.jpg\nTon|beispiel.mp3\n1+8|9\n\n2+5|7\n1+2|3"}
         />
         <p className="text-xs text-gray-500 mt-1">Trenne Aufgaben durch eine Leerzeile. Mindestens 2 Paare pro Block.</p>
       </div>
@@ -981,17 +1024,34 @@ function MatchingLessonForm({ lessonData, setLessonData }: {
             {blocks.map((block, bi) => {
               const pairs = block.split(/\n+/).map(l => l.trim()).filter(Boolean).slice(0,5).map(line => {
                 const [l, r] = line.split('|');
-                return { l: (l||'').trim(), r: (r||'').trim() };
+                const L = (l||'').trim();
+                const R = (r||'').trim();
+                return { l: L, r: R };
               }).filter(p => p.l && p.r);
               return (
                 <div key={bi} className="border rounded p-3 bg-white">
                   <div className="text-sm text-gray-600 mb-2">Aufgabe {bi + 1}</div>
-                  <ul className="list-disc pl-5 text-sm text-gray-700">
-                    {pairs.map((p, idx) => (
-                      <li key={idx}><strong>{p.l}</strong> ↔ {p.r}</li>
-                    ))}
-                    {pairs.length === 0 && <li className="text-gray-500">Keine gültigen Paare in diesem Block.</li>}
-                  </ul>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    {pairs.map((p, idx) => {
+                      const Lr = (isImagePath(p.l) || isAudioPath(p.l)) ? resolveMediaPath(p.l) : p.l;
+                      const Rr = (isImagePath(p.r) || isAudioPath(p.r)) ? resolveMediaPath(p.r) : p.r;
+                      const renderSide = (val: string) => {
+                        const v = val.trim();
+                        // Bilder/Audio inkl. http/https mit Query/Hash
+                        if (isImagePath(v)) return (<div className="h-14 flex items-center justify-center overflow-hidden bg-white border rounded"><img src={v} alt="" className="max-h-14 max-w-full object-contain" /></div>);
+                        if (isAudioPath(v)) return (<div className="h-14 flex items-center justify-center bg-white border rounded px-1"><audio controls className="w-full"><source src={v} /></audio></div>);
+                        // Normale URLs als Link rendern
+                        if (/^https?:\/\//i.test(v)) return (<div className="h-14 flex items-center justify-center text-center px-1 break-words bg-white border rounded"><a href={v} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{v}</a></div>);
+                        return (<div className="h-14 flex items-center justify-center text-center px-1 break-words bg-white border rounded">{v}</div>);
+                      };
+                      return (
+                        <div key={idx} className="contents">
+                          {renderSide(Lr)}
+                          {renderSide(Rr)}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
@@ -1152,8 +1212,8 @@ function OrderingForm({ lessonData, setLessonData }: { lessonData: LessonFormSta
         {items.length < 2 ? <div className="text-gray-400 text-sm">Mindestens 2 Zeilen für Vorschau.</div> : (
           <ul className="space-y-2">
             {previewOrder.map((step, idx) => (
-              <li key={idx} className="flex items-start gap-2 border rounded p-2 bg-white text-xs">
-                <div className="flex flex-col gap-1 pt-0.5">
+              <li key={idx} className="flex items-center gap-2 border rounded p-2 bg-white text-xs">
+                <div className="flex flex-col gap-1 justify-center">
                   <button type="button" onClick={()=>movePreview(idx,-1)} disabled={idx===0} className={`w-6 h-6 border rounded ${idx===0? 'opacity-30 cursor-not-allowed':'hover:bg-gray-50'}`}>↑</button>
                   <button type="button" onClick={()=>movePreview(idx,1)} disabled={idx===previewOrder.length-1} className={`w-6 h-6 border rounded ${idx===previewOrder.length-1? 'opacity-30 cursor-not-allowed':'hover:bg-gray-50'}`}>↓</button>
                 </div>

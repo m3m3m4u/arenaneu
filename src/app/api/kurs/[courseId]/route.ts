@@ -7,20 +7,7 @@ import Lesson from "@/models/Lesson";
 import AuditLog from "@/models/AuditLog";
 import User from "@/models/User";
 import ClassCourseAccess from "@/models/ClassCourseAccess";
-
-const ALLOWED_CATEGORIES = [
-  "Mathematik",
-  "Musik",
-  "Deutsch",
-  "Englisch",
-  "Geographie",
-  "Geschichte",
-  "Physik",
-  "Chemie",
-  "Biologie",
-  "Kunst",
-  "sonstiges"
-];
+import { CATEGORIES as ALLOWED_CATEGORIES, isAllowedCategory, normalizeCategory } from '@/lib/categories';
 
 export async function GET(
   request: NextRequest,
@@ -134,7 +121,7 @@ export async function PUT(
       );
     }
 
-    if (!ALLOWED_CATEGORIES.includes(body.category)) {
+    if (!isAllowedCategory(body.category)) {
       return NextResponse.json({ success: false, error: 'Ungültige Kategorie' }, { status: 400 });
     }
 
@@ -154,7 +141,7 @@ export async function PUT(
       {
         title: nameOrTitle,
         description: body.description,
-        category: body.category,
+  category: normalizeCategory(body.category) || 'sonstiges',
         isPublished: body.isPublic ?? body.isPublished ?? false,
         updatedAt: new Date()
       },

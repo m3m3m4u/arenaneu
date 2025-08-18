@@ -6,7 +6,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 interface Exercise { _id: string; title: string; type: string; courseId: string; createdAt?: string; category?: string; }
 
 function UebenInner() {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  // Gesamtliste aller Übungen (ungefiltert)
+  const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isGuest, setIsGuest] = useState(false);
@@ -22,15 +23,14 @@ function UebenInner() {
   }, [search]);
 
   const load = useCallback(async () => {
+    // Immer alle Übungen laden; Filter erfolgt clientseitig, damit die Button-Leiste vollständig bleibt
     setLoading(true); setError('');
     try {
-      const q = new URLSearchParams();
-      if (selectedCategory) q.set('cat', selectedCategory);
-      const res = await fetch(`/api/exercises${q.toString() ? `?${q.toString()}` : ''}`);
+      const res = await fetch(`/api/exercises`);
       const data = await res.json();
-      if (data.success) setExercises(data.exercises || []); else setError(data.error || 'Fehler');
+      if (data.success) setAllExercises(data.exercises || []); else setError(data.error || 'Fehler');
     } catch { setError('Netzwerkfehler'); } finally { setLoading(false); }
-  }, [selectedCategory]);
+  }, []);
 
   useEffect(()=>{ load(); }, [load]);
   // Sync Kategorie in URL (?cat=)
@@ -55,8 +55,8 @@ function UebenInner() {
           Gastmodus aktiv: Fortschritte werden nur lokal im Browser gespeichert.
         </div>
       )}
-      {error && <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700 mb-4">{error}</div>}
-      {!loading && exercises.length > 0 && (
+    {error && <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700 mb-4">{error}</div>}
+    {!loading && allExercises.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2 items-center">
           <span className="text-sm text-gray-600 mr-1">Fach:</span>
           <button
@@ -64,7 +64,7 @@ function UebenInner() {
             onClick={() => setSelectedCategory('')}
             className={`px-3 py-1.5 rounded border text-sm ${selectedCategory === '' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-gray-50'}`}
           >Alle</button>
-          {Array.from(new Set((exercises.map(e => e.category).filter(Boolean) as string[])))
+      {Array.from(new Set((allExercises.map(e => e.category).filter(Boolean) as string[])))
             .sort((a, b) => a.localeCompare(b, 'de'))
             .map(cat => (
               <button
@@ -76,10 +76,10 @@ function UebenInner() {
             ))}
         </div>
       )}
-      {loading ? <div className="text-gray-500">Lade…</div> : (
-        exercises.length === 0 ? <div className="text-gray-500 text-sm">Noch keine Übungen vorhanden.</div> : (
+    {loading ? <div className="text-gray-500">Lade…</div> : (
+    allExercises.length === 0 ? <div className="text-gray-500 text-sm">Noch keine Übungen vorhanden.</div> : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {(selectedCategory ? exercises.filter(e => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()) : exercises).map(ex => {
+      {(selectedCategory ? allExercises.filter(e => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()) : allExercises).map(ex => {
               const link = ex.courseId && ex.courseId !== 'exercise-pool' ? `/kurs/${ex.courseId}/lektion/${ex._id}` : `/kurs/${ex.courseId || 'exercise-pool'}/lektion/${ex._id}`;
               return (
                 <a key={ex._id} href={link} className="border rounded p-4 bg-white hover:shadow-sm transition flex flex-col gap-2">

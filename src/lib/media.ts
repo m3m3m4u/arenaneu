@@ -2,8 +2,9 @@
 
 const ABSOLUTE_OR_DATA = /^(https?:\/\/)|^data:|^blob:|^\//i;
 const HAS_SLASH = /\//;
-const IMG_EXT = /(\.png|\.jpe?g|\.gif|\.webp|\.svg)$/i;
-const AUDIO_EXT = /(\.mp3|\.wav|\.ogg|\.m4a)$/i;
+// Match file extensions at end or before query/hash
+const IMG_EXT = /\.(png|jpe?g|gif|webp|svg)(?=($|\?|#))/i;
+const AUDIO_EXT = /\.(mp3|wav|ogg|m4a)(?=($|\?|#))/i;
 
 export type MediaKind = 'image' | 'audio' | 'file';
 

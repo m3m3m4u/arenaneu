@@ -4,6 +4,7 @@ import TitleCategoryBar from '@/components/shared/TitleCategoryBar';
 import BackLink from '@/components/shared/BackLink';
 import dynamic from 'next/dynamic';
 import MarkdownPreview from '@/components/shared/MarkdownPreview';
+import { resolveMediaPath } from '@/lib/media';
 import { extractYouTubeId } from '@/lib/extractYouTubeId';
 import type { ComponentType } from "react";
 import { useParams, useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -189,6 +190,15 @@ export default function EditLessonPage() {
     if (!showPreview) setShowPreview(true);
   }, [questionsText, lesson?.type, showPreview]);
 
+  // Live-Parsing: direkt und mit Debounce bei Änderungen
+  useEffect(() => {
+    if (!lesson) return;
+    if(['single-choice','multiple-choice','snake','minigame'].includes(lesson.type)) {
+      const id = setTimeout(() => { parseQuestions(); }, 200);
+      return () => clearTimeout(id);
+    }
+  }, [questionsText, lesson, parseQuestions]);
+
   useEffect(()=>{
     if(!lesson) return;
   if(['single-choice','multiple-choice','snake','minigame'].includes(lesson.type)) parseQuestions();
@@ -292,7 +302,7 @@ export default function EditLessonPage() {
           const corrects = (Array.isArray(q.correctAnswers) && q.correctAnswers.length) ? q.correctAnswers : [q.correctAnswer];
             const order = q.allAnswers && q.allAnswers.length ? q.allAnswers : [...corrects, ...q.wrongAnswers];
             const answerLines = order.map(a => corrects.includes(a) ? `* ${a}` : a);
-            const qLine = q.mediaLink ? `${q.question} [${q.mediaLink}]` : q.question;
+            const qLine = q.mediaLink ? `${q.question} [${resolveMediaPath(q.mediaLink)}]` : q.question;
             return [qLine, ...answerLines].join('\n');
         });
         setQuestionsText(blocks.join('\n\n'));
@@ -673,7 +683,7 @@ export default function EditLessonPage() {
           <h3 className="font-semibold mb-4">✏️ Fragen bearbeiten</h3>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-2">{lesson.type === 'multiple-choice' ? 'Frage [optional: Link] + Antworten (* = korrekt)' : 'Frage [optional: Link] + Richtige + Falsche Antworten'}</label>
-            <textarea value={questionsText} onChange={e => setQuestionsText(e.target.value)} className="w-full h-96 p-3 border rounded font-mono text-sm" placeholder={lesson.type === 'multiple-choice' ? `Frage 1 [/media/bilder/bild.jpg]\n* Richtige Antwort\nFalsche Antwort\n* Weitere richtige\n\nFrage 2\n* Richtig\nFalsch` : `Frage 1 [/media/bilder/bild.jpg]\nRichtige Antwort\nFalsche Antwort 1\nFalsche Antwort 2\n\nFrage 2\nRichtige Antwort\nFalsche Antwort 1`} />
+            <textarea value={questionsText} onChange={e => setQuestionsText(e.target.value)} className="w-full h-96 p-3 border rounded font-mono text-sm" placeholder={lesson.type === 'multiple-choice' ? `Frage 1 [bild.jpg]\n* Richtige Antwort\nFalsche Antwort\n* Weitere richtige\n\nFrage 2 [clip.mp3]\n* Richtig\nFalsch` : `Frage 1 [diagramm.jpg]\nRichtige Antwort hier\nFalsche Antwort 1\nFalsche Antwort 2\n\nFrage 2 [beispiel.jpg]\nEine andere richtige Antwort\nFalsche Option A\nFalsche Option B\n\nFrage 3 [beispiel.mp3]\nAudio-Frage Antwort\nFalsche Audio-Antwort`} />
           </div>
           <div className="flex gap-3">
             <button onClick={parseQuestions} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">🔍 Vorschau aktualisieren</button>
@@ -681,7 +691,7 @@ export default function EditLessonPage() {
           </div>
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded p-4 text-sm text-blue-800 space-y-1">
             <p>• Leere Zeile trennt Fragen</p>
-            <p>• Bilder: [/media/bilder/datei.jpg] • Audio: [/media/audio/datei.mp3]</p>
+            <p>• Medien: [datei.jpg] oder [/uploads/datei.jpg] oder absolute URL – Dateinamen werden automatisch zu /uploads/… aufgelöst; Audio: [datei.mp3]</p>
             {lesson.type === 'multiple-choice' ? <p>• Mehrere richtige Antworten mit * markieren</p> : <p>• Zweite Zeile = richtige Antwort</p>}
           </div>
         </div>

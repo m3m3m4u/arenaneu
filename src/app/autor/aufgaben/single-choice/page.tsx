@@ -14,18 +14,18 @@ interface CourseItem { _id: string; title: string }
 
 export default function SingleChoiceEditorPage() {
   const router = useRouter();
-  const [questionsText, setQuestionsText] = useState(`Frage 1
+  const [questionsText, setQuestionsText] = useState(`Frage 1 [diagramm.jpg]
 Richtige Antwort hier
 Falsche Antwort 1
 Falsche Antwort 2
 Falsche Antwort 3
 
-Frage 2 [/media/bilder/beispiel.jpg]
+Frage 2 [beispiel.jpg]
 Eine andere richtige Antwort
 Falsche Option A
 Falsche Option B
 
-Frage 3 [/media/audio/beispiel.mp3]
+Frage 3 [beispiel.mp3]
 Audio-Frage Antwort
 Falsche Audio-Antwort`);
   const [parsedQuestions, setParsedQuestions] = useState<SCQuestion[]>([]);

@@ -32,7 +32,7 @@ export default function MatchingEditor({ lesson, title, setTitle, category, setC
           <div className="mt-4 bg-blue-50 border border-blue-200 rounded p-4 text-sm text-blue-800 space-y-1">
             <p>• Blöcke durch Leerzeile trennen, Zeile: LINKS|RECHTS</p>
             <p>• 2–5 Paare pro Block.</p>
-            <p>• Bilder: /media/bilder/*.jpg • Audio: /media/audio/*.mp3</p>
+            <p>• Medien: Dateiname (auto → /uploads/…), Pfad (/uploads/…), oder absolute URL; Bilder *.jpg/png/gif/webp, Audio *.mp3/wav/ogg/m4a</p>
           </div>
         </div>
         <div className="bg-white border rounded p-6">

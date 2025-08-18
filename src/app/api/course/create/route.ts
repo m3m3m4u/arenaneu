@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Course from "@/models/Course";
-
-const ALLOWED_CATEGORIES = [
-  "Mathematik",
-  "Musik",
-  "Deutsch",
-  "Englisch",
-  "Geographie",
-  "Geschichte",
-  "Physik",
-  "Chemie",
-  "Biologie",
-  "Kunst",
-  "sonstiges"
-];
+import { CATEGORIES as ALLOWED_CATEGORIES, normalizeCategory } from '@/lib/categories';
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,8 +14,8 @@ export async function POST(req: NextRequest) {
     }
 
     const catStr = String(category).trim();
-    const normalizedCategory = ALLOWED_CATEGORIES.find(c => c.toLowerCase() === catStr.toLowerCase());
-    if (!normalizedCategory) {
+  const normalizedCategory = normalizeCategory(catStr);
+  if (!normalizedCategory) {
       return NextResponse.json({ success: false, error: `Ungültige Kategorie: ${catStr}` }, { status: 400 });
     }
 

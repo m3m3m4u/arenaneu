@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import CategorySelect from '@/components/shared/CategorySelect';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import MediaLibrary from '@/components/media/MediaLibrary';
@@ -150,21 +151,15 @@ function CreateCourseTab() {
           <textarea value={description} onChange={e=>setDescription(e.target.value)} required className="w-full border rounded p-3 h-28" />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Kategorie *</label>
-          <select value={category} onChange={e=>setCategory(e.target.value)} required className="w-full border rounded p-3">
-            <option value="">Kategorie wählen</option>
-            <option value="Mathematik">Mathematik</option>
-            <option value="Musik">Musik</option>
-            <option value="Deutsch">Deutsch</option>
-            <option value="Englisch">Englisch</option>
-            <option value="Geographie">Geographie</option>
-            <option value="Geschichte">Geschichte</option>
-            <option value="Physik">Physik</option>
-            <option value="Chemie">Chemie</option>
-            <option value="Biologie">Biologie</option>
-            <option value="Kunst">Kunst</option>
-            <option value="sonstiges">sonstiges</option>
-          </select>
+          <CategorySelect
+            value={category}
+            onChange={setCategory}
+            label="Kategorie *"
+            required
+            includeEmpty
+            emptyLabel="Kategorie wählen"
+            selectClassName="w-full border rounded p-3"
+          />
         </div>
         <div>
           <button disabled={busy} className="bg-green-600 disabled:opacity-50 text-white px-6 py-3 rounded font-semibold hover:bg-green-700">{busy?'Erstelle…':'Kurs erstellen ➜'}</button>

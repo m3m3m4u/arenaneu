@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect, Suspense, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import CategorySelect from '@/components/shared/CategorySelect';
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { resolveMediaPath, isImagePath, isAudioPath } from "../../../../lib/media";
+import { resolveMediaPath, isImagePath, isAudioPath } from '@/lib/media';
 
 interface SCQuestion {
   question: string;
@@ -28,17 +29,17 @@ function SingleChoiceLektionPageInner() {
   
   const [title, setTitle] = useState('');
   const [courseName, setCourseName] = useState('');
-  const [questionsText, setQuestionsText] = useState(`Frage 1
+  const [questionsText, setQuestionsText] = useState(`Frage 1 [diagramm.jpg]
 Richtige Antwort hier
 Falsche Antwort 1
 Falsche Antwort 2
 
-Frage 2 [/media/bilder/beispiel.jpg]
+Frage 2 [beispiel.jpg]
 Eine andere richtige Antwort
 Falsche Option A
 Falsche Option B
 
-Frage 3 [/media/audio/beispiel.mp3]
+Frage 3 [beispiel.mp3]
 Audio-Frage Antwort
 Falsche Audio-Antwort`);
 
@@ -89,13 +90,13 @@ Falsche Audio-Antwort`);
         questionText = firstLine;
       }
 
-      const answers = lines.slice(1);
+  const answers = lines.slice(1);
       const correctAnswer = answers[0];
       const wrongAnswers = answers.slice(1);
 
       questions.push({
         question: questionText,
-        mediaLink,
+  mediaLink: mediaLink ? resolveMediaPath(mediaLink) : '',
         correctAnswer,
         wrongAnswers,
         allAnswers: [correctAnswer, ...wrongAnswers].sort(() => Math.random() - 0.5)
@@ -104,6 +105,18 @@ Falsche Audio-Antwort`);
 
   setParsedQuestions(questions);
   };
+
+  // Live-Parsing: initial und bei Änderungen (debounced)
+  useEffect(() => {
+    // initial parse
+    parseQuestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const id = setTimeout(() => { parseQuestions(); }, 200);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questionsText]);
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -205,20 +218,8 @@ Falsche Audio-Antwort`);
           {!courseId && (
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2">Fach / Kategorie (optional)</label>
-              <select value={standaloneCategory} onChange={e=>setStandaloneCategory(e.target.value)} className="w-full p-3 border rounded">
-                <option value="">— wählen —</option>
-                <option value="Mathematik">Mathematik</option>
-                <option value="Deutsch">Deutsch</option>
-                <option value="Englisch">Englisch</option>
-                <option value="Musik">Musik</option>
-                <option value="Geographie">Geographie</option>
-                <option value="Geschichte">Geschichte</option>
-                <option value="Physik">Physik</option>
-                <option value="Chemie">Chemie</option>
-                <option value="Biologie">Biologie</option>
-                <option value="Kunst">Kunst</option>
-                <option value="sonstiges">sonstiges</option>
-              </select>
+              {/* Zentraler CategorySelect */}
+              <CategorySelect value={standaloneCategory} onChange={setStandaloneCategory} includeEmpty emptyLabel="— wählen —" label="" labelClassName="sr-only" selectClassName="w-full p-3 border rounded" />
             </div>
           )}
         {courseId && (
@@ -242,23 +243,24 @@ Falsche Audio-Antwort`);
               value={questionsText}
               onChange={(e) => setQuestionsText(e.target.value)}
               className="w-full h-96 p-3 border rounded font-mono text-sm"
-              placeholder={`Frage 1 [/media/bilder/diagramm.jpg]
-Richtige Antwort
+              placeholder={`Frage 1 [diagramm.jpg]
+Richtige Antwort hier
 Falsche Antwort 1
 Falsche Antwort 2
 
-Frage 2
-Andere richtige Antwort
-Andere falsche Antwort`}
+Frage 2 [beispiel.jpg]
+Eine andere richtige Antwort
+Falsche Option A
+Falsche Option B
+
+Frage 3 [beispiel.mp3]
+Audio-Frage Antwort
+Falsche Audio-Antwort`}
             />
           </div>
 
-          <div className="flex gap-3 mb-6">
-            <button
-              type="button"
-              onClick={parseQuestions}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            >� Neu parsen</button>
+          <div className="flex items-center gap-3 mb-6">
+            <span className="text-xs text-gray-500">Vorschau aktualisiert automatisch</span>
             <button
               type="button"
               onClick={handleSave}
@@ -267,7 +269,7 @@ Andere falsche Antwort`}
             >{isSaving ? '⏳ Speichern...' : '💾 Speichern'}</button>
           </div>
 
-          {/* Format Hilfe */}
+      {/* Format Hilfe */}
           <div className="bg-blue-50 border border-blue-200 rounded p-4">
             <h4 className="font-semibold text-blue-800 mb-2">📋 Format-Regeln:</h4>
             <ul className="text-blue-700 text-sm space-y-1">
@@ -275,8 +277,8 @@ Andere falsche Antwort`}
               <li>• <strong>Zweite Zeile:</strong> Richtige Antwort</li>
               <li>• <strong>Weitere Zeilen:</strong> Falsche Antworten</li>
               <li>• <strong>Trennung:</strong> Leere Zeile zwischen Fragen</li>
-              <li>• <strong>Bilder:</strong> [/media/bilder/dateiname.jpg]</li>
-              <li>• <strong>Audio:</strong> [/media/audio/dateiname.mp3]</li>
+        <li>• <strong>Medien:</strong> [bild.jpg] oder [/uploads/bild.jpg] oder absolute URL – Dateinamen werden automatisch zu <code>/uploads/…</code> aufgelöst</li>
+        <li>• <strong>Audio:</strong> [sound.mp3] (auch Pfad wie /uploads/sound.mp3 oder absolute URL möglich)</li>
             </ul>
           </div>
         </div>

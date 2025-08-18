@@ -1,5 +1,6 @@
 "use client";
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import CategorySelect from '@/components/shared/CategorySelect';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/shared/ToastProvider';
@@ -7,10 +8,6 @@ import MediaLibrary from '@/components/media/MediaLibrary';
 
 interface TeacherClass { _id:string; name:string; courseAccess?: 'class'|'all'; }
 interface CourseDB { _id:string; title:string; description?:string; category?:string; isPublished?:boolean; author?:string; }
-
-const CATEGORIES = [
-  "Mathematik","Musik","Deutsch","Englisch","Geographie","Geschichte","Physik","Chemie","Biologie","Kunst","Informatik","sonstiges"
-];
 
 export default function TeacherCoursesPage(){
   return (
@@ -211,10 +208,15 @@ function TeacherCoursesContent(){
                           <textarea value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="w-full border rounded px-3 py-2 h-24" />
                         </div>
                         <div className="flex gap-2 items-center">
-                          <select value={editCategory} onChange={e=>setEditCategory(e.target.value)} className="border rounded px-2 py-1 text-sm">
-                            <option value="">Kategorie wählen</option>
-                            {CATEGORIES.map(cat=> <option key={cat} value={cat}>{cat}</option>)}
-                          </select>
+                          <CategorySelect
+                            value={editCategory}
+                            onChange={setEditCategory}
+                            label=""
+                            includeEmpty
+                            emptyLabel="Kategorie wählen"
+                            labelClassName="sr-only"
+                            selectClassName="border rounded px-2 py-1 text-sm"
+                          />
                           {/* Veröffentlicht-Toggle entfernt im Teacher-Kontext */}
                           <div className="flex gap-2 ml-auto">
                             <button disabled={saving} onClick={saveEdit} className="bg-blue-600 text-white px-3 py-1 rounded text-sm disabled:opacity-50">💾 Speichern</button>

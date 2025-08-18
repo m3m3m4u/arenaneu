@@ -109,7 +109,7 @@ function AdminTeacherManageInner(){
       {error && <div className="text-red-600 text-sm">{error}</div>}
       {loading && <div className="text-sm text-gray-500">Lade…</div>}
 
-      {(classes.length>0 || learners.length>0) && (
+  {(teacher || teacherIdParam) && (
         <section className="bg-white border rounded p-4 space-y-4">
           <h2 className="font-semibold">Klassen</h2>
           <form onSubmit={createClass} className="flex gap-2 text-xs">
@@ -123,7 +123,7 @@ function AdminTeacherManageInner(){
         </section>
       )}
 
-      {(classes.length>0 || learners.length>0) && (
+  {(teacher || teacherIdParam) && (
         <section className="bg-white border rounded p-4 space-y-4">
           <h2 className="font-semibold">Lernende</h2>
           <form onSubmit={createLearner} className="grid gap-2 md:grid-cols-6 text-xs items-start">

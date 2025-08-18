@@ -137,9 +137,9 @@ function LernenPageInner() {
       setLoading(true); setError(null);
       try {
     const q = new URLSearchParams();
-    if (selectedCategory) q.set('cat', selectedCategory);
     // Standard: Klassenkurse, außer Gast (Gast hat keinen Modus; bleibt class)
     q.set('mode', activeMode);
+    // Wichtig: Keine serverseitige Kategorie-Filterung mehr, damit die Button-Leiste vollständig bleibt
     const url = `/api/kurse${q.toString() ? `?${q.toString()}` : ''}`; // nur veröffentlichte
     const res = await fetch(url);
         const data = await res.json();
@@ -160,7 +160,7 @@ function LernenPageInner() {
     };
   void load();
     return () => { cancelled = true; };
-  }, [viewTab, selectedCategory, activeMode]);
+  }, [viewTab, activeMode]);
 
   // Klassenliste laden (nur Lehrer) – unabhängig vom Tab, damit Auswahl immer verfügbar ist
   useEffect(() => {

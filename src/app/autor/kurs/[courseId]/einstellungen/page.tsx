@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 // import { useRouter } from 'next/navigation'; // entfernt: ungenutzt
 import Link from 'next/link';
+import CategorySelect from '@/components/shared/CategorySelect';
 import { usePathname, useParams } from 'next/navigation';
 
 interface CourseSettings {
@@ -212,26 +213,12 @@ export default function CourseSettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Kategorie */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Kategorie *
-                </label>
-                <select
+                <CategorySelect
                   value={course.category}
-                  onChange={(e) => handleInputChange('category', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="Mathematik">Mathematik</option>
-                  <option value="Musik">Musik</option>
-                  <option value="Deutsch">Deutsch</option>
-                  <option value="Englisch">Englisch</option>
-                  <option value="Geographie">Geographie</option>
-                  <option value="Geschichte">Geschichte</option>
-                  <option value="Physik">Physik</option>
-                  <option value="Chemie">Chemie</option>
-                  <option value="Biologie">Biologie</option>
-                  <option value="Kunst">Kunst</option>
-                  <option value="sonstiges">sonstiges</option>
-                </select>
+                  onChange={(v)=>handleInputChange('category', v)}
+                  label="Kategorie *"
+                  selectClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
             </div>
 

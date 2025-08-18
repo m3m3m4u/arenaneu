@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import CategorySelect from '@/components/shared/CategorySelect';
 import { useRouter } from "next/navigation";
 
 export default function KursErstellenPage() {
@@ -85,26 +86,15 @@ export default function KursErstellenPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Kategorie *</label>
-            <select
+            <CategorySelect
               value={courseData.category}
-              onChange={(e) => setCourseData({...courseData, category: e.target.value})}
-              className="w-full p-3 border rounded"
+              onChange={(v)=> setCourseData(c=>({...c, category: v}))}
+              label="Kategorie *"
               required
-            >
-              <option value="">Kategorie wählen</option>
-              <option value="Mathematik">Mathematik</option>
-              <option value="Musik">Musik</option>
-              <option value="Deutsch">Deutsch</option>
-              <option value="Englisch">Englisch</option>
-              <option value="Geographie">Geographie</option>
-              <option value="Geschichte">Geschichte</option>
-              <option value="Physik">Physik</option>
-              <option value="Chemie">Chemie</option>
-              <option value="Biologie">Biologie</option>
-              <option value="Kunst">Kunst</option>
-              <option value="sonstiges">sonstiges</option>
-            </select>
+              includeEmpty
+              emptyLabel="Kategorie wählen"
+              selectClassName="w-full p-3 border rounded"
+            />
           </div>
         </div>
 

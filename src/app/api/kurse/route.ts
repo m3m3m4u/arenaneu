@@ -6,20 +6,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import User from '@/models/User';
 import ClassCourseAccess from '@/models/ClassCourseAccess';
-
-const ALLOWED_CATEGORIES = [
-  "Mathematik",
-  "Musik",
-  "Deutsch",
-  "Englisch",
-  "Geographie",
-  "Geschichte",
-  "Physik",
-  "Chemie",
-  "Biologie",
-  "Kunst",
-  "sonstiges"
-];
+import { CATEGORIES as ALLOWED_CATEGORIES, normalizeCategory } from '@/lib/categories';
 
 type LeanCourse = { _id: unknown } & Record<string, unknown>;
 
@@ -38,9 +25,7 @@ export async function GET(req: NextRequest) {
       if (!rawCat) return undefined;
       const v = String(rawCat).trim();
       if (!v || /^(alle|all|any)$/i.test(v)) return undefined; // keine Einschränkung
-      // Nur erlaubte Kategorien zulassen, sonst ignorieren
-      const found = ALLOWED_CATEGORIES.find(c => c.toLowerCase() === v.toLowerCase());
-      return found || undefined;
+      return normalizeCategory(v);
     })();
     const filter: Record<string, unknown> = showAll ? {} : { isPublished: true };
     if (normalizedCat) filter.category = normalizedCat;
