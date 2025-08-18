@@ -1,2 +1,2 @@
-Isostadt läuft als React-Client-Komponente (IsostadtCanvas) direkt auf /arena/isostadt.
+Isostadt (arenaCity) läuft als React-Client-Komponente (IsostadtCanvas) direkt auf /arena/arenaCity.
 Texturen liegen in /public/media.

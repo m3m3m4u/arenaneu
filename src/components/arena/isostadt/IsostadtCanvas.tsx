@@ -162,7 +162,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
 
   async function loadMapFromDB() {
       try {
-        const res = await fetch(`/api/arena/isostadt?key=${encodeURIComponent(mapKey.current)}`);
+  const res = await fetch(`/api/arena/arenaCity?key=${encodeURIComponent(mapKey.current)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data?.success && data?.exists && Array.isArray(data.map) && Number.isFinite(data.n)) {
@@ -196,7 +196,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
         try {
-          const res = await fetch('/api/arena/isostadt', {
+          const res = await fetch('/api/arena/arenaCity', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: mapKey.current, n, map, lastModified, balance: balanceRef.current, stars: starsRef.current }),

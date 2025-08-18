@@ -25,7 +25,7 @@ export default function ArenaPage() {
       )}
       
       <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <a href="/arena/isostadt" className="block border rounded p-4 hover:bg-gray-50 transition">
+  <a href="/arena/arenaCity" className="block border rounded p-4 hover:bg-gray-50 transition">
           <div className="flex items-center gap-3">
             <img src="/media/haus.svg" alt="arenaCity" className="w-10 h-10" />
             <div>
