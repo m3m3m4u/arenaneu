@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 
 type Props = {
   width?: number;
@@ -72,6 +73,7 @@ const OFFICE_META: Record<number, { name: string; price: number }> = {
 };
 
 export default function IsostadtCanvas({ width, height }: Props) {
+  const { data: session } = useSession();
   const bgRef = useRef<HTMLCanvasElement | null>(null);
   const fgRef = useRef<HTMLCanvasElement | null>(null);
   const areaRef = useRef<HTMLDivElement | null>(null);
@@ -82,6 +84,12 @@ export default function IsostadtCanvas({ width, height }: Props) {
   type Panel = "roads" | "houses" | "market" | "townhouse" | "kiosk" | "office" | null;
   const [activePanel, setActivePanel] = useState<Panel>(null);
   const [panMode, setPanMode] = useState(false);
+  const [inspectMode, setInspectMode] = useState(false);
+  const inspectModeRef = useRef(false);
+  const [demolishMode, setDemolishMode] = useState(false);
+  const demolishModeRef = useRef(false);
+  const [inspect, setInspect] = useState<null | { idx: number; name: string; price: number; type: "house" | "road" | "building"; posI: number; posJ: number } & { taxes?: number; population?: number }>(null);
+  const inspectRef = useRef<typeof inspect>(null);
   const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
   const [gridXOffset, setGridXOffset] = useState(0); // px
   const [gridYOffset, setGridYOffset] = useState(0); // px
@@ -100,13 +108,47 @@ export default function IsostadtCanvas({ width, height }: Props) {
   // Wenn Balance/Sterne sich ändern, speichern (debounced via saveRef)
   useEffect(() => { saveRef.current?.(); }, [balance, stars]);
 
+  // Sterne mit Profil synchronisieren
+  useEffect(() => {
+    const uname = (session?.user as any)?.username as string | undefined;
+    if (!uname) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/user?username=${encodeURIComponent(uname)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const st = Number(data?.user?.stars);
+        if (Number.isFinite(st)) setStars(st);
+      } catch {}
+    })();
+  }, [session?.user]);
+
   const panRef = useRef(false);
   const toolRef = useRef<[number, number] | null>(null); // [row, col]
+  const inspectByClickRef = useRef(false);
 
   useEffect(() => {
     panRef.current = panMode;
     updateCursor();
   }, [panMode]);
+  useEffect(() => {
+    inspectModeRef.current = inspectMode;
+    updateCursor();
+    // Beim Wechsel in/aus den Inspektionsmodus: immer zurücksetzen,
+    // damit keine Zone ohne Klick sichtbar ist
+    inspectByClickRef.current = false;
+    setInspect(null);
+    // Optional neu zeichnen, um den Zustand zu reflektieren
+    if (inspectMode) {
+      redrawRef.current?.();
+    }
+  }, [inspectMode]);
+  useEffect(() => { inspectRef.current = inspect; redrawRef.current?.(); }, [inspect]);
+  
+  useEffect(() => {
+    demolishModeRef.current = demolishMode;
+    updateCursor();
+  }, [demolishMode]);
 
   // Lade zuletzt gespeicherten Änderungszeitpunkt (lokal)
   useEffect(() => {
@@ -126,13 +168,17 @@ export default function IsostadtCanvas({ width, height }: Props) {
   function updateCursor() {
     const fg = fgRef.current;
     if (!fg) return;
-    fg.style.cursor = panRef.current ? "all-scroll" : toolRef.current ? "crosshair" : "default";
+  fg.style.cursor = inspectMode ? "pointer" : demolishModeRef.current ? "crosshair" : panRef.current ? "all-scroll" : toolRef.current ? "crosshair" : "default";
   }
 
   useEffect(() => {
     const bg = bgRef.current!;
     const fg = fgRef.current!;
     const area = areaRef.current!;
+
+    // Map-Key an eingeloggten Nutzer binden (sonst 'default')
+    const uname = (session?.user as any)?.username as string | undefined;
+    mapKey.current = uname ? `isostadt:${uname}` : 'default';
 
     let w = (bg.width = width || area.clientWidth || 1400);
     let h = (bg.height = height || area.clientHeight || 900);
@@ -162,7 +208,8 @@ export default function IsostadtCanvas({ width, height }: Props) {
 
   async function loadMapFromDB() {
       try {
-        const res = await fetch(`/api/arena/isostadt?key=${encodeURIComponent(mapKey.current)}`);
+        const key = mapKey.current;
+        const res = await fetch(`/api/arena/isostadt?key=${encodeURIComponent(key)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data?.success && data?.exists && Array.isArray(data.map) && Number.isFinite(data.n)) {
@@ -188,6 +235,31 @@ export default function IsostadtCanvas({ width, height }: Props) {
           else setStars((s) => s);
           drawMap();
           drawHover();
+        } else if (data?.success && !data?.exists && key !== 'default') {
+          // Fallback: 'default' laden
+          const resDef = await fetch(`/api/arena/isostadt?key=default`);
+          if (resDef.ok) {
+            const def = await resDef.json();
+            if (def?.success && def?.exists && Array.isArray(def.map) && Number.isFinite(def.n)) {
+              const dn: number = def.n;
+              const src: any[][][] = def.map;
+              for (let i = 0; i < Math.min(n, dn); i++) {
+                for (let j = 0; j < Math.min(n, dn); j++) {
+                  const cell = src?.[i]?.[j];
+                  if (Array.isArray(cell) && cell.length === 2 && Number.isFinite(cell[0]) && Number.isFinite(cell[1])) {
+                    map[i][j] = [cell[0], cell[1]] as [number, number];
+                  }
+                }
+              }
+              if (typeof def.lastModified === 'number') setLastModified(def.lastModified);
+              if (typeof def.balance === 'number') setBalance(def.balance);
+              if (typeof def.stars === 'number') setStars(def.stars);
+              drawMap();
+              drawHover();
+              // Optional: direkt unter Benutzer-Key speichern
+              scheduleSave();
+            }
+          }
         }
       } catch {}
     }
@@ -243,6 +315,49 @@ export default function IsostadtCanvas({ width, height }: Props) {
       return (ROAD_TILE_INDICES as readonly number[]).includes(idx);
     }
 
+    function isKioskIdx(idx: number) {
+      return (KIOSK_TILE_INDICES as readonly number[]).includes(idx);
+    }
+
+    function isHouseIdx(idx: number) {
+      // Behandle Wohnhaus und Stadthaus als "Haus" für Hervorhebung/Bonuseffekte
+      if ((HOUSE_TILE_INDICES as readonly number[]).includes(idx)) return true;
+      if ((TOWNHOUSE_TILE_INDICES as readonly number[]).includes(idx)) return true;
+      return false;
+    }
+
+    function isMarketIdx(idx: number) {
+      return (MARKET_TILE_INDICES as readonly number[]).includes(idx);
+    }
+
+    function isOfficeIdx(idx: number) {
+      return (OFFICE_TILE_INDICES as readonly number[]).includes(idx);
+    }
+
+    // Reichweite je Kiosk-Typ: günstiger Kiosk (66) = 4, teurer (69) = 5
+    function kioskRangeByIdx(idx: number): number {
+      if (idx === 66) return 4;
+      if (idx === 69) return 5;
+      return 5;
+    }
+
+    function marketRangeByIdx(idx: number): number {
+      // 47 klein -> 6, 54 mittel -> 7, 56 groß -> 8
+      if (idx === 47) return 6;
+      if (idx === 54) return 7;
+      if (idx === 56) return 8;
+      return 7;
+    }
+
+    function officeRangeByIdx(idx: number): number {
+      // 46 klein -> 3, 55 mittel -> 4, 57 hoch -> 5, 58 komplex -> 6
+      if (idx === 46) return 3;
+      if (idx === 55) return 4;
+      if (idx === 57) return 5;
+      if (idx === 58) return 6;
+      return 4;
+    }
+
     type Conn = { N?: boolean; E?: boolean; S?: boolean; W?: boolean };
     // Ersteinschätzung der Straßen-Konnektivität für gängige Formen
     const ROAD_CONN: Partial<Record<number, Conn>> = {
@@ -275,6 +390,54 @@ export default function IsostadtCanvas({ width, height }: Props) {
         }
       }
       return false;
+    }
+
+    // Zähle Kioske, die die Position (i,j) tatsächlich abdecken (eigene Reichweite je Kiosk)
+    function countKiosksCovering(i: number, j: number) {
+      let count = 0;
+      for (let ii = 0; ii < n; ii++) {
+        for (let jj = 0; jj < n; jj++) {
+          const [ti, tj] = map[ii][jj];
+          const idx = ti * SHEET_COLS + tj;
+          if (!isKioskIdx(idx)) continue;
+          const r = kioskRangeByIdx(idx);
+          const d = Math.max(Math.abs(ii - i), Math.abs(jj - j));
+          if (d <= r) count++;
+        }
+      }
+      return count;
+    }
+
+    // Zähle Märkte, die die Position (i,j) abdecken
+    function countMarketsCovering(i: number, j: number) {
+      let count = 0;
+      for (let ii = 0; ii < n; ii++) {
+        for (let jj = 0; jj < n; jj++) {
+          const [ti, tj] = map[ii][jj];
+          const idx = ti * SHEET_COLS + tj;
+          if (!isMarketIdx(idx)) continue;
+          const r = marketRangeByIdx(idx);
+          const d = Math.max(Math.abs(ii - i), Math.abs(jj - j));
+          if (d <= r) count++;
+        }
+      }
+      return count;
+    }
+
+    // Zähle Büros, die die Position (i,j) abdecken
+    function countOfficesCovering(i: number, j: number) {
+      let count = 0;
+      for (let ii = 0; ii < n; ii++) {
+        for (let jj = 0; jj < n; jj++) {
+          const [ti, tj] = map[ii][jj];
+          const idx = ti * SHEET_COLS + tj;
+          if (!isOfficeIdx(idx)) continue;
+          const r = officeRangeByIdx(idx);
+          const d = Math.max(Math.abs(ii - i), Math.abs(jj - j));
+          if (d <= r) count++;
+        }
+      }
+      return count;
     }
 
     function canPlaceAt(i: number, j: number) {
@@ -348,10 +511,12 @@ export default function IsostadtCanvas({ width, height }: Props) {
       for (let i = 0; i < n; i++) {
         for (let j = 0; j < n; j++) {
           const [ti, tj] = map[i][j];
-          // Tile zeichnen
-          drawTile(ctx, i, j, ti, tj);
-          // Wenn Zelle leer ist, Gitter-Raute direkt darüber zeichnen
-          if (isEmptyCell(i, j)) {
+          // Nur nicht-leere Zellen zeichnen
+          if (!isEmptyCell(i, j)) {
+            drawTile(ctx, i, j, ti, tj);
+          } else {
+            // Leere Zelle: zeige das Objekt mit ID 0 (Spritesheet 0,0) und darüber die Rasterkontur
+            drawTile(ctx, i, j, 0, 0);
             const { x: cx, y: cy } = gridCenter(i, j);
             ctx.beginPath();
             ctx.moveTo(cx, cy - ISO_H / 2);
@@ -359,6 +524,8 @@ export default function IsostadtCanvas({ width, height }: Props) {
             ctx.lineTo(cx, cy + ISO_H / 2);
             ctx.lineTo(cx - ISO_W / 2, cy);
             ctx.closePath();
+            ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+            ctx.lineWidth = Math.max(1, 1 / scale);
             ctx.stroke();
           }
         }
@@ -424,36 +591,340 @@ export default function IsostadtCanvas({ width, height }: Props) {
     function drawHover() {
       fgctx.setTransform(1, 0, 0, 1, 0, 0);
       fgctx.clearRect(0, 0, w, h);
-      if (!hover) return;
       fgctx.translate(w / 2 + panX, ISO_H * 2 + panY);
       fgctx.scale(scale, scale);
-  const i = hover.x; // row
-  const j = hover.y; // col
-  const { x: cx, y: cy } = gridCenter(i, j);
-      fgctx.beginPath();
-      fgctx.moveTo(cx, cy - ISO_H / 2);
-      fgctx.lineTo(cx + ISO_W / 2, cy);
-      fgctx.lineTo(cx, cy + ISO_H / 2);
-      fgctx.lineTo(cx - ISO_W / 2, cy);
-      fgctx.closePath();
-  // Farbcode: grün (ok), rot (nicht ok), blau (kein Tool)
-  let fill = "rgba(59,130,246,0.20)", stroke = "rgba(59,130,246,1)";
-  if (toolRef.current) {
-    const ok = canPlaceAt(i, j);
-    if (ok) { fill = "rgba(16,185,129,0.25)"; stroke = "rgba(16,185,129,1)"; }
-    else { fill = "rgba(239,68,68,0.25)"; stroke = "rgba(239,68,68,1)"; }
-  }
-  // Light fill to make the hovered cell pop on any background
-  fgctx.fillStyle = fill;
-  fgctx.fill();
-      // Outer white stroke for contrast
-      fgctx.strokeStyle = "rgba(255,255,255,0.9)";
-      fgctx.lineWidth = Math.max(2, 4 / scale);
-      fgctx.stroke();
-      // Inner blue stroke
-      fgctx.strokeStyle = stroke;
-      fgctx.lineWidth = Math.max(1, 2 / scale);
-      fgctx.stroke();
+  const i: number | null = hover ? hover.x : null; // row
+  const j: number | null = hover ? hover.y : null; // col
+
+  // Wenn ein Kiosk/Markt/Büro platziert werden soll: Reichweite (Chebyshev) markieren
+      if (toolRef.current && !demolishModeRef.current && !inspectModeRef.current && i != null && j != null) {
+        const selIdx = toolRef.current[0] * SHEET_COLS + toolRef.current[1];
+        if (isKioskIdx(selIdx)) {
+      const range = kioskRangeByIdx(selIdx);
+          const fillRange = "rgba(245,158,11,0.12)"; // Amber 400, transparent
+          const strokeRange = "rgba(245,158,11,0.9)";
+          for (let ii = Math.max(0, i - range); ii <= Math.min(n - 1, i + range); ii++) {
+            for (let jj = Math.max(0, j - range); jj <= Math.min(n - 1, j + range); jj++) {
+              const d = Math.max(Math.abs(ii - i), Math.abs(jj - j));
+              if (d > range) continue;
+              const { x: rx, y: ry } = gridCenter(ii, jj);
+              fgctx.beginPath();
+              fgctx.moveTo(rx, ry - ISO_H / 2);
+              fgctx.lineTo(rx + ISO_W / 2, ry);
+              fgctx.lineTo(rx, ry + ISO_H / 2);
+              fgctx.lineTo(rx - ISO_W / 2, ry);
+              fgctx.closePath();
+              fgctx.fillStyle = fillRange;
+              fgctx.fill();
+              fgctx.strokeStyle = strokeRange;
+              fgctx.lineWidth = Math.max(1, 1.5 / scale);
+              fgctx.stroke();
+              const [tti, ttj] = map[ii][jj];
+              const tIdx = tti * SHEET_COLS + ttj;
+              if (isHouseIdx(tIdx)) {
+                fgctx.strokeStyle = "rgba(16,185,129,1)";
+                fgctx.lineWidth = Math.max(1.5, 2 / scale);
+                fgctx.stroke();
+              }
+            }
+          }
+        } else if (isMarketIdx(selIdx)) {
+          const range = marketRangeByIdx(selIdx);
+          const fillRange = "rgba(59,130,246,0.10)"; // Blau-transparent
+          const strokeRange = "rgba(59,130,246,0.85)";
+          for (let ii = Math.max(0, i - range); ii <= Math.min(n - 1, i + range); ii++) {
+            for (let jj = Math.max(0, j - range); jj <= Math.min(n - 1, j + range); jj++) {
+              const d = Math.max(Math.abs(ii - i), Math.abs(jj - j));
+              if (d > range) continue;
+              const { x: rx, y: ry } = gridCenter(ii, jj);
+              fgctx.beginPath();
+              fgctx.moveTo(rx, ry - ISO_H / 2);
+              fgctx.lineTo(rx + ISO_W / 2, ry);
+              fgctx.lineTo(rx, ry + ISO_H / 2);
+              fgctx.lineTo(rx - ISO_W / 2, ry);
+              fgctx.closePath();
+              fgctx.fillStyle = fillRange;
+              fgctx.fill();
+              fgctx.strokeStyle = strokeRange;
+              fgctx.lineWidth = Math.max(1, 1.5 / scale);
+              fgctx.stroke();
+              const [tti, ttj] = map[ii][jj];
+              const tIdx = tti * SHEET_COLS + ttj;
+              if (isHouseIdx(tIdx)) {
+                fgctx.strokeStyle = "rgba(16,185,129,1)";
+                fgctx.lineWidth = Math.max(1.5, 2 / scale);
+                fgctx.stroke();
+              }
+            }
+          }
+        } else if (isOfficeIdx(selIdx)) {
+          const range = officeRangeByIdx(selIdx);
+          const fillRange = "rgba(168,85,247,0.10)"; // Violett-transparent
+          const strokeRange = "rgba(168,85,247,0.85)";
+          for (let ii = Math.max(0, i - range); ii <= Math.min(n - 1, i + range); ii++) {
+            for (let jj = Math.max(0, j - range); jj <= Math.min(n - 1, j + range); jj++) {
+              const d = Math.max(Math.abs(ii - i), Math.abs(jj - j));
+              if (d > range) continue;
+              const { x: rx, y: ry } = gridCenter(ii, jj);
+              fgctx.beginPath();
+              fgctx.moveTo(rx, ry - ISO_H / 2);
+              fgctx.lineTo(rx + ISO_W / 2, ry);
+              fgctx.lineTo(rx, ry + ISO_H / 2);
+              fgctx.lineTo(rx - ISO_W / 2, ry);
+              fgctx.closePath();
+              fgctx.fillStyle = fillRange;
+              fgctx.fill();
+              fgctx.strokeStyle = strokeRange;
+              fgctx.lineWidth = Math.max(1, 1.5 / scale);
+              fgctx.stroke();
+              const [tti, ttj] = map[ii][jj];
+              const tIdx = tti * SHEET_COLS + ttj;
+              if (isHouseIdx(tIdx)) {
+                fgctx.strokeStyle = "rgba(16,185,129,1)";
+                fgctx.lineWidth = Math.max(1.5, 2 / scale);
+                fgctx.stroke();
+              }
+            }
+          }
+        }
+      }
+
+  // Haus-Inspect zeigt keine Zone mehr – Zone nur für Kiosk nach Klick
+
+  // Zone beim Kiosk-Inspect: nur bei Klick-Inspekt zeigen
+  const currentInspect = inspectRef.current;
+  if (inspectModeRef.current && currentInspect && isKioskIdx(currentInspect.idx) && inspectByClickRef.current) {
+        const ci = (currentInspect as any).posI;
+        const cj = (currentInspect as any).posJ;
+        const range = kioskRangeByIdx(currentInspect.idx);
+        const fillRange = "rgba(245,158,11,0.10)";
+        const strokeRange = "rgba(245,158,11,0.85)";
+        for (let ii = Math.max(0, ci - range); ii <= Math.min(n - 1, ci + range); ii++) {
+          for (let jj = Math.max(0, cj - range); jj <= Math.min(n - 1, cj + range); jj++) {
+            const d = Math.max(Math.abs(ii - ci), Math.abs(jj - cj));
+            if (d > range) continue;
+            const { x: rx, y: ry } = gridCenter(ii, jj);
+            fgctx.beginPath();
+            fgctx.moveTo(rx, ry - ISO_H / 2);
+            fgctx.lineTo(rx + ISO_W / 2, ry);
+            fgctx.lineTo(rx, ry + ISO_H / 2);
+            fgctx.lineTo(rx - ISO_W / 2, ry);
+            fgctx.closePath();
+            fgctx.fillStyle = fillRange;
+            fgctx.fill();
+            fgctx.strokeStyle = strokeRange;
+            fgctx.lineWidth = Math.max(1, 1.25 / scale);
+            fgctx.stroke();
+            const [tti, ttj] = map[ii][jj];
+            const tIdx = tti * SHEET_COLS + ttj;
+            if (isHouseIdx(tIdx)) {
+              fgctx.strokeStyle = "rgba(16,185,129,1)";
+              fgctx.lineWidth = Math.max(1.5, 2 / scale);
+              fgctx.stroke();
+            }
+          }
+        }
+
+        // Mittelpunkt wie in der Bau-Ansicht hervorheben (Diamant + Label)
+        if (ci != null && cj != null) {
+          const { x: cx2, y: cy2 } = gridCenter(ci, cj);
+          fgctx.beginPath();
+          fgctx.moveTo(cx2, cy2 - ISO_H / 2);
+          fgctx.lineTo(cx2 + ISO_W / 2, cy2);
+          fgctx.lineTo(cx2, cy2 + ISO_H / 2);
+          fgctx.lineTo(cx2 - ISO_W / 2, cy2);
+          fgctx.closePath();
+          let fill2 = "rgba(59,130,246,0.20)", stroke2 = "rgba(59,130,246,1)";
+          fgctx.fillStyle = fill2;
+          fgctx.fill();
+          fgctx.strokeStyle = "rgba(255,255,255,0.9)";
+          fgctx.lineWidth = Math.max(2, 4 / scale);
+          fgctx.stroke();
+          fgctx.strokeStyle = stroke2;
+          fgctx.lineWidth = Math.max(1, 2 / scale);
+          fgctx.stroke();
+
+          const label = currentInspect.name;
+          if (label) {
+            const px = cx2;
+            const py = cy2 - ISO_H / 2 - 6;
+            const basePx = 12;
+            const fontPx = Math.max(10, basePx / scale);
+            fgctx.save();
+            fgctx.font = `${fontPx}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+            const metrics = fgctx.measureText(label);
+            const padX = 6 / Math.max(1, scale);
+            const padY = 4 / Math.max(1, scale);
+            const bw = metrics.width + padX * 2;
+            const bh = fontPx + padY * 2;
+            const bx = px - bw / 2;
+            const by = py - bh - 2 / Math.max(1, scale);
+            const r = 6 / Math.max(1, scale);
+            const drawRoundRect = (x: number, y: number, w: number, h: number, rr: number) => {
+              const rrClamped = Math.min(rr, w / 2, h / 2);
+              fgctx.beginPath();
+              fgctx.moveTo(x + rrClamped, y);
+              fgctx.lineTo(x + w - rrClamped, y);
+              fgctx.quadraticCurveTo(x + w, y, x + w, y + rrClamped);
+              fgctx.lineTo(x + w, y + h - rrClamped);
+              fgctx.quadraticCurveTo(x + w, y + h, x + w - rrClamped, y + h);
+              fgctx.lineTo(x + rrClamped, y + h);
+              fgctx.quadraticCurveTo(x, y + h, x, y + h - rrClamped);
+              fgctx.lineTo(x, y + rrClamped);
+              fgctx.quadraticCurveTo(x, y, x + rrClamped, y);
+              fgctx.closePath();
+            };
+            drawRoundRect(bx, by, bw, bh, r);
+            fgctx.fillStyle = "rgba(255,255,255,0.95)";
+            fgctx.fill();
+            fgctx.strokeStyle = "rgba(0,0,0,0.15)";
+            fgctx.lineWidth = Math.max(1, 1 / scale);
+            fgctx.stroke();
+            fgctx.fillStyle = "#111";
+            fgctx.textBaseline = "middle";
+            fgctx.textAlign = "center";
+            fgctx.fillText(label, px, by + bh / 2);
+            fgctx.restore();
+          }
+        }
+      }
+
+      // Zone beim Markt-Inspect: nur bei Klick-Inspekt zeigen
+      if (inspectModeRef.current && currentInspect && isMarketIdx(currentInspect.idx) && inspectByClickRef.current) {
+        const ci = (currentInspect as any).posI;
+        const cj = (currentInspect as any).posJ;
+        const range = marketRangeByIdx(currentInspect.idx);
+        const fillRange = "rgba(59,130,246,0.10)";
+        const strokeRange = "rgba(59,130,246,0.85)";
+        for (let ii = Math.max(0, ci - range); ii <= Math.min(n - 1, ci + range); ii++) {
+          for (let jj = Math.max(0, cj - range); jj <= Math.min(n - 1, cj + range); jj++) {
+            const d = Math.max(Math.abs(ii - ci), Math.abs(jj - cj));
+            if (d > range) continue;
+            const { x: rx, y: ry } = gridCenter(ii, jj);
+            fgctx.beginPath();
+            fgctx.moveTo(rx, ry - ISO_H / 2);
+            fgctx.lineTo(rx + ISO_W / 2, ry);
+            fgctx.lineTo(rx, ry + ISO_H / 2);
+            fgctx.lineTo(rx - ISO_W / 2, ry);
+            fgctx.closePath();
+            fgctx.fillStyle = fillRange;
+            fgctx.fill();
+            fgctx.strokeStyle = strokeRange;
+            fgctx.lineWidth = Math.max(1, 1.25 / scale);
+            fgctx.stroke();
+            const [tti, ttj] = map[ii][jj];
+            const tIdx = tti * SHEET_COLS + ttj;
+            if (isHouseIdx(tIdx)) {
+              fgctx.strokeStyle = "rgba(16,185,129,1)";
+              fgctx.lineWidth = Math.max(1.5, 2 / scale);
+              fgctx.stroke();
+            }
+          }
+        }
+
+        // Mittelpunkt hervorheben
+        if (ci != null && cj != null) {
+          const { x: cx2, y: cy2 } = gridCenter(ci, cj);
+          fgctx.beginPath();
+          fgctx.moveTo(cx2, cy2 - ISO_H / 2);
+          fgctx.lineTo(cx2 + ISO_W / 2, cy2);
+          fgctx.lineTo(cx2, cy2 + ISO_H / 2);
+          fgctx.lineTo(cx2 - ISO_W / 2, cy2);
+          fgctx.closePath();
+          fgctx.fillStyle = "rgba(59,130,246,0.20)";
+          fgctx.fill();
+          fgctx.strokeStyle = "rgba(255,255,255,0.9)";
+          fgctx.lineWidth = Math.max(2, 4 / scale);
+          fgctx.stroke();
+          fgctx.strokeStyle = "rgba(59,130,246,1)";
+          fgctx.lineWidth = Math.max(1, 2 / scale);
+          fgctx.stroke();
+        }
+      }
+
+      // Zone beim Büro-Inspect: nur bei Klick-Inspekt zeigen
+      if (inspectModeRef.current && currentInspect && isOfficeIdx(currentInspect.idx) && inspectByClickRef.current) {
+        const ci = (currentInspect as any).posI;
+        const cj = (currentInspect as any).posJ;
+        const range = officeRangeByIdx(currentInspect.idx);
+        const fillRange = "rgba(168,85,247,0.10)";
+        const strokeRange = "rgba(168,85,247,0.85)";
+        for (let ii = Math.max(0, ci - range); ii <= Math.min(n - 1, ci + range); ii++) {
+          for (let jj = Math.max(0, cj - range); jj <= Math.min(n - 1, cj + range); jj++) {
+            const d = Math.max(Math.abs(ii - ci), Math.abs(jj - cj));
+            if (d > range) continue;
+            const { x: rx, y: ry } = gridCenter(ii, jj);
+            fgctx.beginPath();
+            fgctx.moveTo(rx, ry - ISO_H / 2);
+            fgctx.lineTo(rx + ISO_W / 2, ry);
+            fgctx.lineTo(rx, ry + ISO_H / 2);
+            fgctx.lineTo(rx - ISO_W / 2, ry);
+            fgctx.closePath();
+            fgctx.fillStyle = fillRange;
+            fgctx.fill();
+            fgctx.strokeStyle = strokeRange;
+            fgctx.lineWidth = Math.max(1, 1.25 / scale);
+            fgctx.stroke();
+            const [tti, ttj] = map[ii][jj];
+            const tIdx = tti * SHEET_COLS + ttj;
+            if (isHouseIdx(tIdx)) {
+              fgctx.strokeStyle = "rgba(16,185,129,1)";
+              fgctx.lineWidth = Math.max(1.5, 2 / scale);
+              fgctx.stroke();
+            }
+          }
+        }
+
+        // Mittelpunkt hervorheben
+        if (ci != null && cj != null) {
+          const { x: cx2, y: cy2 } = gridCenter(ci, cj);
+          fgctx.beginPath();
+          fgctx.moveTo(cx2, cy2 - ISO_H / 2);
+          fgctx.lineTo(cx2 + ISO_W / 2, cy2);
+          fgctx.lineTo(cx2, cy2 + ISO_H / 2);
+          fgctx.lineTo(cx2 - ISO_W / 2, cy2);
+          fgctx.closePath();
+          fgctx.fillStyle = "rgba(168,85,247,0.20)";
+          fgctx.fill();
+          fgctx.strokeStyle = "rgba(255,255,255,0.9)";
+          fgctx.lineWidth = Math.max(2, 4 / scale);
+          fgctx.stroke();
+          fgctx.strokeStyle = "rgba(168,85,247,1)";
+          fgctx.lineWidth = Math.max(1, 2 / scale);
+          fgctx.stroke();
+        }
+      }
+
+  if (i != null && j != null) {
+    const { x: cx, y: cy } = gridCenter(i, j);
+    fgctx.beginPath();
+    fgctx.moveTo(cx, cy - ISO_H / 2);
+    fgctx.lineTo(cx + ISO_W / 2, cy);
+    fgctx.lineTo(cx, cy + ISO_H / 2);
+    fgctx.lineTo(cx - ISO_W / 2, cy);
+    fgctx.closePath();
+    // Farbcode: grün (ok), rot (nicht ok/Abreißen), blau (neutral)
+    let fill = "rgba(59,130,246,0.20)", stroke = "rgba(59,130,246,1)";
+    if (demolishModeRef.current) {
+      const occupied = !isEmptyCell(i, j);
+      if (occupied) { fill = "rgba(16,185,129,0.25)"; stroke = "rgba(16,185,129,1)"; }
+      else { fill = "rgba(239,68,68,0.25)"; stroke = "rgba(239,68,68,1)"; }
+    } else if (toolRef.current) {
+      const ok = canPlaceAt(i, j);
+      if (ok) { fill = "rgba(16,185,129,0.25)"; stroke = "rgba(16,185,129,1)"; }
+      else { fill = "rgba(239,68,68,0.25)"; stroke = "rgba(239,68,68,1)"; }
+    }
+    // Light fill to make the hovered cell pop on any background
+    fgctx.fillStyle = fill;
+    fgctx.fill();
+    // Outer white stroke for contrast
+    fgctx.strokeStyle = "rgba(255,255,255,0.9)";
+    fgctx.lineWidth = Math.max(2, 4 / scale);
+    fgctx.stroke();
+    // Inner blue/green/red stroke
+    fgctx.strokeStyle = stroke;
+    fgctx.lineWidth = Math.max(1, 2 / scale);
+    fgctx.stroke();
 
       // Name des aktuell gewählten Tiles anzeigen (Straßen & Gebäude)
       if (toolRef.current) {
@@ -463,7 +934,11 @@ export default function IsostadtCanvas({ width, height }: Props) {
           if ((HOUSE_TILE_INDICES as readonly number[]).includes(idx)) return HOUSE_META[idx]?.name ?? null;
           if ((MARKET_TILE_INDICES as readonly number[]).includes(idx)) return MARKET_META[idx]?.name ?? null;
           if ((TOWNHOUSE_TILE_INDICES as readonly number[]).includes(idx)) return TOWNHOUSE_META[idx]?.name ?? null;
-          if ((KIOSK_TILE_INDICES as readonly number[]).includes(idx)) return KIOSK_META[idx]?.name ?? null;
+          if ((KIOSK_TILE_INDICES as readonly number[]).includes(idx)) {
+            const base = KIOSK_META[idx]?.name ?? "Kiosk";
+            const r = kioskRangeByIdx(idx);
+            return `${base} · R=${r}`;
+          }
           if ((OFFICE_TILE_INDICES as readonly number[]).includes(idx)) return OFFICE_META[idx]?.name ?? null;
           return null;
         };
@@ -516,6 +991,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
           fgctx.restore();
         }
       }
+  }
     }
 
     function gridFromPoint(localX: number, localY: number) {
@@ -574,9 +1050,111 @@ export default function IsostadtCanvas({ width, height }: Props) {
         pointerStart = { x: e.clientX, y: e.clientY };
       }
     };
+
+  const performInspect = (lx: number, ly: number) => {
+      const pos = gridFromPoint(lx, ly);
+      const [ti, tj] = map[pos.x][pos.y];
+      const idx = ti * SHEET_COLS + tj;
+      if (idx <= 0) { setInspect(null); return; }
+      if ((ROAD_TILE_INDICES as readonly number[]).includes(idx)) {
+  // Kein Kiosk -> Zone ausblenden
+  inspectByClickRef.current = false;
+        const meta = ROAD_META[idx];
+        if (meta) setInspect({ idx, name: meta.name, price: meta.price, type: "road", posI: pos.x, posJ: pos.y });
+        else setInspect(null);
+        return;
+      }
+  if ((HOUSE_TILE_INDICES as readonly number[]).includes(idx)) {
+    // Kein Kiosk -> Zone ausblenden
+    inspectByClickRef.current = false;
+        const meta = HOUSE_META[idx];
+        if (meta) {
+          const baseTaxes = Math.round(meta.price * 0.10);
+          const hasKiosk = countKiosksCovering(pos.x, pos.y) > 0;
+          const hasMarket = countMarketsCovering(pos.x, pos.y) > 0;
+          const hasOffice = countOfficesCovering(pos.x, pos.y) > 0;
+          const taxBonus = (hasKiosk ? 0.2 : 0) + (hasMarket ? 0.4 : 0);
+          const taxes = Math.round(baseTaxes * (1 + taxBonus));
+          const basePop = Math.round(meta.price * 0.05);
+          const population = Math.round(basePop * (1 + (hasOffice ? 0.2 : 0)));
+          setInspect({ idx, name: meta.name, price: meta.price, type: "house", taxes, population, posI: pos.x, posJ: pos.y });
+        } else setInspect(null);
+        return;
+      }
+  if ((MARKET_TILE_INDICES as readonly number[]).includes(idx)) {
+        // Markt: Klick-Inspekt aktiviert Market-Zone
+        const meta = MARKET_META[idx];
+        if (meta) {
+          inspectByClickRef.current = true;
+          setInspect({ idx, name: meta.name, price: meta.price, type: "building", posI: pos.x, posJ: pos.y });
+        }
+        else setInspect(null);
+        return;
+      }
+      if ((TOWNHOUSE_TILE_INDICES as readonly number[]).includes(idx)) {
+        // Kein Zonenzentrum – Zone ausblenden
+        inspectByClickRef.current = false;
+        const meta = TOWNHOUSE_META[idx];
+        if (meta) {
+          const baseTaxes = Math.round(meta.price * 0.10);
+          const hasKiosk = countKiosksCovering(pos.x, pos.y) > 0;
+          const hasMarket = countMarketsCovering(pos.x, pos.y) > 0;
+          const bonus = (hasKiosk ? 0.2 : 0) + (hasMarket ? 0.4 : 0);
+          const taxes = Math.round(baseTaxes * (1 + bonus));
+          // "Etwas mehr Einwohner" als Haus: +20% ggü. 0.05 => 0.06
+          const population = Math.round(meta.price * 0.06);
+          setInspect({ idx, name: meta.name, price: meta.price, type: "house", taxes, population, posI: pos.x, posJ: pos.y });
+        } else setInspect(null);
+        return;
+      }
+      if ((KIOSK_TILE_INDICES as readonly number[]).includes(idx)) {
+        const meta = KIOSK_META[idx];
+        if (meta) {
+          // Bei Kiosk-Inspekt direkt Klick-Flag setzen, damit die Zone erscheint
+          inspectByClickRef.current = true;
+          setInspect({ idx, name: meta.name, price: meta.price, type: "building", posI: pos.x, posJ: pos.y });
+        }
+        else setInspect(null);
+        return;
+      }
+      if ((OFFICE_TILE_INDICES as readonly number[]).includes(idx)) {
+  // Büro: Klick-Inspekt aktiviert Büro-Zone
+  inspectByClickRef.current = true;
+        const meta = OFFICE_META[idx];
+        if (meta) setInspect({ idx, name: meta.name, price: meta.price, type: "building", posI: pos.x, posJ: pos.y });
+        else setInspect(null);
+        return;
+      }
+      setInspect(null);
+    };
+
+    const performDemolish = (lx: number, ly: number) => {
+      const pos = gridFromPoint(lx, ly);
+      const [ti, tj] = map[pos.x][pos.y];
+      if (ti === 0 && tj === 0) return;
+  map[pos.x][pos.y] = [0, 0];
+      drawMap();
+      hover = { x: pos.x, y: pos.y };
+      drawHover();
+      setInspect(null);
+      try {
+        const ts = Date.now();
+        setLastModified(ts);
+        localStorage.setItem("isostadt:lastModified", String(ts));
+      } catch {}
+  scheduleSave();
+    };
   const onMouseUp = (e: MouseEvent) => {
       if (panning) {
         panning = false;
+        return;
+      }
+      // Abreißen-Modus: vorhandenes Objekt entfernen
+      if (demolishModeRef.current) {
+        const rect = fg.getBoundingClientRect();
+        const lx = e.clientX - rect.left;
+        const ly = e.clientY - rect.top;
+        performDemolish(lx, ly);
         return;
       }
       if (!toolRef.current) return;
@@ -608,19 +1186,25 @@ export default function IsostadtCanvas({ width, height }: Props) {
         setErrorMsg("Nicht genug Guthaben.");
         return;
       }
+      // Nur auf leere Zellen bauen
+      const [cti, ctj] = map[pos.x][pos.y];
+      if (cti !== 0 || ctj !== 0) {
+        setErrorMsg("Feld ist belegt. Nutze 'Abreißen'.");
+        return;
+      }
       // Platzieren
-  map[pos.x][pos.y] = [toolRef.current[0], toolRef.current[1]];
+      map[pos.x][pos.y] = [toolRef.current[0], toolRef.current[1]];
       drawMap();
       hover = { x: pos.x, y: pos.y };
       drawHover();
-      // Guthaben abziehen
-      if (price > 0) setBalance((b) => b - price);
-  scheduleSave();
-      try {
+  // Guthaben abziehen
+  if (price > 0) setBalance((b) => b - price);
+  try {
         const ts = Date.now();
         setLastModified(ts);
         localStorage.setItem("isostadt:lastModified", String(ts));
-      } catch {}
+  } catch {}
+  scheduleSave();
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -639,6 +1223,22 @@ export default function IsostadtCanvas({ width, height }: Props) {
         hover = { x: pos.x, y: pos.y };
         drawHover();
       }
+  // Im Inspektionsmodus kein Hover-Inspect mehr, nur per Klick
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (demolishModeRef.current) {
+        const rect = fg.getBoundingClientRect();
+        const lx = e.clientX - rect.left;
+        const ly = e.clientY - rect.top;
+        performDemolish(lx, ly);
+        return;
+      }
+  if (!inspectModeRef.current) return;
+      const rect = fg.getBoundingClientRect();
+      const lx = e.clientX - rect.left;
+      const ly = e.clientY - rect.top;
+  performInspect(lx, ly);
     };
 
     const onWheel = (e: WheelEvent) => {
@@ -668,6 +1268,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
   fg.addEventListener("mouseup", onMouseUp);
   fg.addEventListener("mouseleave", onMouseLeave);
     fg.addEventListener("mousemove", onMouseMove);
+  fg.addEventListener("click", onClick);
     fg.addEventListener("wheel", onWheel, { passive: false } as any);
     window.addEventListener("keydown", onKey);
 
@@ -689,12 +1290,13 @@ export default function IsostadtCanvas({ width, height }: Props) {
   fg.removeEventListener("mouseup", onMouseUp);
   fg.removeEventListener("mouseleave", onMouseLeave);
   fg.removeEventListener("mousemove", onMouseMove);
+  fg.removeEventListener("click", onClick);
   fg.removeEventListener("wheel", onWheel as any);
       window.removeEventListener("keydown", onKey);
   if (ro) ro.disconnect();
   if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
     };
-  }, [width, height]);
+  }, [width, height, session?.user]);
 
   // Auf Grid-Settings reagieren und neu zeichnen
   useEffect(() => {
@@ -743,11 +1345,53 @@ export default function IsostadtCanvas({ width, height }: Props) {
               </svg>
             </button>
             <button
+              id="inspectBtn"
+              className="tool-btn"
+              aria-pressed={inspectMode ? "true" : "false"}
+              title="Mauszeiger (Details anzeigen)"
+              onClick={() => {
+                setInspectMode((m) => !m);
+                setPanMode(false);
+                setDemolishMode(false);
+                setActivePanel(null);
+                toolRef.current = null;
+                setSelectedTileIndex(null);
+                // Overlay soll erst nach Klick erscheinen
+                inspectByClickRef.current = false;
+                setInspect(null);
+              }}
+              style={{ border: "1px solid #bbb", background: inspectMode ? "#dbeafe" : "#f5f5f5", borderRadius: 6, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block" }}>
+                <path d="M5 3 L15 13 L11 13 L13 20 L11.5 20.7 L9.5 13.8 L7 16 Z" fill="#333" />
+              </svg>
+            </button>
+            <button
+              id="demolishBtn"
+              className="tool-btn"
+              aria-pressed={demolishMode ? "true" : "false"}
+              title="Abreißen"
+              onClick={() => {
+                setDemolishMode((m) => !m);
+                setInspectMode(false);
+                setPanMode(false);
+                setActivePanel(null);
+                toolRef.current = null;
+                setSelectedTileIndex(null);
+              }}
+              style={{ border: "1px solid #bbb", background: demolishMode ? "#fee2e2" : "#f5f5f5", borderRadius: 6, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block" }}>
+                <path d="M3 6h18v2H3zM6 8h12l-1 11H7z" fill="#b91c1c" />
+                <path d="M9 10v7M12 10v7M15 10v7" stroke="#7f1d1d" strokeWidth="1.5" />
+              </svg>
+            </button>
+            <button
               id="roadBtn"
               className="tool-btn"
               aria-pressed={activePanel === "roads" ? "true" : "false"}
               title="Straßen bauen"
-              onClick={() => setActivePanel((p) => (p === "roads" ? null : "roads"))}
+              onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "roads" ? null : "roads")); updateCursor(); }}
               style={{ border: "1px solid #bbb", background: activePanel === "roads" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
             >
               Straße
@@ -757,7 +1401,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               className="tool-btn"
               aria-pressed={activePanel === "houses" ? "true" : "false"}
               title="Wohnhäuser"
-              onClick={() => setActivePanel((p) => (p === "houses" ? null : "houses"))}
+              onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "houses" ? null : "houses")); updateCursor(); }}
               style={{ border: "1px solid #bbb", background: activePanel === "houses" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
             >
               Wohnhäuser
@@ -767,7 +1411,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               className="tool-btn"
               aria-pressed={activePanel === "market" ? "true" : "false"}
               title="Supermarkt"
-              onClick={() => setActivePanel((p) => (p === "market" ? null : "market"))}
+              onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "market" ? null : "market")); updateCursor(); }}
               style={{ border: "1px solid #bbb", background: activePanel === "market" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
             >
               Supermarkt
@@ -777,7 +1421,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               className="tool-btn"
               aria-pressed={activePanel === "townhouse" ? "true" : "false"}
               title="Stadthaus"
-              onClick={() => setActivePanel((p) => (p === "townhouse" ? null : "townhouse"))}
+              onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "townhouse" ? null : "townhouse")); updateCursor(); }}
               style={{ border: "1px solid #bbb", background: activePanel === "townhouse" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
             >
               Stadthaus
@@ -787,7 +1431,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               className="tool-btn"
               aria-pressed={activePanel === "kiosk" ? "true" : "false"}
               title="Kiosk"
-              onClick={() => setActivePanel((p) => (p === "kiosk" ? null : "kiosk"))}
+              onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "kiosk" ? null : "kiosk")); updateCursor(); }}
               style={{ border: "1px solid #bbb", background: activePanel === "kiosk" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
             >
               Kiosk
@@ -797,7 +1441,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               className="tool-btn"
               aria-pressed={activePanel === "office" ? "true" : "false"}
               title="Bürogebäude"
-              onClick={() => setActivePanel((p) => (p === "office" ? null : "office"))}
+              onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "office" ? null : "office")); updateCursor(); }}
               style={{ border: "1px solid #bbb", background: activePanel === "office" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
             >
               Bürogebäude
@@ -932,6 +1576,16 @@ export default function IsostadtCanvas({ width, height }: Props) {
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{meta.name}</div>
                       <div style={{ color: "#444" }}>Preis: {meta.price}</div>
+                      {(() => {
+                        const steuern = Math.round(meta.price * 0.10);
+                        const einwohner = Math.round(meta.price * 0.05);
+                        return (
+                          <div style={{ marginTop: 6, display: "grid", rowGap: 2 }}>
+                            <div style={{ color: "#444" }}>Steuereinnahmen: {steuern.toLocaleString('de-DE')} € pro Monat</div>
+                            <div style={{ color: "#444" }}>Einwohner: {einwohner.toLocaleString('de-DE')}</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div style={{ color: "#666" }}>Keine Beschreibung vorhanden.</div>
@@ -1000,6 +1654,14 @@ export default function IsostadtCanvas({ width, height }: Props) {
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{meta.name}</div>
                       <div style={{ color: "#444" }}>Preis: {meta.price}</div>
+                      {(() => {
+                        const r = selectedTileIndex === 47 ? 6 : selectedTileIndex === 54 ? 7 : 8;
+                        return (
+                          <div style={{ color: "#333", marginTop: 6 }}>
+                            Wirkung: +20% Steuern für Häuser, Reichweite {r}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div style={{ color: "#666" }}>Keine Beschreibung vorhanden.</div>
@@ -1068,6 +1730,16 @@ export default function IsostadtCanvas({ width, height }: Props) {
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{meta.name}</div>
                       <div style={{ color: "#444" }}>Preis: {meta.price}</div>
+                      {(() => {
+                        const steuern = Math.round(meta.price * 0.10);
+                        const einwohner = Math.round(meta.price * 0.06); // 20% mehr als Haus-Basis (0.05)
+                        return (
+                          <div style={{ marginTop: 6, display: "grid", rowGap: 2 }}>
+                            <div style={{ color: "#444" }}>Steuereinnahmen (Basis): {steuern.toLocaleString('de-DE')} € pro Monat</div>
+                            <div style={{ color: "#444" }}>Einwohner: {einwohner.toLocaleString('de-DE')}</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div style={{ color: "#666" }}>Keine Beschreibung vorhanden.</div>
@@ -1136,6 +1808,14 @@ export default function IsostadtCanvas({ width, height }: Props) {
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{meta.name}</div>
                       <div style={{ color: "#444" }}>Preis: {meta.price}</div>
+                      {(() => {
+                        const r = selectedTileIndex === 66 ? 4 : 5;
+                        return (
+                          <div style={{ color: "#333", marginTop: 6 }}>
+                            Wirkung: +20% Steuern für Häuser, Reichweite {r}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div style={{ color: "#666" }}>Keine Beschreibung vorhanden.</div>
@@ -1204,6 +1884,14 @@ export default function IsostadtCanvas({ width, height }: Props) {
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{meta.name}</div>
                       <div style={{ color: "#444" }}>Preis: {meta.price}</div>
+                      {(() => {
+                        const r = selectedTileIndex === 46 ? 3 : selectedTileIndex === 55 ? 4 : selectedTileIndex === 57 ? 5 : 6;
+                        return (
+                          <div style={{ color: "#333", marginTop: 6 }}>
+                            Wirkung: +20% Einwohner in Häusern, Reichweite {r}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div style={{ color: "#666" }}>Keine Beschreibung vorhanden.</div>
@@ -1220,6 +1908,68 @@ export default function IsostadtCanvas({ width, height }: Props) {
       <div ref={areaRef} id="area" aria-label="Spielfläche" style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
   <canvas ref={bgRef} id="bg" style={{ position: "absolute", inset: 0, zIndex: 0 }} />
   <canvas ref={fgRef} id="fg" style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: "auto" }} />
+
+  {/* Overlay rechts oben: Eigenschaften des Bauwerks im Inspektionsmodus */}
+  {inspect && (
+    <div role="dialog" aria-label="Eigenschaften" style={{ position: "absolute", top: 12, right: 12, zIndex: 30, background: "rgba(255,255,255,0.98)", padding: "14px 16px", borderRadius: 10, border: '1px solid rgba(0,0,0,0.08)', boxShadow: "0 14px 34px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.10)", minWidth: 280 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontWeight: 700, color: '#111' }}>{inspect.name}</div>
+        <button onClick={() => setInspect(null)} aria-label="Schließen" style={{ border: '1px solid #ddd', background: '#f5f5f5', borderRadius: 6, padding: '2px 6px', cursor: 'pointer' }}>✕</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'center', columnGap: 10, marginTop: 8 }}>
+  <div style={{ width: 48, height: 88, border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', background: '#f9fafb' }}>
+          <div
+            style={{
+              width: TILE_W,
+              height: TILE_H,
+              backgroundImage: "url('/media/01_130x66_130x230.png')",
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: `-${(inspect.idx % SHEET_COLS) * TILE_W + 2}px -${Math.floor(inspect.idx / SHEET_COLS) * TILE_H}px`,
+              transform: 'scale(0.38)',
+              transformOrigin: 'top left',
+            }}
+          />
+        </div>
+        <div>
+          <div style={{ color: '#333' }}>Preis: {inspect.price.toLocaleString('de-DE')} €</div>
+          {(() => {
+            const isKiosk = (KIOSK_TILE_INDICES as readonly number[]).includes(inspect.idx);
+            return isKiosk ? (
+            <div style={{ color: '#333', marginTop: 6 }}>
+              Wirkung: +20% Steuern für Häuser, Reichweite {inspect.idx === 66 ? 4 : 5}
+            </div>
+            ) : null;
+          })()}
+          {inspect.type === 'house' && (
+            <div style={{ marginTop: 6, display: 'grid', rowGap: 2, color: '#333' }}>
+              <div>Steuereinnahmen: {Number(inspect.taxes ?? 0).toLocaleString('de-DE')} € pro Monat</div>
+              <div>Einwohner: {Number(inspect.population ?? 0).toLocaleString('de-DE')}</div>
+            </div>
+          )}
+          {(() => {
+            const isMarket = (MARKET_TILE_INDICES as readonly number[]).includes(inspect.idx);
+            if (!isMarket) return null;
+            const r = inspect.idx === 47 ? 6 : inspect.idx === 54 ? 7 : 8;
+            return (
+              <div style={{ color: '#333', marginTop: 6 }}>
+                Wirkung: +40% Steuern für Häuser, Reichweite {r}
+              </div>
+            );
+          })()}
+          {(() => {
+            const isOffice = (OFFICE_TILE_INDICES as readonly number[]).includes(inspect.idx);
+            if (!isOffice) return null;
+            const r = inspect.idx === 46 ? 3 : inspect.idx === 55 ? 4 : inspect.idx === 57 ? 5 : 6;
+            return (
+              <div style={{ color: '#333', marginTop: 6 }}>
+                Wirkung: +20% Einwohner in Häusern, Reichweite {r}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    </div>
+  )}
 
   {/* Last modified timestamp bottom-left */}
   <div aria-hidden style={{ position: "absolute", left: 8, bottom: 8, zIndex: 30, background: "rgba(255,255,255,0.85)", padding: "6px 8px", borderRadius: 6, fontSize: 12, color: "#333", boxShadow: "0 6px 20px rgba(0,0,0,0.12)" }}>
