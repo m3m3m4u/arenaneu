@@ -101,6 +101,12 @@ export default function IsostadtCanvas({ width, height }: Props) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [balance, setBalance] = useState<number>(10000);
   const [stars, setStars] = useState<number>(0);
+  const [gridN, setGridN] = useState<number>(16); // aktuelle Boardgröße für UI/Preis
+  const [monthReport, setMonthReport] = useState<null | {
+    total: number; // Einnahmen dieses Monats
+    population: number; // Einwohner gesamt
+    newBalance: number; // neues Guthaben nach Einnahmen
+  }>(null);
   const balanceRef = useRef(balance);
   const starsRef = useRef(stars);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
@@ -126,6 +132,8 @@ export default function IsostadtCanvas({ width, height }: Props) {
   const panRef = useRef(false);
   const toolRef = useRef<[number, number] | null>(null); // [row, col]
   const inspectByClickRef = useRef(false);
+  const nextMonthRef = useRef<() => void>(() => {});
+  const expandGridRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     panRef.current = panMode;
@@ -202,9 +210,9 @@ export default function IsostadtCanvas({ width, height }: Props) {
   const ctx = bg.getContext("2d")!;
   const fgctx = fg.getContext("2d")!;
 
-    // Map
-    const n = 16; // Boardgröße (vorher 14)
-    let map: [number, number][][] = Array.from({ length: n }, () => Array.from({ length: n }, () => [0, 0]));
+  // Map
+  let n = gridN; // Boardgröße
+  let map: [number, number][][] = Array.from({ length: n }, () => Array.from({ length: n }, () => [0, 0]));
 
   async function loadMapFromDB() {
       try {
@@ -216,11 +224,27 @@ export default function IsostadtCanvas({ width, height }: Props) {
           // nur übernehmen, wenn Größen kompatibel; andernfalls einfache Bounds-Kopie
           const dn: number = data.n;
           const src: any[][][] = data.map;
-          for (let i = 0; i < Math.min(n, dn); i++) {
-            for (let j = 0; j < Math.min(n, dn); j++) {
-              const cell = src?.[i]?.[j];
-              if (Array.isArray(cell) && cell.length === 2 && Number.isFinite(cell[0]) && Number.isFinite(cell[1])) {
-                map[i][j] = [cell[0], cell[1]] as [number, number];
+          if (dn !== n) {
+            // Map und Größe auf gespeicherte Dimension anpassen
+            const newMap: [number, number][][] = Array.from({ length: dn }, () => Array.from({ length: dn }, () => [0, 0] as [number, number]));
+            for (let i = 0; i < Math.min(dn, src.length); i++) {
+              for (let j = 0; j < Math.min(dn, src[i]?.length ?? 0); j++) {
+                const cell = src?.[i]?.[j];
+                if (Array.isArray(cell) && cell.length === 2 && Number.isFinite(cell[0]) && Number.isFinite(cell[1])) {
+                  newMap[i][j] = [cell[0], cell[1]];
+                }
+              }
+            }
+            n = dn;
+            map = newMap;
+            setGridN(dn);
+          } else {
+            for (let i = 0; i < Math.min(n, dn); i++) {
+              for (let j = 0; j < Math.min(n, dn); j++) {
+                const cell = src?.[i]?.[j];
+                if (Array.isArray(cell) && cell.length === 2 && Number.isFinite(cell[0]) && Number.isFinite(cell[1])) {
+                  map[i][j] = [cell[0], cell[1]] as [number, number];
+                }
               }
             }
           }
@@ -1043,6 +1067,90 @@ export default function IsostadtCanvas({ width, height }: Props) {
     // Events
     fg.style.touchAction = "none";
 
+    // Nächster-Monat-Aktion bereitstellen
+    nextMonthRef.current = () => {
+      // Sternenkosten prüfen
+      if ((starsRef.current ?? 0) < 1) {
+        setErrorMsg("Nicht genug Sterne.");
+        return;
+      }
+      let total = 0; // Einnahmen
+      let populationTotal = 0; // Einwohner gesamt
+      for (let ii = 0; ii < n; ii++) {
+        for (let jj = 0; jj < n; jj++) {
+          const [ti, tj] = map[ii][jj];
+          const idx = ti * SHEET_COLS + tj;
+          if ((HOUSE_TILE_INDICES as readonly number[]).includes(idx) || (TOWNHOUSE_TILE_INDICES as readonly number[]).includes(idx)) {
+            const meta = (HOUSE_META as any)[idx] ?? (TOWNHOUSE_META as any)[idx];
+            if (!meta) continue;
+            const baseTaxes = Math.round(meta.price * 0.10);
+            const hasKiosk = countKiosksCovering(ii, jj) > 0;
+            const hasMarket = countMarketsCovering(ii, jj) > 0;
+            const hasOffice = countOfficesCovering(ii, jj) > 0;
+            const bonus = (hasKiosk ? 0.2 : 0) + (hasMarket ? 0.4 : 0) + (hasOffice ? 0.2 : 0);
+            const taxes = Math.round(baseTaxes * (1 + bonus));
+            total += taxes;
+            // Einwohner berechnen
+            if ((HOUSE_TILE_INDICES as readonly number[]).includes(idx)) {
+              const hasOffice = countOfficesCovering(ii, jj) > 0;
+              const basePop = Math.round(meta.price * 0.05);
+              const pop = Math.round(basePop * (hasOffice ? 1.2 : 1));
+              populationTotal += pop;
+            } else {
+              // Stadthaus: etwas mehr Einwohner (0.06 * Preis)
+              const pop = Math.round(meta.price * 0.06);
+              populationTotal += pop;
+            }
+          }
+        }
+      }
+      // Guthaben und Sterne aktualisieren
+      setStars((s) => Math.max(0, (s ?? 0) - 1));
+      setBalance((b) => b + total);
+      const newBal = (balanceRef.current ?? 0) + total;
+      setMonthReport({ total, population: populationTotal, newBalance: newBal });
+      setInspect(null);
+      try {
+        const ts = Date.now();
+        setLastModified(ts);
+        localStorage.setItem("isostadt:lastModified", String(ts));
+      } catch {}
+      scheduleSave();
+    };
+
+    // Spielfeld vergrößern (+1 Ring) mit eskalierenden Kosten
+    expandGridRef.current = () => {
+      // Preis: 10.000, dann +10.000 pro weiterem Ausbau
+      const expansions = Math.max(0, Math.floor((n - 16) / 2));
+      const cost = (expansions + 1) * 10000;
+      if ((balanceRef.current ?? 0) < cost) {
+        setErrorMsg("Nicht genug Guthaben.");
+        return;
+      }
+      const newN = n + 2;
+      const newMap: [number, number][][] = Array.from({ length: newN }, () => Array.from({ length: newN }, () => [0, 0] as [number, number]));
+      // Alte Map mittig einsetzen
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          newMap[i + 1][j + 1] = map[i][j];
+        }
+      }
+      // Übernehmen
+      n = newN;
+      map = newMap;
+      setGridN(newN);
+      // Kosten abziehen, speichern und neu zeichnen
+      setBalance((b) => b - cost);
+      try {
+        const ts = Date.now();
+        setLastModified(ts);
+        localStorage.setItem("isostadt:lastModified", String(ts));
+      } catch {}
+      drawMap();
+      drawHover();
+      scheduleSave();
+    };
+
     const onMouseDown = (e: MouseEvent) => {
       if (panRef.current || e.button === 1 || e.shiftKey) {
         panning = true;
@@ -1073,7 +1181,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
           const hasKiosk = countKiosksCovering(pos.x, pos.y) > 0;
           const hasMarket = countMarketsCovering(pos.x, pos.y) > 0;
           const hasOffice = countOfficesCovering(pos.x, pos.y) > 0;
-          const taxBonus = (hasKiosk ? 0.2 : 0) + (hasMarket ? 0.4 : 0);
+          const taxBonus = (hasKiosk ? 0.2 : 0) + (hasMarket ? 0.4 : 0) + (hasOffice ? 0.2 : 0);
           const taxes = Math.round(baseTaxes * (1 + taxBonus));
           const basePop = Math.round(meta.price * 0.05);
           const population = Math.round(basePop * (1 + (hasOffice ? 0.2 : 0)));
@@ -1326,6 +1434,45 @@ export default function IsostadtCanvas({ width, height }: Props) {
               <div style={{ fontWeight: 700 }}>{balance.toLocaleString('de-DE')} €</div>
               <div style={{ color: '#333' }}>Sterne</div>
               <div style={{ fontWeight: 600 }}>{stars.toLocaleString('de-DE')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                onClick={() => nextMonthRef.current?.()}
+                title="In den nächsten Monat springen und Steuereinnahmen kassieren"
+                disabled={stars < 1}
+                style={{
+                  border: '1px solid #bbb',
+                  background: stars >= 1 ? '#e5f3ff' : '#f0f0f0',
+                  color: '#111',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  cursor: stars >= 1 ? 'pointer' : 'not-allowed'
+                }}
+              >
+                Nächster Monat
+              </button>
+              {(() => {
+                const expansions = Math.max(0, Math.floor((gridN - 16) / 2));
+                const cost = (expansions + 1) * 10000;
+                const can = balance >= cost;
+                return (
+                  <button
+                    onClick={() => expandGridRef.current?.()}
+                    title={`Spielfeld vergrößern: +1 äußerer Ring (Kosten: ${cost.toLocaleString('de-DE')} €)`}
+                    disabled={!can}
+                    style={{
+                      border: '1px solid #bbb',
+                      background: can ? '#ecfdf5' : '#f0f0f0',
+                      color: '#111',
+                      borderRadius: 6,
+                      padding: '6px 10px',
+                      cursor: can ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    Größer (+1)
+                  </button>
+                );
+              })()}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -1962,10 +2109,30 @@ export default function IsostadtCanvas({ width, height }: Props) {
             const r = inspect.idx === 46 ? 3 : inspect.idx === 55 ? 4 : inspect.idx === 57 ? 5 : 6;
             return (
               <div style={{ color: '#333', marginTop: 6 }}>
-                Wirkung: +20% Einwohner in Häusern, Reichweite {r}
+                Wirkung: +20% Einwohner und +20% Steuern für Häuser, Reichweite {r}
               </div>
             );
           })()}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Overlay: Monatsbericht (Einnahmen) */}
+  {monthReport && (
+    <div role="dialog" aria-label="Monatsbericht" style={{ position: "absolute", top: 12, right: 12, zIndex: 40, background: "rgba(255,255,255,0.98)", padding: "14px 16px", borderRadius: 10, border: '1px solid rgba(0,0,0,0.08)', boxShadow: "0 14px 34px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.10)", minWidth: 320 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontWeight: 700, color: '#111' }}>Monatsbericht</div>
+        <button onClick={() => setMonthReport(null)} aria-label="Schließen" style={{ border: '1px solid #ddd', background: '#f5f5f5', borderRadius: 6, padding: '2px 6px', cursor: 'pointer' }}>✕</button>
+      </div>
+      <div style={{ marginTop: 8, color: '#111', fontSize: 14 }}>
+        <div style={{ display: 'grid', rowGap: 6 }}>
+          <div><strong>Gesamteinnahmen:</strong> {monthReport.total.toLocaleString('de-DE')} €</div>
+          <div><strong>Einwohner gesamt:</strong> {monthReport.population.toLocaleString('de-DE')}</div>
+          <div style={{ color: '#333' }}>Neues Guthaben: {monthReport.newBalance.toLocaleString('de-DE')} €</div>
+        </div>
+        <div style={{ marginTop: 10, textAlign: 'right' }}>
+          <button onClick={() => setMonthReport(null)} style={{ border: '1px solid #bbb', background: '#eef6ff', color: '#111', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' }}>OK</button>
         </div>
       </div>
     </div>
