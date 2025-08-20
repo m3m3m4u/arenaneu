@@ -1,0 +1,8 @@
+# Override: Bilder strikt als Binär, keine EOL-Normalisierung
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.webp -text
+# SVG bleibt Text (LF)
+*.svg text eol=lf
