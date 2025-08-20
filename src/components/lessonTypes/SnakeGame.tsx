@@ -9,11 +9,12 @@ import PlaneGame from './plane/PlaneGame';
 import SpaceImpactGame from './space/SpaceImpactGame';
 import PacmanGame from './pacman/PacmanGame';
 import AutoGame from './auto/AutoGame';
+import TwoSnakeGame from './twosnake/TwoSnakeGame';
 
-interface Props { lesson: Lesson; courseId: string; completedLessons: string[]; setCompletedLessons: (v: string[] | ((p:string[])=>string[]))=>void; }
+interface Props { lesson: Lesson; courseId: string; completedLessons: string[]; setCompletedLessons: (v: string[] | ((p:string[])=>string[]))=>void; disableCompletion?: boolean }
 
-export default function SnakeGame({ lesson, courseId, completedLessons, setCompletedLessons }: Props){
-  const [variant, setVariant] = useState<'snake'|'plane'|'space'|'pacman'|'auto'>('snake');
+export default function SnakeGame({ lesson, courseId, completedLessons, setCompletedLessons, disableCompletion }: Props){
+  const [variant, setVariant] = useState<'snake'|'plane'|'space'|'pacman'|'auto'|'twosnake'>('snake');
   const wrapperRef = useRef<HTMLDivElement|null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsMaxPx, setFsMaxPx] = useState<number | null>(null);
@@ -34,7 +35,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
     return ()=> window.removeEventListener('keydown', handler);
   },[]);
   const { data: session } = useSession();
-  const { snake, foods, food, score, running, finished, gameOver, showHelp, currentQuestion, targetScore, marking, tickMs, setShowHelp, setRunning, restart, blocksLength, setDirection, setTickMs } = useSnakeLogic({ lesson, courseId, completedLessons, setCompletedLessons, sessionUsername: session?.user?.username });
+  const { snake, foods, food, score, running, finished, gameOver, showHelp, currentQuestion, targetScore, marking, tickMs, setShowHelp, setRunning, restart, blocksLength, setDirection, setTickMs } = useSnakeLogic({ lesson, courseId, completedLessons, setCompletedLessons, sessionUsername: session?.user?.username, disableCompletion });
   const canvasRef = useSnakeRendering({ snake, foods, food, blocksLength, score, finished, targetScore });
 
   // Fullscreen API helpers
@@ -89,7 +90,8 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <button disabled className="px-5 py-2 text-sm rounded border bg-emerald-600 text-white shadow-sm">✈️ Flugzeug</button>
           <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
           <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
-          <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+            <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
         </div>
         <PlaneGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
       </div>
@@ -104,7 +106,8 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <button onClick={()=> setVariant('plane')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">✈️ Flugzeug</button>
           <button disabled className="px-5 py-2 text-sm rounded border bg-violet-600 text-white shadow-sm">🛸 Space</button>
           <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
-          <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+            <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
         </div>
         <SpaceImpactGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
       </div>
@@ -119,7 +122,8 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <button onClick={()=> setVariant('plane')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">✈️ Flugzeug</button>
           <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
           <button disabled className="px-5 py-2 text-sm rounded border bg-amber-600 text-white shadow-sm">👻 Pacman</button>
-          <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+            <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
         </div>
         <PacmanGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
       </div>
@@ -134,12 +138,29 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <button onClick={()=> setVariant('plane')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">✈️ Flugzeug</button>
           <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
           <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
-          <button disabled className="px-5 py-2 text-sm rounded border bg-blue-600 text-white shadow-sm">🚗 Auto</button>
+            <button disabled className="px-5 py-2 text-sm rounded border bg-blue-600 text-white shadow-sm">🚗 Auto</button>
+            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
         </div>
         <AutoGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
       </div>
     );
   }
+
+    if(variant === 'twosnake'){
+      return (
+        <div className="w-full flex flex-col gap-3">
+          <div className="flex justify-center gap-3 mb-2">
+            <button onClick={()=> setVariant('snake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍 Snake</button>
+            <button onClick={()=> setVariant('plane')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">✈️ Flugzeug</button>
+            <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
+            <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
+            <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+            <button disabled className="px-5 py-2 text-sm rounded border bg-amber-200 text-gray-800 shadow-sm">🐍×2 Zwei</button>
+          </div>
+          <TwoSnakeGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
+        </div>
+      );
+    }
 
   return (
     <div className="w-full flex flex-col gap-4">

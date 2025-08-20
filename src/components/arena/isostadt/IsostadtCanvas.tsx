@@ -217,7 +217,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
   async function loadMapFromDB() {
       try {
   const key = mapKey.current;
-  const res = await fetch(`/api/arena/isostadt?key=${encodeURIComponent(key)}`);
+  const res = await fetch(`/api/arena/isostadt?key=${encodeURIComponent(key)}`, { cache: 'no-store' as RequestCache, headers: { 'Cache-Control': 'no-store' } });
         if (!res.ok) return;
         const data = await res.json();
         if (data?.success && data?.exists && Array.isArray(data.map) && Number.isFinite(data.n)) {
@@ -261,7 +261,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
           drawHover();
         } else if (data?.success && !data?.exists && key !== 'default') {
           // Fallback: 'default' laden
-          const resDef = await fetch(`/api/arena/isostadt?key=default`);
+          const resDef = await fetch(`/api/arena/isostadt?key=default`, { cache: 'no-store' as RequestCache, headers: { 'Cache-Control': 'no-store' } });
           if (resDef.ok) {
             const def = await resDef.json();
             if (def?.success && def?.exists && Array.isArray(def.map) && Number.isFinite(def.n)) {
@@ -285,16 +285,45 @@ export default function IsostadtCanvas({ width, height }: Props) {
             }
           }
         }
-      } catch {}
+      } catch (e) {
+        // Netzwerk/DB-Fehler: lokales Snapshot-Fallback laden
+        try {
+          const raw = localStorage.getItem('isostadt:snapshot');
+          if (raw) {
+            const snap = JSON.parse(raw) as { n: number; map: [number, number][][]; lastModified?: number; balance?: number; stars?: number };
+            if (snap && Array.isArray(snap.map) && Number.isFinite(snap.n)) {
+              n = snap.n;
+              map = snap.map as any;
+              setGridN(snap.n);
+              if (typeof snap.lastModified === 'number') setLastModified(snap.lastModified);
+              if (typeof snap.balance === 'number') setBalance(snap.balance);
+              if (typeof snap.stars === 'number') setStars(snap.stars);
+              drawMap();
+              drawHover();
+            }
+          }
+        } catch {}
+      }
     }
 
   function scheduleSave() {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
         try {
-      const res = await fetch('/api/arena/isostadt', {
+      // Lokalen Snapshot persistieren (Fallback bei Offline/DB-Problemen)
+      try {
+        const snap = {
+          n,
+          map,
+          lastModified,
+          balance: balanceRef.current,
+          stars: starsRef.current,
+        };
+        localStorage.setItem('isostadt:snapshot', JSON.stringify(snap));
+      } catch {}
+  const res = await fetch('/api/arena/isostadt', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
       body: JSON.stringify({ key: mapKey.current, n, map, lastModified, balance: balanceRef.current, stars: starsRef.current }),
           });
           // optional: Fehlerbehandlung

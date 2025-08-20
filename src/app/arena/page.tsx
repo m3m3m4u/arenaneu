@@ -34,6 +34,24 @@ export default function ArenaPage() {
             </div>
           </div>
         </a>
+        <a href="/arena/snake-live" className="block border rounded p-4 hover:bg-gray-50 transition">
+          <div className="flex items-center gap-3">
+            <img src="/media/snake.svg" alt="Snake Live" className="w-10 h-10 object-contain" />
+            <div>
+              <div className="font-semibold">Snake Live (Beta)</div>
+              <div className="text-sm text-gray-600">2 Geräte, gemeinsames Board</div>
+            </div>
+          </div>
+        </a>
+        <a href="/arena/snake2" className="block border rounded p-4 hover:bg-gray-50 transition">
+          <div className="flex items-center gap-3">
+            <img src="/media/snake.svg" alt="Snake 2x" className="w-10 h-10 object-contain" />
+            <div>
+              <div className="font-semibold">Snake‑Duell</div>
+              <div className="text-sm text-gray-600">Zwei Schlangen, ein Board (Pfeile & WASD)</div>
+            </div>
+          </div>
+        </a>
       </div>
       
       <a href="/dashboard" className="bg-gray-600 text-white py-2 px-4 rounded font-semibold hover:bg-gray-700 transition">

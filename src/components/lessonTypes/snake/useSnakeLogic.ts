@@ -10,11 +10,12 @@ interface Params {
   completedLessons: string[];
   setCompletedLessons: (v: string[] | ((p:string[])=>string[]))=>void;
   sessionUsername?: string;
+  disableCompletion?: boolean;
 }
 
 const DEFAULT_TARGET_SCORE = 15;
 
-export function useSnakeLogic({ lesson, courseId, completedLessons, setCompletedLessons, sessionUsername }: Params){
+export function useSnakeLogic({ lesson, courseId, completedLessons, setCompletedLessons, sessionUsername, disableCompletion }: Params){
   const content = (lesson.content as LessonContent | undefined) || {};
   const targetScore: number = Number(content.targetScore) || DEFAULT_TARGET_SCORE;
   const difficulty: 'einfach'|'mittel'|'schwer' = content.difficulty === 'schwer' ? 'schwer' : (content.difficulty === 'einfach' ? 'einfach' : 'mittel');
@@ -155,7 +156,22 @@ export function useSnakeLogic({ lesson, courseId, completedLessons, setCompleted
   }, [score]);
 
   // Completion
-  useEffect(()=>{ if(finished) return; if(score >= targetScore && !completedLessons.includes(lesson._id)){ setFinished(true); (async()=>{ try { if(lastScorePostedRef.current >= targetScore) return; lastScorePostedRef.current = targetScore; setMarking(true); await finalizeLesson({ username: sessionUsername, lessonId: lesson._id, courseId, type: lesson.type, earnedStar: lesson.type !== 'markdown' }); setCompletedLessons(prev=> prev.includes(lesson._id)? prev: [...prev, lesson._id]); } finally { setMarking(false);} })(); } },[score, targetScore, finished, completedLessons, lesson._id, lesson.type, courseId, sessionUsername, setCompletedLessons]);
+  useEffect(()=>{
+    if(finished) return;
+    if(score >= targetScore && !completedLessons.includes(lesson._id)){
+      setFinished(true);
+      if(disableCompletion) return;
+      (async()=>{
+        try {
+          if(lastScorePostedRef.current >= targetScore) return;
+          lastScorePostedRef.current = targetScore;
+          setMarking(true);
+          await finalizeLesson({ username: sessionUsername, lessonId: lesson._id, courseId, type: lesson.type, earnedStar: lesson.type !== 'markdown' });
+          setCompletedLessons(prev=> prev.includes(lesson._id)? prev: [...prev, lesson._id]);
+        } finally { setMarking(false);} 
+      })();
+    }
+  },[score, targetScore, finished, completedLessons, lesson._id, lesson.type, courseId, sessionUsername, setCompletedLessons, disableCompletion]);
 
   const restart = useCallback(()=>{ const startBody=[{x:5,y:8}]; setSnake(startBody); setDir({x:1,y:0}); setScore(0); setTickMs(initialSpeed); setRunning(false); setFinished(false); setGameOver(false); lastScorePostedRef.current=0; questionIdRef.current=0; lastScoredQuestionIdRef.current=-1; requestNewQuestionRef.current=false; if(blocks.length){ const nq=pickNextQuestion(); if(nq){ setCurrentQuestion(nq); placeAnswerFoods(nq, startBody);} } else { placeFood(startBody); } },[blocks.length, initialSpeed, pickNextQuestion, placeAnswerFoods, placeFood]);
 

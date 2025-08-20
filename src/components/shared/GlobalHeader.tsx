@@ -16,6 +16,7 @@ export default function GlobalHeader(){
   // Links kontextabhängig
   const leftLinks = [
     { href: '/dashboard', label: 'Startseite' },
+  { href: '/arena', label: 'Arena' },
     { href: '/lernen', label: 'Kurse' },
     { href: '/ueben', label: 'Übungen' },
   ];
@@ -36,7 +37,7 @@ export default function GlobalHeader(){
             ...(role==='author' ? authorExtras: []),
             ...(role==='admin' ? adminExtras: []),
           ].map(l=> (
-            <Link key={l.href} href={l.href} className={`px-2 py-1 rounded hover:bg-gray-100 ${pathname===l.href? 'font-semibold text-blue-700':''}`}>
+            <Link key={l.href} href={l.href} className={`px-2 py-1 rounded hover:bg-gray-100 ${(pathname===l.href || pathname.startsWith(l.href + '/'))? 'font-semibold text-blue-700':''}`}>
               {l.label}
             </Link>
           ))}
