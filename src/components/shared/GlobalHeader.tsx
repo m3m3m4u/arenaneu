@@ -1,5 +1,5 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
@@ -8,8 +8,19 @@ import { useSession } from 'next-auth/react';
 export default function GlobalHeader(){
   const pathname = usePathname();
   const { data: session } = useSession();
-  const queryGuest = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('guest') === '1' : false;
-  const isGuest = queryGuest;
+  const [isGuest, setIsGuest] = useState(false);
+
+  // Gastmodus ableiten: URL-Parameter ?guest=1 oder localStorage guest:active
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const flag = p.get('guest') === '1' || localStorage.getItem('guest:active') === '1';
+      setIsGuest(!!flag);
+    } catch {
+      setIsGuest(false);
+    }
+  }, [pathname]);
+
   const username: string = isGuest ? 'Gast' : (session?.user?.username || session?.user?.name || session?.user?.email || 'Gast');
   const role: string = isGuest ? 'guest' : (session?.user?.role || 'anon');
 
@@ -47,7 +58,30 @@ export default function GlobalHeader(){
           <span className="px-2 py-1 bg-gray-100 rounded font-mono">{String(username)}</span>
           <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded uppercase text-xs tracking-wide">{String(role)}</span>
           {isGuest && (
-            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs" title="Gastmodus: Daten werden nur lokal gespeichert">Nur lokal</span>
+            <>
+              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs" title="Gastmodus: Daten werden nur lokal gespeichert">Nur lokal</span>
+              <button
+                onClick={() => {
+                  try { localStorage.removeItem('guest:active'); } catch {}
+                  try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('guest');
+                    const q = url.searchParams.toString();
+                    const newUrl = url.pathname + (q ? `?${q}` : '') + url.hash;
+                    window.history.replaceState({}, '', newUrl);
+                  } catch {}
+                  if (window.location.pathname.startsWith('/guest')) {
+                    window.location.href = '/dashboard';
+                    return;
+                  }
+                  setIsGuest(false);
+                }}
+                className="ml-2 px-2 py-1 border rounded hover:bg-gray-50"
+                title="Gastmodus beenden und URL bereinigen"
+              >
+                Gastmodus beenden
+              </button>
+            </>
           )}
           {session ? (
             <button onClick={()=>signOut({ callbackUrl: '/login', redirect: true })} className="ml-2 px-2 py-1 border rounded hover:bg-gray-50">Logout</button>

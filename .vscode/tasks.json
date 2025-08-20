@@ -62,6 +62,12 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "dev",
+			"type": "shell",
+			"command": "npm run dev",
+			"group": "build"
 		}
 	]
 }
