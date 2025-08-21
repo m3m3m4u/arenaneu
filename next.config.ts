@@ -30,7 +30,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/media': [
       'node_modules/@vercel/blob/**',
-      'node_modules/undici/**'
+  'node_modules/undici/**',
+  'node_modules/async-retry/**'
     ]
   },
   eslint: { ignoreDuringBuilds: true },
