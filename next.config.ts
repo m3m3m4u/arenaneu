@@ -26,6 +26,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: 'standalone', // kleinere Lambda bundles (Vercel / Docker)
+  // Sorgt dafür, dass @vercel/blob trotz dynamischem Import in /api/media mit in das Standalone-Bundle aufgenommen wird
+  outputFileTracingIncludes: {
+    '/api/media': ['node_modules/@vercel/blob/**']
+  },
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
   experimental: {
