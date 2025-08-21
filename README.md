@@ -74,6 +74,14 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+### Hinweis: package.json Reparatur (Vercel Blob Runtime)
+
+In der aktuellen Historie war `package.json` beschädigt (eine Shell-Zeile landete außerhalb von `scripts`). Dadurch fehlen zur Laufzeit teils Abhängigkeiten wie `@vercel/blob`-Transitives (`undici`, `async-retry`, `bytes`).
+
+• Eine korrigierte Datei liegt als `package.fixed.json` bei. Bitte ersetze die bestehende `package.json` mit deren Inhalt und führe anschließend `npm i` aus.
+
+• In `next.config.ts` sind unter `outputFileTracingIncludes['/api/media']` die Node-Module `@vercel/blob`, `undici`, `async-retry`, `bytes` explizit aufgenommen, damit sie im Standalone-Bundle landen.
+
 ### Vercel Deployment Hinweise
 
 1. Environment Variablen im Vercel Projekt setzen:

@@ -31,7 +31,8 @@ const nextConfig: NextConfig = {
     '/api/media': [
       'node_modules/@vercel/blob/**',
   'node_modules/undici/**',
-  'node_modules/async-retry/**'
+  'node_modules/async-retry/**',
+  'node_modules/bytes/**'
     ]
   },
   eslint: { ignoreDuringBuilds: true },
@@ -40,7 +41,7 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['react', 'react-dom']
   },
   // Unterdrückt gezielt die harmlosen Warnings durch den absichtlich dynamischen Import in /api/media
-  webpack: (config) => {
+  webpack: (config: any) => {
     const prev = config.ignoreWarnings || [];
     config.ignoreWarnings = [
       ...prev,
