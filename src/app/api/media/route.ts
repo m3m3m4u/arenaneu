@@ -110,7 +110,15 @@ export async function POST(req: any){
       const exists = await davExists(BLOB_PREFIX + safeName);
       if(exists) return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 });
       const blob = file as Blob;
-      await davPut(BLOB_PREFIX + safeName, blob, (blob as any).type || undefined);
+      try{
+        await davPut(BLOB_PREFIX + safeName, blob, (blob as any).type || undefined);
+      }catch(e:any){
+        const msg = String(e?.message||e);
+        if(msg.includes('409')){
+          return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 });
+        }
+        return NextResponse.json({ success:false, error: msg }, { status:500 });
+      }
       return NextResponse.json({ success:true, name: safeName, url: webdavPublicUrl(BLOB_PREFIX + safeName), key: BLOB_PREFIX + safeName });
     } else if(useBlob){
   const { list, put } = await importVercelBlob();

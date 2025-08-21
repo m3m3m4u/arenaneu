@@ -53,9 +53,39 @@ export async function davPut(key: string, body: Uint8Array | ArrayBuffer | Blob,
   const c = conf(); if(!c) return null;
   const target = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
   const blobBody = body instanceof Blob ? body : new Blob([body as any], { type: contentType || 'application/octet-stream' });
-  const res = await fetch(target, { method:'PUT', headers: { Authorization: c.auth, ...(contentType? { 'Content-Type': contentType }: {}) }, body: blobBody });
-  if(!res.ok) throw new Error('PUT failed: ' + res.status);
+  // Ensure parent directories exist (MKCOL), in case server returns 409 for missing collections
+  await ensureParentDir(key, c.url, c.auth);
+  let res = await fetch(target, { method:'PUT', headers: { Authorization: c.auth, ...(contentType? { 'Content-Type': contentType }: {}) }, body: blobBody });
+  if(res.status === 409){
+    // Try once more after ensuring parent again
+    await ensureParentDir(key, c.url, c.auth, true);
+    res = await fetch(target, { method:'PUT', headers: { Authorization: c.auth, ...(contentType? { 'Content-Type': contentType }: {}) }, body: blobBody });
+  }
+  if(!res.ok){
+    // If conflict because it exists, surface as 409
+    const exists = await davExists(key).catch(()=>false);
+    if(exists) throw new Error('PUT failed: 409');
+    throw new Error('PUT failed: ' + res.status);
+  }
   return { url: webdavPublicUrl(key), key };
+}
+
+async function ensureParentDir(key: string, baseUrl: string, auth: string, force?: boolean){
+  const idx = key.lastIndexOf('/');
+  if(idx <= 0) return;
+  const dirPath = key.substring(0, idx);
+  const parts = dirPath.split('/').filter(Boolean);
+  let acc = '';
+  for(const part of parts){
+    acc += (acc ? '/' : '') + part;
+    const uri = `${baseUrl}/${encodeURIComponent(acc).replace(/%2F/g,'/')}`;
+    // Check if collection exists
+    const pf = await fetch(uri, { method:'PROPFIND', headers: { Authorization: auth, Depth: '0' } });
+    if(force || !pf.ok){
+      // Try to create collection
+      await fetch(uri, { method:'MKCOL', headers: { Authorization: auth } }).catch(()=>undefined);
+    }
+  }
 }
 
 export async function davDelete(key: string){
