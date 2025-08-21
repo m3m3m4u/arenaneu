@@ -34,7 +34,8 @@ const nextConfig: NextConfig = {
   'node_modules/async-retry/**',
   'node_modules/bytes/**',
   'node_modules/is-plain-object/**',
-  'node_modules/is-buffer/**'
+  'node_modules/is-buffer/**',
+  'node_modules/@fastify/busboy/**'
     ]
   },
   eslint: { ignoreDuringBuilds: true },
