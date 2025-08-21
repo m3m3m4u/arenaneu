@@ -74,6 +74,14 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+### Hinweis: package.json Reparatur (Vercel Blob Runtime)
+
+In der aktuellen Historie war `package.json` beschädigt (eine Shell-Zeile landete außerhalb von `scripts`). Dadurch fehlen zur Laufzeit teils Abhängigkeiten wie `@vercel/blob`-Transitives (`undici`, `async-retry`, `bytes`).
+
+• Eine korrigierte Datei liegt als `package.fixed.json` bei. Bitte ersetze die bestehende `package.json` mit deren Inhalt und führe anschließend `npm i` aus.
+
+• In `next.config.ts` sind unter `outputFileTracingIncludes['/api/media']` die Node-Module `@vercel/blob`, `undici`, `async-retry`, `bytes` explizit aufgenommen, damit sie im Standalone-Bundle landen.
+
 ### Vercel Deployment Hinweise
 
 1. Environment Variablen im Vercel Projekt setzen:
@@ -87,6 +95,16 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 3. Build Output ist `standalone` (siehe `next.config.ts`). Vercel erstellt automatisch Functions.
 4. Healthcheck Endpoint: `/api/health` liefert `{ ok: true }`.
 5. Sicherheit: Security Headers & CSP sind in `next.config.ts` gesetzt. Falls externe Domains (Bilder, Medien) genutzt werden, CSP & `images.remotePatterns` ergänzen.
+
+#### Medien-Speicher (Optionen)
+
+- Standard: Vercel Blob (Production) oder lokales Filesystem (`public/uploads`) – bereits integriert.
+- Hetzner Storage Box via WebDAV: Setze folgende ENV Variablen und der Server nutzt WebDAV bevorzugt:
+	- `WEBDAV_BASEURL` (z. B. `https://uXXXX-sub2.your-storagebox.de`)
+	- `WEBDAV_USERNAME`
+	- `WEBDAV_PASSWORD`
+	- Optional `WEBDAV_PUBLIC_BASEURL` (öffentliche Basis-URL/CDN) – sonst direkte Box-URL
+
 6. Datenbank: MongoDB Atlas oder kompatibler Dienst empfohlen. Network Access: Vercel IP Ranges whitelisten oder `0.0.0.0/0` (weniger sicher) + Benutzer mit minimalen Rechten.
 7. Skalierung: Mongoose Connection wird gecached (`src/lib/db.ts`).
 8. Fehleranalyse: Logs via Vercel Dashboard. Zusätzliche Audit Logs unter `/api/admin/audit` (auth erforderlich).
