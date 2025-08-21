@@ -34,11 +34,18 @@ export async function davList(prefix: string){
   for(const seg of responses){
     const hrefMatch = seg.match(/<d:href>([\s\S]*?)<\/d:href>/) || seg.match(/<href>([\s\S]*?)<\/href>/);
     if(!hrefMatch) continue;
-    const href = decodeURIComponent(hrefMatch[1].trim());
+    let href = hrefMatch[1].trim();
+    // Normalize to pathname only
+    try { if(/^https?:\/\//i.test(href)) href = new URL(href).pathname; } catch{}
+    href = decodeURIComponent(href);
     if(href.endsWith('/')) continue; // Ordner überspringen
-    const key = href.replace(/^https?:\/\/[^/]+\//,'');
-    if(!key.startsWith(prefix)) continue;
-    const name = key.replace(prefix,''); if(!name) continue;
+    // Extract path under /uploads/
+    const up = href.match(/(?:^|\/)uploads\/([^?#]+)/);
+    if(!up) continue;
+    const rel = up[1];
+    if(!rel || /\/$/.test(rel)) continue;
+    const name = rel.split('/').pop() || rel;
+    const key = `uploads/${rel}`;
     const sizeMatch = seg.match(/<d:getcontentlength>(\d+)<\/d:getcontentlength>/) || seg.match(/<getcontentlength>(\d+)<\/getcontentlength>/);
     const dateMatch = seg.match(/<d:getlastmodified>([\s\S]*?)<\/d:getlastmodified>/) || seg.match(/<getlastmodified>([\s\S]*?)<\/getlastmodified>/);
     const size = sizeMatch ? Number(sizeMatch[1]) : 0;
