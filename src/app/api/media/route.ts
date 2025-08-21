@@ -27,7 +27,7 @@ async function importVercelBlob() {
 
 export async function GET(){
   if(useWebdav){
-    const client = getWebdav();
+    const client = await getWebdav();
     if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
     try{
       const dirents = await client.getDirectoryContents(BLOB_PREFIX, { deep: false }) as any[];
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest){
     const nameFromForm = (form.get('filename') as string | null) || (file as any).name || 'upload.bin';
     const safeName = path.basename(nameFromForm).replace(/[^a-zA-Z0-9._-]/g, '_');
     if(useWebdav){
-      const client = getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
+      const client = await getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
       // Duplikat prüfen
       try{ const existing = await client.stat(BLOB_PREFIX + safeName); if(existing) return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 }); } catch{}
   const arrayBuffer = await (file as Blob).arrayBuffer();
@@ -159,7 +159,7 @@ export async function DELETE(req: NextRequest){
       key = body?.key || key;
     }
     if(useWebdav){
-      const client = getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
+      const client = await getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
   const key = (searchParams.get('key') || (body?.key)) as string | undefined;
   const name = (searchParams.get('name') || (body?.name)) as string | undefined;
       const target = key || (name ? (BLOB_PREFIX + path.basename(name)) : '');
@@ -208,7 +208,7 @@ export async function PATCH(req: NextRequest){
     const safeOld = path.basename(name);
     const safeNew = path.basename(newName).replace(/[^a-zA-Z0-9._-]/g, '_');
     if(useWebdav){
-      const client = getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
+      const client = await getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
       const oldKey = BLOB_PREFIX + safeOld;
       const newKey = BLOB_PREFIX + safeNew;
       // Existenz prüfen
