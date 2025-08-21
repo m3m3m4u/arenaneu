@@ -16,13 +16,19 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
         src={p} 
         alt="" 
         className="max-h-36 w-auto object-contain border rounded bg-white"
-        onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(p.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/media/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } }}
+        onError={(e)=>{ 
+          const el=e.currentTarget as HTMLImageElement; 
+          const name=(p.split('/').pop()||''); 
+          if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; }
+          else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; }
+          else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; }
+        }}
       />
     </div>;
     if(isAudioPath(p)) return <div className="w-full flex items-center justify-center">
       <audio controls className="w-full max-w-xs border rounded bg-white p-1">
+        {(()=>{ const name=(p.split('/').pop()||''); return name? <source src={`/medien/uploads/${name}`}/> : null; })()}
         <source src={p}/>
-        <source src={p.replace('/media/audio/','/media/')} />
         <source src={p.replace('/media/audio/','/uploads/')} />
       </audio>
     </div>;

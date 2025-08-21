@@ -555,12 +555,12 @@ export default function LessonPage() {
                     src={currentMedia} 
                     alt="Frage Bild" 
                     className="max-w-full max-h-64 object-contain mx-auto border rounded"
-                    onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/media/bilder/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/media/${name}`; } }}
+                    onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }}
                   />
                 ) : isAudioPath(currentMedia) ? (
                   <audio controls className="w-full max-w-md mx-auto">
+                    {(()=>{ const name=(currentMedia.split('/').pop()||''); return name? <source src={`/medien/uploads/${name}`}/> : null; })()}
                     <source src={currentMedia} />
-                    <source src={currentMedia.replace('/uploads/','/media/audio/')}/>
                     <source src={currentMedia.replace('/uploads/','/media/')}/>
                     <p className="text-red-600 text-sm">Audio wird vom Browser nicht unterstützt</p>
                   </audio>

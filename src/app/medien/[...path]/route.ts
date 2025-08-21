@@ -23,9 +23,9 @@ function conf(){
   return { url, auth };
 }
 
-export async function GET(req: any, ctx: { params: { path: string[] } }){
+export async function GET(req: Request, ctx: { params: Promise<{ path: string[] }> }){
   const c = conf(); if(!c) return new NextResponse('WebDAV nicht konfiguriert', { status: 500 });
-  const pathParts = ctx.params?.path || [];
+  const { path: pathParts = [] } = await ctx.params.catch?.(()=>({ path: [] as string[] })) ?? (ctx as any).params;
   const key = pathParts.join('/');
   const url = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
   const upstream = await fetch(url, { headers: { Authorization: c.auth } });
@@ -41,9 +41,9 @@ export async function GET(req: any, ctx: { params: { path: string[] } }){
   return new NextResponse(body, { status: 200, headers });
 }
 
-export async function HEAD(req: any, ctx: { params: { path: string[] } }){
+export async function HEAD(req: Request, ctx: { params: Promise<{ path: string[] }> }){
   const c = conf(); if(!c) return new NextResponse(null, { status: 500 });
-  const pathParts = ctx.params?.path || [];
+  const { path: pathParts = [] } = await ctx.params.catch?.(()=>({ path: [] as string[] })) ?? (ctx as any).params;
   const key = pathParts.join('/');
   const url = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
   const upstream = await fetch(url, { method: 'HEAD', headers: { Authorization: c.auth } });

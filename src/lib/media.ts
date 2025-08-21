@@ -20,9 +20,7 @@ export function detectMediaKind(input: string): MediaKind {
  * - Bereits absolute URLs (http, https, data) oder beginnend mit "/" bleiben unangetastet
  * - Enthält der String einen Slash, wird nur ein führendes "/" ergänzt (z. B. "uploads/x.jpg" -> "/uploads/x.jpg")
  * - Reiner Dateiname ohne Slash wird je nach Endung auf Standardordner gemappt:
- *   - Bilder -> "/media/bilder/<name>"
- *   - Audio  -> "/media/audio/<name>"
- *   - sonst  -> "/media/<name>"
+ *   - Bilder/Audio/Datei -> bevorzugt "/uploads/<name>"; wenn WebDAV aktiv, via Proxy "/medien/uploads/<name>"
  */
 export function resolveMediaPath(input: string): string {
   if (!input) return input;
@@ -30,16 +28,24 @@ export function resolveMediaPath(input: string): string {
   // "public/" gehört nicht in die URL; strippen
   if (cleaned.toLowerCase().startsWith('public/')) cleaned = cleaned.slice(7);
   if (ABSOLUTE_OR_DATA.test(cleaned)) return cleaned;
-  if (HAS_SLASH.test(cleaned)) return cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
+  // Wenn bereits ein Pfad mit Slash: ggf. auf Proxy umbiegen
+  if (HAS_SLASH.test(cleaned)) {
+    const withSlash = cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
+    // uploads-Pfade über Proxy ausliefern, wenn vorhanden
+    if (/^\/uploads\//i.test(withSlash) && typeof process !== 'undefined' && process.env && process.env.WEBDAV_BASEURL) {
+      return withSlash.replace(/^\/uploads\//i, '/medien/uploads/');
+    }
+    return withSlash;
+  }
   const kind = detectMediaKind(cleaned);
   // Standardmäßig bevorzugen wir Uploads als Quelle
   switch (kind) {
     case 'image':
-      return `/uploads/${cleaned}`;
+      return (typeof process !== 'undefined' && process.env && process.env.WEBDAV_BASEURL) ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
     case 'audio':
-      return `/uploads/${cleaned}`;
+      return (typeof process !== 'undefined' && process.env && process.env.WEBDAV_BASEURL) ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
     default:
-      return `/uploads/${cleaned}`;
+      return (typeof process !== 'undefined' && process.env && process.env.WEBDAV_BASEURL) ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
   }
 }
 
