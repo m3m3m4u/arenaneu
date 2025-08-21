@@ -137,6 +137,7 @@ export async function davExists(key: string){
 export function webdavPublicUrl(pathname: string){
   const cdn = process.env.WEBDAV_PUBLIC_BASEURL; // optional, wenn via CDN/Domain exponiert
   if(cdn) return `${cdn.replace(/\/$/,'')}/${encodeURIComponent(pathname).replace(/%2F/g,'/')}`;
-  const base = (process.env.WEBDAV_BASEURL||'').replace(/\/$/, '');
-  return `${base}/${encodeURIComponent(pathname).replace(/%2F/g,'/')}`;
+  // Fallback: interne Proxy-Route ohne Auth im Browser
+  const clean = pathname.replace(/^\/+/, '');
+  return `/medien/${encodeURIComponent(clean).replace(/%2F/g,'/')}`;
 }
