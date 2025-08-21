@@ -33,7 +33,8 @@ const nextConfig: NextConfig = {
   'node_modules/undici/**',
   'node_modules/async-retry/**',
   'node_modules/bytes/**',
-  'node_modules/is-plain-object/**'
+  'node_modules/is-plain-object/**',
+  'node_modules/is-buffer/**'
     ]
   },
   eslint: { ignoreDuringBuilds: true },
