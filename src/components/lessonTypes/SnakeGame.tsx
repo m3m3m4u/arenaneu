@@ -169,7 +169,8 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
         <button onClick={()=> setVariant('plane')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">✈️ Flugzeug</button>
         <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
         <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
-        <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+  <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
+  <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
       </div>
       <div
         ref={wrapperRef}

@@ -4,11 +4,14 @@ import type { Lesson } from './types';
 interface Props { allLessons: Lesson[]; currentLessonId: string; courseId: string; completedLessons: string[]; progressionMode?: 'linear' | 'free'; backHref?: string; }
 
 export default function LessonFooterNavigation({ allLessons, currentLessonId, courseId, completedLessons, progressionMode = 'free', backHref }: Props) {
-  if (!allLessons || allLessons.length === 0) return null;
+  // Im Üben-Bereich keine Liste weiterer Lektionen anzeigen
+  const isUeben = backHref === '/ueben';
+  if ((!allLessons || allLessons.length === 0) && !isUeben) return null;
   return (
-    <div className="mt-10 border-t pt-6">
-      <h3 className="text-lg font-semibold mb-4">Weitere Lektionen</h3>
-      <div className="flex flex-wrap gap-3">
+    <div className={`mt-10 ${isUeben ? '' : 'border-t pt-6'}`}>
+      {!isUeben && <h3 className="text-lg font-semibold mb-4">Weitere Lektionen</h3>}
+      {!isUeben && (
+        <div className="flex flex-wrap gap-3">
         {allLessons.map((l, idx) => {
           const id = (l as any)._id || (l as any).id || '';
           const active = id === currentLessonId;
@@ -33,7 +36,8 @@ export default function LessonFooterNavigation({ allLessons, currentLessonId, co
             </a>
           );
         })}
-      </div>
+        </div>
+      )}
       <div className="text-center mt-6">
         <a href={backHref || `/kurs/${courseId}`} className="text-blue-600 hover:underline text-sm">← {backHref === '/ueben' ? 'Zurück zu Übungen' : 'Zurück zur Kursübersicht'}</a>
       </div>

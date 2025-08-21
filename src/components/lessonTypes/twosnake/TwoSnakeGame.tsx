@@ -403,16 +403,16 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
             )}
             {localControlB && (
               <>
-                <div className="text-xs text-gray-500 mb-2">Steuerung B (Pfeile)</div>
+                <div className="text-xs text-gray-500 mb-2">Steuerung B (WASD)</div>
             <div className="grid grid-cols-3 gap-2 w-56 select-none">
               <div />
-                  <button onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">↑</button>
+                  <button onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">W</button>
               <div />
-                  <button onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">←</button>
+                  <button onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">A</button>
               <div />
-                  <button onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">→</button>
+                  <button onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">D</button>
               <div />
-                  <button onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">↓</button>
+                  <button onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">S</button>
               <div />
             </div>
               </>
@@ -428,7 +428,7 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
       {!running && !finished && scoreA===0 && scoreB===0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm text-center p-4 gap-2">
         <button onClick={()=> canStart && setRunning(true)} disabled={!canStart} className="px-6 py-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md text-sm disabled:opacity-50">{canStart ? 'Start (Leertaste)' : 'Warte auf zweiten Spieler …'}</button>
-  <div className="text-[11px] text-gray-600">{[localControlA? 'A: Pfeile': null, localControlB? 'B: Pfeile': null].filter(Boolean).join(' • ')}</div>
+  <div className="text-[11px] text-gray-600">{[localControlA? 'A: Pfeile': null, localControlB? 'B: WASD': null].filter(Boolean).join(' • ')}</div>
               </div>
             )}
             {finished && (
