@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
 
+// Optional: Host für externe Medien (Hetzner WebDAV/CDN)
+const webdavBase = process.env.WEBDAV_PUBLIC_BASEURL || process.env.WEBDAV_BASEURL;
+let webdavHost: string | undefined;
+try {
+  if (webdavBase) webdavHost = new URL(webdavBase).hostname;
+} catch {}
+
 const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
@@ -8,20 +15,28 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   { key: 'X-XSS-Protection', value: '1; mode=block' },
-  { key: 'Content-Security-Policy', value: [
-      "default-src 'self'",
-      // Next.js dev benötigt teils eval; in Prod ggf. strenger machen
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https://blob.vercel-storage.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      // YouTube Embeds
-      "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtu.be",
-      // Für Media Blob URLs (z. B. @vercel/blob signed URLs)
-  "media-src 'self' blob: https://blob.vercel-storage.com",
-      // Connect für API/Blob ggf. erweitern
-      "connect-src 'self'",
-    ].join('; ') }
+  { key: 'Content-Security-Policy', value: (()=>{
+      const imgSrc = ["img-src 'self'", 'data:', 'blob:', 'https://blob.vercel-storage.com'];
+      const mediaSrc = ["media-src 'self'", 'blob:', 'https://blob.vercel-storage.com'];
+      if (webdavHost) {
+        imgSrc.push(`https://${webdavHost}`);
+        mediaSrc.push(`https://${webdavHost}`);
+      }
+      return [
+        "default-src 'self'",
+        // Next.js dev benötigt teils eval; in Prod ggf. strenger machen
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        imgSrc.join(' '),
+        "font-src 'self' https://fonts.gstatic.com",
+        // YouTube Embeds
+        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtu.be",
+        // Für Media Blob/WebDAV URLs
+        mediaSrc.join(' '),
+        // Connect für API/Blob ggf. erweitern
+        "connect-src 'self'",
+      ].join('; ');
+    })() }
 ];
 
 const nextConfig: NextConfig = {
@@ -71,7 +86,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'i.ytimg.com' },
-  { protocol: 'https', hostname: 'blob.vercel-storage.com' }
+      { protocol: 'https', hostname: 'blob.vercel-storage.com' },
+      ...(webdavHost ? [{ protocol: 'https' as const, hostname: webdavHost }] : [])
     ]
   }
 };
