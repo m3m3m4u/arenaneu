@@ -35,7 +35,8 @@ const nextConfig: NextConfig = {
   'node_modules/bytes/**',
   'node_modules/is-plain-object/**',
   'node_modules/is-buffer/**',
-  'node_modules/@fastify/busboy/**'
+  'node_modules/@fastify/busboy/**',
+  'node_modules/webdav/**'
     ]
   },
   eslint: { ignoreDuringBuilds: true },
@@ -70,7 +71,7 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'i.ytimg.com' },
-      { protocol: 'https', hostname: 'blob.vercel-storage.com' }
+  { protocol: 'https', hostname: 'blob.vercel-storage.com' }
     ]
   }
 };
