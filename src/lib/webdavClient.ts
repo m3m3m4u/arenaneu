@@ -30,22 +30,29 @@ export async function davList(prefix: string){
   if(!res.ok) return [];
   const xml = await res.text();
   const items: Array<{ name: string; url: string; size: number; mtime: number; key: string }> = [];
-  const responses = xml.split('<d:response').slice(1);
+  // Determine base path from base URL to compute keys relative to it
+  let basePath = '/';
+  try { const u = new URL(c.url); basePath = u.pathname || '/'; } catch {}
+  basePath = basePath.replace(/\/$/, '');
+  const normPrefix = prefix.replace(/^\/+/, '');
+  const prefixPath = `${basePath}/${normPrefix}`.replace(/\/+/, '/');
+  // Split on both D:response and d:response
+  const responses = xml.split(/<[^>]*:response/).slice(1);
   for(const seg of responses){
-    const hrefMatch = seg.match(/<d:href>([\s\S]*?)<\/d:href>/) || seg.match(/<href>([\s\S]*?)<\/href>/);
+    const hrefMatch = seg.match(/<[^>]*:href>([\s\S]*?)<\/[a-zA-Z0-9_:-]*href>/);
     if(!hrefMatch) continue;
     let href = hrefMatch[1].trim();
     // Normalize to pathname only
     try { if(/^https?:\/\//i.test(href)) href = new URL(href).pathname; } catch{}
     href = decodeURIComponent(href);
     if(href.endsWith('/')) continue; // Ordner überspringen
-    // Extract path under /uploads/
-    const up = href.match(/(?:^|\/)uploads\/([^?#]+)/);
-    if(!up) continue;
-    const rel = up[1];
+    // Ensure file is under the requested prefixPath
+    if(!href.startsWith(prefixPath)) continue;
+    let rel = href.substring(prefixPath.length);
+    rel = rel.replace(/^\/+/, '');
     if(!rel || /\/$/.test(rel)) continue;
     const name = rel.split('/').pop() || rel;
-    const key = `uploads/${rel}`;
+    const key = `${normPrefix}${normPrefix.endsWith('/')?'':'/'}${rel}`;
     const sizeMatch = seg.match(/<d:getcontentlength>(\d+)<\/d:getcontentlength>/) || seg.match(/<getcontentlength>(\d+)<\/getcontentlength>/);
     const dateMatch = seg.match(/<d:getlastmodified>([\s\S]*?)<\/d:getlastmodified>/) || seg.match(/<getlastmodified>([\s\S]*?)<\/getlastmodified>/);
     const size = sizeMatch ? Number(sizeMatch[1]) : 0;
