@@ -121,10 +121,11 @@ export async function POST(req: any){
         await davPut(BLOB_PREFIX + safeName, blob, (blob as any).type || undefined);
       }catch(e:any){
         const msg = String(e?.message||e);
-        if(msg.includes('409')){
+        if(/409/.test(msg)){
           return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 });
         }
-        return NextResponse.json({ success:false, error: msg }, { status:500 });
+        // Detailierter Fehler für WebDAV Uploads
+        return NextResponse.json({ success:false, error: `WebDAV Upload fehlgeschlagen: ${msg}` }, { status:500 });
       }
       return NextResponse.json({ success:true, name: safeName, url: webdavPublicUrl(BLOB_PREFIX + safeName), key: BLOB_PREFIX + safeName });
     } else if(useBlob){

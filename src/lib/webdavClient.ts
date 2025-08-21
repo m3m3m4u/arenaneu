@@ -22,13 +22,38 @@ function conf(){
 
 export function isWebdavEnabled(){ return !!conf(); }
 
+async function ensureBasePath(baseUrl: string, auth: string){
+  // Erzeugt alle Teilverzeichnisse des BaseURL-Pfades (z. B. /dav/arenaneu)
+  let basePath = '/';
+  try { const u = new URL(baseUrl); basePath = (u.pathname || '/').replace(/^\/+/, '').replace(/\/+$/, ''); } catch {}
+  if(!basePath) return;
+  const parts = basePath.split('/').filter(Boolean);
+  let acc = '';
+  for(const part of parts){
+    acc += (acc ? '/' : '') + part;
+    const uri = `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent('').replace(/%2F/g,'')}`; // baseUrl selbst
+    const dirUrl = `${baseUrl.replace(/\/$/, '').split('/').slice(0,3).join('/')}/${acc}`;
+    // PROPFIND zur Existenzprüfung
+    const pf = await fetch(dirUrl, { method:'PROPFIND', headers: { Authorization: auth, Depth: '0' } });
+    if(!pf.ok){
+      await fetch(dirUrl, { method:'MKCOL', headers: { Authorization: auth } }).catch(()=>undefined);
+    }
+  }
+}
+
 export async function davList(prefix: string){
   const c = conf(); if(!c) return [] as Array<{ name: string; url: string; size: number; mtime: number; key: string }>;
   const encoded = encodeURIComponent(prefix).replace(/%2F/g,'/');
   const target = `${c.url}/${encoded.endsWith('/') ? encoded : encoded + '/'}`;
   // Einige Server liefern ohne Body nicht alle Props. Sende Minimal-Body mit gewünschten Props.
   const body = `<?xml version="1.0" encoding="utf-8"?>\n<d:propfind xmlns:d="DAV:">\n  <d:prop>\n    <d:getlastmodified/>\n    <d:getcontentlength/>\n    <d:resourcetype/>\n  </d:prop>\n</d:propfind>`;
-  const res = await fetch(target, { method:'PROPFIND', headers: { Authorization: c.auth, Depth: '1', 'Content-Type': 'text/xml' }, body });
+    const res = await fetch(target, { method:'PROPFIND', headers: { Authorization: c.auth, Depth: '1', 'Content-Type': 'text/xml' }, body });
+    if(res.status === 404){
+      // Basis-Pfad sicherstellen und Zielordner anlegen, dann leere Liste zurückgeben
+      await ensureBasePath(c.url, c.auth).catch(()=>undefined);
+      await ensureParentDir(prefix.endsWith('/') ? prefix.slice(0, -1) : prefix, c.url, c.auth).catch(()=>undefined);
+      return [];
+    }
   if(!res.ok) return [];
   const xml = await res.text();
   const items: Array<{ name: string; url: string; size: number; mtime: number; key: string }> = [];
