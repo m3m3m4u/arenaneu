@@ -51,7 +51,8 @@ export default function MemoryGame({ lesson, onCompleted, completedLessons, setC
       {cards.map((card,idx)=>{ const flipped= card.flipped||card.matched; return <button key={card.id} onClick={()=>handleFlip(idx)} disabled={card.flipped||card.matched||lock} className={`relative h-32 md:h-40 border rounded-lg flex items-center justify-center bg-white transition-transform duration-300 ${flipped?'shadow-inner':'shadow hover:shadow-md'} ${card.matched?'border-green-500':'border-gray-200'}`}>{flipped ? <div className="w-full h-full flex items-center justify-center p-2">{renderCardFace(card)}</div>: <div className="w-full h-full flex items-center justify-center font-semibold text-gray-500 select-none">🧠</div>}</button>; })}
     </div>
     <div className="mt-6 flex items-center gap-4 flex-wrap">
-      {finished ? <span className="text-green-600 font-medium">✔️ Alle Paare gefunden!</span>: <span className="text-gray-600 text-sm">Finde alle Paare.</span>}
+  {finished ? <span className="text-green-600 font-medium">✔️ Alle Paare gefunden!</span>: <span className="text-gray-600 text-sm">Finde alle Paare.</span>}
+  <span className="text-sm text-gray-500">Paare: {initialPairs.length}</span>
       <span className="text-sm text-gray-500">Züge: {moves}</span>
       <button onClick={restart} className="text-xs px-3 py-1 border rounded hover:bg-gray-50">Neu mischen</button>
       {marking && <span className="text-sm text-gray-500">Speichere Abschluss…</span>}

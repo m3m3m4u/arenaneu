@@ -79,7 +79,10 @@ export default function IsostadtCanvas({ width, height }: Props) {
   const areaRef = useRef<HTMLDivElement | null>(null);
   const redrawRef = useRef<() => void>(() => {});
   const saveRef = useRef<() => void>(() => {});
+  const flushRef = useRef<() => void>(() => {});
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
+  const dirtyRef = useRef<boolean>(false);
+  const lastSavedAtRef = useRef<number>(0);
   const mapKey = useRef<string>('default');
   type Panel = "roads" | "houses" | "market" | "townhouse" | "kiosk" | "office" | null;
   const [activePanel, setActivePanel] = useState<Panel>(null);
@@ -109,12 +112,21 @@ export default function IsostadtCanvas({ width, height }: Props) {
   }>(null);
   const balanceRef = useRef(balance);
   const starsRef = useRef(stars);
+  // Merker: Wurden Sterne aus DB/Snapshot geladen? Verhindert Überschreiben durch Profil.
+  const dbStarsSeenRef = useRef(false);
+  // Verhindere frühes Autosave mit Defaultwerten, bis Initial-Ladevorgang abgeschlossen ist
+  const initialLoadDone = useRef(false);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { starsRef.current = stars; }, [stars]);
   // Wenn Balance/Sterne sich ändern, speichern (debounced via saveRef)
-  useEffect(() => { saveRef.current?.(); }, [balance, stars]);
+  useEffect(() => {
+    // Erst nach initialem Laden (DB oder Snapshot) autosaven,
+    // sonst würden die Defaults 10000/0 die DB überschreiben
+    if (!initialLoadDone.current) return;
+    saveRef.current?.();
+  }, [balance, stars]);
 
-  // Sterne mit Profil synchronisieren
+  // Optionales Seed: Profil-Sterne nur verwenden, wenn noch keine DB/Snapshot-Sterne vorhanden sind
   useEffect(() => {
     const uname = (session?.user as any)?.username as string | undefined;
     if (!uname) return;
@@ -124,7 +136,9 @@ export default function IsostadtCanvas({ width, height }: Props) {
         if (!res.ok) return;
         const data = await res.json();
         const st = Number(data?.user?.stars);
-        if (Number.isFinite(st)) setStars(st);
+        if (Number.isFinite(st) && !dbStarsSeenRef.current) {
+          setStars(st);
+        }
       } catch {}
     })();
   }, [session?.user]);
@@ -255,7 +269,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
           // Falls Werte fehlen, lokale Defaults beibehalten
           if (typeof data.balance === 'number') setBalance(data.balance);
           else setBalance((b) => b);
-          if (typeof data.stars === 'number') setStars(data.stars);
+          if (typeof data.stars === 'number') { setStars(data.stars); dbStarsSeenRef.current = true; }
           else setStars((s) => s);
           drawMap();
           drawHover();
@@ -277,7 +291,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               }
               if (typeof def.lastModified === 'number') setLastModified(def.lastModified);
               if (typeof def.balance === 'number') setBalance(def.balance);
-              if (typeof def.stars === 'number') setStars(def.stars);
+              if (typeof def.stars === 'number') { setStars(def.stars); dbStarsSeenRef.current = true; }
               drawMap();
               drawHover();
               // Optional: direkt unter Benutzer-Key speichern
@@ -297,16 +311,21 @@ export default function IsostadtCanvas({ width, height }: Props) {
               setGridN(snap.n);
               if (typeof snap.lastModified === 'number') setLastModified(snap.lastModified);
               if (typeof snap.balance === 'number') setBalance(snap.balance);
-              if (typeof snap.stars === 'number') setStars(snap.stars);
+              if (typeof snap.stars === 'number') { setStars(snap.stars); dbStarsSeenRef.current = true; }
               drawMap();
               drawHover();
             }
           }
         } catch {}
+      } finally {
+        // Initial-Ladevorgang ist beendet (egal ob DB oder Snapshot)
+        initialLoadDone.current = true;
       }
     }
 
   function scheduleSave() {
+  // Änderungen ab jetzt als 'dirty' markieren (für Lifecycle-Flush)
+  dirtyRef.current = true;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
         try {
@@ -326,13 +345,51 @@ export default function IsostadtCanvas({ width, height }: Props) {
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
       body: JSON.stringify({ key: mapKey.current, n, map, lastModified, balance: balanceRef.current, stars: starsRef.current }),
           });
-          // optional: Fehlerbehandlung
-          void res;
+          if (res.ok) {
+            const data = await res.json().catch(()=>null);
+            if (data?.success) {
+              if (typeof data.lastModified === 'number') {
+                setLastModified(data.lastModified);
+                try { localStorage.setItem('isostadt:lastModified', String(data.lastModified)); } catch {}
+              }
+              if (typeof data.balance === 'number') setBalance(data.balance);
+              if (typeof data.stars === 'number') setStars(data.stars);
+              dirtyRef.current = false;
+              lastSavedAtRef.current = Date.now();
+            }
+          }
         } catch {}
       }, 350);
     }
   // Exponiere das Speichern nach außen (für Toolbar/HUD-Buttons)
   saveRef.current = () => scheduleSave();
+
+    // Sofortiges Speichern ohne Debounce (für Tab-Schließen/Seitenwechsel)
+    flushRef.current = () => {
+      try {
+        const snap = { n, map, lastModified, balance: balanceRef.current, stars: starsRef.current };
+        localStorage.setItem('isostadt:snapshot', JSON.stringify(snap));
+      } catch {}
+      const payload = JSON.stringify({ key: mapKey.current, n, map, lastModified, balance: balanceRef.current, stars: starsRef.current });
+      let sent = false;
+      try {
+        if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+          const blob = new Blob([payload], { type: 'application/json' });
+          sent = (navigator as any).sendBeacon('/api/arena/isostadt', blob);
+        }
+      } catch {}
+      if (!sent) {
+        try {
+          fetch('/api/arena/isostadt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+            body: payload,
+            // keepalive erlaubt das Senden beim Entladen der Seite
+            keepalive: true as any,
+          }).catch(() => {});
+        } catch {}
+      }
+    };
 
     // Texture
     const texture = new Image();
@@ -1422,6 +1479,25 @@ export default function IsostadtCanvas({ width, height }: Props) {
   // Externe Redraw-Funktion bereitstellen
   redrawRef.current = () => { drawMap(); drawHover(); };
 
+    // Autosave-Intervall: alle 5s, wenn dirty
+    const autosaveId = setInterval(() => {
+      if (dirtyRef.current) {
+        saveRef.current?.();
+      }
+    }, 5000);
+
+    // Lifecycle-Flush: Sichtbarkeit/Seitenwechsel/Unload
+    const onVis = () => {
+      if (document.visibilityState === 'hidden' && dirtyRef.current) {
+        flushRef.current?.();
+      }
+    };
+  const onPageHide = () => { if (dirtyRef.current || saveTimer.current) flushRef.current?.(); };
+  const onBeforeUnload = () => { if (dirtyRef.current || saveTimer.current) flushRef.current?.(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('beforeunload', onBeforeUnload);
+
     return () => {
   fg.removeEventListener("mousedown", onMouseDown);
   fg.removeEventListener("mouseup", onMouseUp);
@@ -1432,6 +1508,10 @@ export default function IsostadtCanvas({ width, height }: Props) {
       window.removeEventListener("keydown", onKey);
   if (ro) ro.disconnect();
   if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+  clearInterval(autosaveId);
+  document.removeEventListener('visibilitychange', onVis);
+  window.removeEventListener('pagehide', onPageHide);
+  window.removeEventListener('beforeunload', onBeforeUnload);
     };
   }, [width, height, session?.user]);
 
@@ -1451,34 +1531,69 @@ export default function IsostadtCanvas({ width, height }: Props) {
     }
   }, [activePanel]);
 
+  // Responsive: Sidebar/Bauen-Grid ohne Scroll – zwischen 3 und 5 Spalten; Anzahl Elemente so begrenzen,
+  // dass die sichtbare Höhe reicht; optional "Alle zeigen" schaltet Begrenzung aus
+  const asideRef = useRef<HTMLDivElement|null>(null);
+  const bauenGridRef = useRef<HTMLDivElement|null>(null);
+  const [bauenCols, setBauenCols] = useState<number>(3);
+  const [visibleBuildCount, setVisibleBuildCount] = useState<number>(6);
+  const [showAllBuilds, setShowAllBuilds] = useState<boolean>(false);
+
+  useEffect(()=>{
+    const adjust = () => {
+      const aside = asideRef.current; const grid = bauenGridRef.current; if(!aside||!grid) return;
+      const gridWidth = grid.clientWidth; const minCell = 120; const gap = 8;
+      const desiredCols = Math.min(5, Math.max(3, Math.floor((gridWidth + gap) / (minCell + gap))));
+      setBauenCols(prev=> prev!==desiredCols? desiredCols: prev);
+      const asideRect = aside.getBoundingClientRect(); const gridRect = grid.getBoundingClientRect();
+      const available = aside.clientHeight - (gridRect.top - asideRect.top) - 12;
+      const sampleBtn = grid.querySelector('button.tool-btn') as HTMLElement | null;
+      const btnH = sampleBtn?.offsetHeight || 40; const rowH = btnH + gap;
+      const rows = Math.max(1, Math.floor((available + gap) / rowH));
+      const total = 6; const visible = Math.max(1, Math.min(total, desiredCols * rows));
+      setVisibleBuildCount(visible);
+    };
+    const ro = new ResizeObserver(()=> adjust());
+    if(asideRef.current) ro.observe(asideRef.current);
+    if(bauenGridRef.current) ro.observe(bauenGridRef.current);
+    window.addEventListener('resize', adjust);
+    const t = setTimeout(adjust, 50);
+    return ()=>{ ro.disconnect(); window.removeEventListener('resize', adjust); clearTimeout(t); };
+  },[]);
+
   return (
-    <div id="main" style={{ display: "grid", gridTemplateColumns: "1fr 3fr", height: "100%", position: "relative" }}>
-    <aside id="sidebar" aria-label="Werkzeuge" style={{ borderRight: "1px solid #ddd", padding: 10, overflow: "auto" }}>
-  <div className="sidebar-header" style={{ position: "sticky", top: 0, zIndex: 5, background: "#fff", display: "grid", alignItems: "stretch", gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid #eee" }}>
+  <div id="main" style={{ display: "grid", gridTemplateColumns: "0.8fr 3fr", height: "100%", position: "relative" }}>
+  <aside id="sidebar" ref={asideRef} aria-label="Werkzeuge" style={{ borderRight: "1px solid #e5e7eb", padding: 12, overflow: "hidden", background: "#fbfbfd" }}>
+  <div className="sidebar-header" style={{ position: "sticky", top: 0, zIndex: 5, background: "#ffffffea", backdropFilter: "blur(6px)", display: "grid", alignItems: "stretch", gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #eef2f7" }}>
           {/* Oben: Platz für Zurück-Button und HUD */}
-          <div style={{ display: 'grid', gap: 6 }}>
+          <div style={{ display: 'grid', gap: 8 }}>
             <div aria-hidden style={{ height: 40 }} />
+            {/* Überschrift */}
+            <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between' }}>
+              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0f172a', letterSpacing: '0.2px' }}>ArenaCity</h1>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 2, columnGap: 8, alignItems: 'center' }}>
               <div style={{ color: '#333', fontWeight: 600 }}>Guthaben</div>
               <div style={{ fontWeight: 700 }}>{balance.toLocaleString('de-DE')} €</div>
               <div style={{ color: '#333' }}>Sterne</div>
               <div style={{ fontWeight: 600 }}>{stars.toLocaleString('de-DE')}</div>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
               <button
                 onClick={() => nextMonthRef.current?.()}
-                title="In den nächsten Monat springen und Steuereinnahmen kassieren"
+                title="Monat beenden und Steuereinnahmen kassieren"
                 disabled={stars < 1}
                 style={{
-                  border: '1px solid #bbb',
-                  background: stars >= 1 ? '#e5f3ff' : '#f0f0f0',
-                  color: '#111',
-                  borderRadius: 6,
-                  padding: '6px 10px',
-                  cursor: stars >= 1 ? 'pointer' : 'not-allowed'
+                  border: stars >= 1 ? '1px solid #1d4ed8' : '1px solid #ddd',
+                  background: stars >= 1 ? 'linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%)' : '#f2f2f2',
+                  color: stars >= 1 ? '#fff' : '#888',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  cursor: stars >= 1 ? 'pointer' : 'not-allowed',
+                  boxShadow: stars >= 1 ? '0 6px 16px rgba(29,78,216,0.25), 0 1px 2px rgba(0,0,0,0.04)' : 'inset 0 0 0 0 transparent'
                 }}
               >
-                Nächster Monat
+                Monat beendet
               </button>
               {(() => {
                 const expansions = Math.max(0, Math.floor((gridN - 16) / 2));
@@ -1487,33 +1602,35 @@ export default function IsostadtCanvas({ width, height }: Props) {
                 return (
                   <button
                     onClick={() => expandGridRef.current?.()}
-                    title={`Spielfeld vergrößern: +1 äußerer Ring (Kosten: ${cost.toLocaleString('de-DE')} €)`}
+                    title={`Land kaufen (Kosten: ${cost.toLocaleString('de-DE')} €) — erweitert die Karte um +1 äußeren Ring`}
                     disabled={!can}
                     style={{
-                      border: '1px solid #bbb',
-                      background: can ? '#ecfdf5' : '#f0f0f0',
-                      color: '#111',
-                      borderRadius: 6,
-                      padding: '6px 10px',
-                      cursor: can ? 'pointer' : 'not-allowed'
+                      border: can ? '1px solid #059669' : '1px solid #ddd',
+                      background: can ? 'linear-gradient(135deg,#10b981 0%, #059669 100%)' : '#f2f2f2',
+                      color: can ? '#fff' : '#888',
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      cursor: can ? 'pointer' : 'not-allowed',
+                      boxShadow: can ? '0 6px 16px rgba(16,185,129,0.25), 0 1px 2px rgba(0,0,0,0.04)' : 'inset 0 0 0 0 transparent'
                     }}
                   >
-                    Größer (+1)
+                    Land kaufen
                   </button>
                 );
               })()}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <h2 style={{ fontSize: 18, margin: 0 }}>Werkzeuge</h2>
-            <div className="tool-actions" role="toolbar" aria-label="Werkzeuge" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 18, margin: 0 }}>Werkzeuge</h2>
+              <div className="tool-actions" role="toolbar" aria-label="Werkzeuge" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
             <button
               id="panModeBtn"
               className="tool-btn"
               aria-pressed={panMode ? "true" : "false"}
               title="Spielfeld verschieben"
               onClick={() => setPanMode((v) => !v)}
-              style={{ border: "1px solid #bbb", background: panMode ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+              style={{ border: panMode?"1px solid #1d4ed8":"1px solid #d1d5db", background: panMode?"#dbeafe":"#f9fafb", borderRadius: 8, padding: "6px 10px", cursor: "pointer", boxShadow: panMode? 'inset 0 0 0 1px #93c5fd' : 'none' }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}>
                 <path d="M12 2l3 3-3-3-3 3 3-3v20l-3-3 3 3 3-3-3 3V2z" />
@@ -1536,7 +1653,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
                 inspectByClickRef.current = false;
                 setInspect(null);
               }}
-              style={{ border: "1px solid #bbb", background: inspectMode ? "#dbeafe" : "#f5f5f5", borderRadius: 6, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+              style={{ border: inspectMode?"1px solid #1d4ed8":"1px solid #d1d5db", background: inspectMode?"#dbeafe":"#f9fafb", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block" }}>
                 <path d="M5 3 L15 13 L11 13 L13 20 L11.5 20.7 L9.5 13.8 L7 16 Z" fill="#333" />
@@ -1555,20 +1672,25 @@ export default function IsostadtCanvas({ width, height }: Props) {
                 toolRef.current = null;
                 setSelectedTileIndex(null);
               }}
-              style={{ border: "1px solid #bbb", background: demolishMode ? "#fee2e2" : "#f5f5f5", borderRadius: 6, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+              style={{ border: demolishMode?"1px solid #dc2626":"1px solid #d1d5db", background: demolishMode?"#fee2e2":"#f9fafb", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block" }}>
                 <path d="M3 6h18v2H3zM6 8h12l-1 11H7z" fill="#b91c1c" />
                 <path d="M9 10v7M12 10v7M15 10v7" stroke="#7f1d1d" strokeWidth="1.5" />
               </svg>
             </button>
+              </div>
+            </div>
+            <div>
+              <h2 style={{ fontSize: 18, margin: 0 }}>Bauen</h2>
+              <div ref={bauenGridRef} className="tool-actions" role="toolbar" aria-label="Bauen" style={{ display: "grid", gridTemplateColumns: `repeat(${bauenCols}, minmax(120px, 1fr))`, gap: 8, marginTop: 8 }}>
             <button
               id="roadBtn"
               className="tool-btn"
               aria-pressed={activePanel === "roads" ? "true" : "false"}
               title="Straßen bauen"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "roads" ? null : "roads")); updateCursor(); }}
-              style={{ border: "1px solid #bbb", background: activePanel === "roads" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+              style={{ border: activePanel === "roads"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "roads"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 0)? 'none': undefined }}
             >
               Straße
             </button>
@@ -1578,7 +1700,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "houses" ? "true" : "false"}
               title="Wohnhäuser"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "houses" ? null : "houses")); updateCursor(); }}
-              style={{ border: "1px solid #bbb", background: activePanel === "houses" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+              style={{ border: activePanel === "houses"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "houses"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 1)? 'none': undefined }}
             >
               Wohnhäuser
             </button>
@@ -1588,7 +1710,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "market" ? "true" : "false"}
               title="Supermarkt"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "market" ? null : "market")); updateCursor(); }}
-              style={{ border: "1px solid #bbb", background: activePanel === "market" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+              style={{ border: activePanel === "market"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "market"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 2)? 'none': undefined }}
             >
               Supermarkt
             </button>
@@ -1598,7 +1720,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "townhouse" ? "true" : "false"}
               title="Stadthaus"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "townhouse" ? null : "townhouse")); updateCursor(); }}
-              style={{ border: "1px solid #bbb", background: activePanel === "townhouse" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+              style={{ border: activePanel === "townhouse"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "townhouse"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 3)? 'none': undefined }}
             >
               Stadthaus
             </button>
@@ -1608,7 +1730,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "kiosk" ? "true" : "false"}
               title="Kiosk"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "kiosk" ? null : "kiosk")); updateCursor(); }}
-              style={{ border: "1px solid #bbb", background: activePanel === "kiosk" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+              style={{ border: activePanel === "kiosk"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "kiosk"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 4)? 'none': undefined }}
             >
               Kiosk
             </button>
@@ -1618,14 +1740,24 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "office" ? "true" : "false"}
               title="Bürogebäude"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "office" ? null : "office")); updateCursor(); }}
-              style={{ border: "1px solid #bbb", background: activePanel === "office" ? "#dbeafe" : "#f5f5f5", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+              style={{ border: activePanel === "office"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "office"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 5)? 'none': undefined }}
             >
               Bürogebäude
             </button>
+              </div>
+              {(!showAllBuilds && visibleBuildCount < 6) && (
+                <div style={{ marginTop: 6 }}>
+                  <button onClick={()=> setShowAllBuilds(true)} style={{ fontSize: 12, color: '#1d4ed8', background: 'transparent', border: 'none', padding: 4, cursor: 'pointer' }}>Alle anzeigen</button>
+                </div>
+              )}
+              {(showAllBuilds && visibleBuildCount < 6) && (
+                <div style={{ marginTop: 6 }}>
+                  <button onClick={()=> setShowAllBuilds(false)} style={{ fontSize: 12, color: '#1d4ed8', background: 'transparent', border: 'none', padding: 4, cursor: 'pointer' }}>Weniger anzeigen</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
-  <p style={{ color: "#666", fontSize: 14, margin: 0 }}>1) Pfeil-Button: Ziehen zum Verschieben. 2) Straße: Overlay öffnen und Typ wählen, dann ins Feld klicken.</p>
 
         {activePanel === "roads" && (
           <div style={{ marginTop: 12 }}>

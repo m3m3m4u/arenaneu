@@ -9,10 +9,19 @@ export async function GET(req: Request) {
     const key = url.searchParams.get('key') || 'default';
     await dbConnect();
     const doc = await IsostadtMap.findOne({ key }).lean();
-    if (!doc) return NextResponse.json({ success: true, exists: false, map: null });
-    return NextResponse.json({ success: true, exists: true, n: doc.n, map: doc.map, lastModified: (doc as any).lastModified, balance: (doc as any).balance, stars: (doc as any).stars });
+    if (!doc) return NextResponse.json(
+      { success: true, exists: false, map: null },
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } }
+    );
+    return NextResponse.json(
+      { success: true, exists: true, n: doc.n, map: doc.map, lastModified: (doc as any).lastModified, balance: (doc as any).balance, stars: (doc as any).stars },
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } }
+    );
   } catch (e: any) {
-    return NextResponse.json({ success: false, error: e?.message || 'Fehler beim Laden' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: e?.message || 'Fehler beim Laden' },
+      { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } }
+    );
   }
 }
 
@@ -38,8 +47,14 @@ export async function POST(req: Request) {
       { $set: set },
       { new: true, upsert: true }
     ).lean();
-    return NextResponse.json({ success: true, n: updated?.n, map: updated?.map });
+    return NextResponse.json(
+      { success: true, n: updated?.n, map: updated?.map, lastModified: (updated as any)?.lastModified, balance: (updated as any)?.balance, stars: (updated as any)?.stars },
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } }
+    );
   } catch (e: any) {
-    return NextResponse.json({ success: false, error: e?.message || 'Fehler beim Speichern' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: e?.message || 'Fehler beim Speichern' },
+      { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } }
+    );
   }
 }

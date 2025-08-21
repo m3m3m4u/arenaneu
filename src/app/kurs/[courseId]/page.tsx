@@ -245,20 +245,60 @@ export default function KursAnsichtPage() {
                       <div className="flex-grow">
                         <h3 className="font-semibold mb-1">{lesson.title}</h3>
                         <p className="text-sm text-gray-600 mb-2">
-                          {lesson.description || 
-                           (lesson.questions && (lesson.type === 'single-choice' || lesson.type === 'multiple-choice') && `${lesson.questions.length} Fragen`) || 
-                           (lesson.content?.questions && `${lesson.content.questions.length} Fragen`) ||
-                           (lesson.type === 'markdown' ? 'Text' : 'Lektion')}
+                          {(() => {
+                            if (lesson.description) return lesson.description;
+                            const t = lesson.type;
+                            const anyLesson = lesson as any;
+                            if (t === 'single-choice' || t === 'multiple-choice') {
+                              const qCount = Array.isArray(anyLesson.questions) ? anyLesson.questions.length : Array.isArray(anyLesson.content?.questions) ? anyLesson.content.questions.length : 0;
+                              return `${qCount} Fragen`;
+                            }
+                            if (t === 'snake' || t === 'minigame') {
+                              const qCount = Array.isArray(anyLesson.content?.blocks) ? anyLesson.content.blocks.length : Array.isArray(anyLesson.questions) ? anyLesson.questions.length : 0;
+                              return `${qCount} Fragen`;
+                            }
+                            if (t === 'matching') {
+                              let pairs = 0;
+                              if (Array.isArray(anyLesson.content?.pairs)) pairs = anyLesson.content.pairs.length;
+                              else if (Array.isArray(anyLesson.questions)) {
+                                pairs = anyLesson.questions.reduce((sum: number, q: any) => sum + (Array.isArray(q?.correctAnswers) ? q.correctAnswers.length : 0), 0);
+                              }
+                              return `${pairs} Paare`;
+                            }
+                            if (t === 'memory') {
+                              const pairs = Array.isArray(anyLesson.content?.pairs) ? anyLesson.content.pairs.length : 0;
+                              return `${pairs} Paare`;
+                            }
+                            return t === 'markdown' ? 'Text' : 'Lektion';
+                          })()}
                         </p>
                         <div className="flex gap-3 text-sm text-gray-500">
                           <span>{getLessonTypeIcon(lesson.type)} {getLessonTypeName(lesson.type)}</span>
                           <span>📅 {new Date((lesson.createdAt || lesson.addedAt) as string).toLocaleDateString('de-DE')}</span>
-                          {lesson.questions && (lesson.type === 'single-choice' || lesson.type === 'multiple-choice') && (
-                            <span>❓ {lesson.questions.length} Fragen</span>
-                          )}
-                          {lesson.content?.questions && (
-                            <span>❓ {lesson.content.questions.length} Fragen</span>
-                          )}
+                          {(() => {
+                            const t = lesson.type; const anyLesson = lesson as any;
+                            if (t === 'single-choice' || t === 'multiple-choice') {
+                              const qCount = Array.isArray(anyLesson.questions) ? anyLesson.questions.length : Array.isArray(anyLesson.content?.questions) ? anyLesson.content.questions.length : 0;
+                              return <span>❓ {qCount} Fragen</span>;
+                            }
+                            if (t === 'snake' || t === 'minigame') {
+                              const qCount = Array.isArray(anyLesson.content?.blocks) ? anyLesson.content.blocks.length : Array.isArray(anyLesson.questions) ? anyLesson.questions.length : 0;
+                              return <span>❓ {qCount} Fragen</span>;
+                            }
+                            if (t === 'matching') {
+                              let pairs = 0;
+                              if (Array.isArray(anyLesson.content?.pairs)) pairs = anyLesson.content.pairs.length;
+                              else if (Array.isArray(anyLesson.questions)) {
+                                pairs = anyLesson.questions.reduce((sum: number, q: any) => sum + (Array.isArray(q?.correctAnswers) ? q.correctAnswers.length : 0), 0);
+                              }
+                              return <span>🧩 {pairs} Paare</span>;
+                            }
+                            if (t === 'memory') {
+                              const pairs = Array.isArray(anyLesson.content?.pairs) ? anyLesson.content.pairs.length : 0;
+                              return <span>🧩 {pairs} Paare</span>;
+                            }
+                            return null;
+                          })()}
                         </div>
                       </div>
                     </div>

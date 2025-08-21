@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -19,6 +20,38 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [unread, setUnread] = useState<number>(0);
   const [lastLink, setLastLink] = useState<{ courseId?: string; lessonId?: string } | null>(null);
+  // Buttons aus public/media/buttons (via /api/buttons)
+  type BtnItem = { src: string; name: string; href?: string; downSrc?: string; upSrc?: string };
+  const [buttons, setButtons] = useState<BtnItem[]>([]);
+
+  useEffect(() => {
+    const mapHref = (name: string): string | undefined => {
+      const k = name.toLowerCase();
+      if (k.includes('autor')) return '/autor';
+      if (k.includes('teacher') || k.includes('lehrer')) return '/teacher';
+      if (k.includes('lern') || k.includes('kurs')) return '/lernen';
+      if (k.includes('ueb') || k.includes('übung') || k.includes('uebung')) return '/ueben';
+  if (k.includes('arena')) return '/arena';
+      if (k.includes('medien')) return '/autor?tab=medien';
+      if (k.includes('dashboard')) return '/dashboard';
+      if (k.includes('admin')) return '/admin/users';
+      if (k.includes('gast') || k.includes('guest')) return '/guest';
+      return undefined;
+    };
+    (async () => {
+      try {
+        const res = await fetch('/api/buttons', { cache: 'no-store' });
+        const d = await res.json();
+        if (res.ok && d?.items) {
+          setButtons(d.items.map((it: any) => ({ ...it, href: mapHref(it.name) })));
+        } else {
+          setButtons([]);
+        }
+      } catch {
+        setButtons([]);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -144,34 +177,33 @@ export default function DashboardPage() {
         {/* Kachel-Spalte */}
         <section className="bg-white rounded shadow p-6">
           <h2 className="text-2xl font-bold mb-4">Schnellzugriff</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <a href="/lernen" className="bg-blue-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-blue-700 transition">📚 Kurse</a>
-            <a href="/ueben" className="bg-green-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-green-700 transition">✏️ Übungen</a>
-            <a href="/arena" className="bg-purple-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-purple-700 transition">🏆 Arena</a>
-            {(['author','admin'] as string[]).includes((session?.user as any)?.role) && (
-              <a href="/autor" className="bg-orange-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-orange-700 transition">🛠️ Autor</a>
-            )}
-            {(session && (session?.user as any)?.role==='teacher') && (
-              <>
-                <a href="/teacher" className="bg-indigo-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-indigo-700 transition">👩‍🏫 Klasse verwalten</a>
-                <a href="/teacher/kurse" className="bg-indigo-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-indigo-700 transition">📚 Kurse zuordnen</a>
-              </>
-            )}
-            {(session?.user as any)?.role === 'admin' && (
-              <>
-                <a href="/admin/users" className="bg-red-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-red-700 transition">🔐 Admin</a>
-                <a href="/guest" className="bg-yellow-500 text-white py-3 px-4 rounded text-center font-semibold hover:bg-yellow-600 transition" title="Gastmodus: Daten werden nur lokal gespeichert">🧪 Gastzugang</a>
-              </>
-            )}
-            {(((session?.user as any)?.role==='teacher') || (((session?.user as any)?.role==='learner') && (user as any)?.ownerTeacher)) && (
-              <a href="/messages" className="relative bg-gray-700 text-white py-3 px-4 rounded text-center font-semibold hover:bg-gray-800 transition" title="Liste: Hintergrund zeigt deinen Lese-Status. Punkt: Orange = Empfänger noch nicht gelesen, Grün = Empfänger hat gelesen.">
-                💬 Nachrichten
-                {unread>0 && (
-                  <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-5 text-center">{unread}</span>
-                )}
-              </a>
-            )}
-          </div>
+          {buttons.length === 0 ? (
+            <div className="text-sm text-gray-500">Keine Buttons gefunden (public/media/buttons).</div>
+          ) : (
+            <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+              {buttons.map((b) => {
+                const defaultSrc = b.downSrc || b.src;
+                const hoverSrc = b.upSrc || b.src;
+                return (
+                  <li key={b.src}>
+                    {b.href ? (
+                      <a href={b.href} className="block group">
+                        <span className="relative block">
+                          <Image src={defaultSrc} alt={b.name} width={640} height={240} className="w-full h-auto object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                          <Image src={hoverSrc} alt={b.name} width={640} height={240} className="w-full h-auto object-contain absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                        </span>
+                      </a>
+                    ) : (
+                      <span className="relative block group">
+                        <Image src={defaultSrc} alt={b.name} width={640} height={240} className="w-full h-auto object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                        <Image src={hoverSrc} alt={b.name} width={640} height={240} className="w-full h-auto object-contain absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       </div>
     </main>
