@@ -1,17 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
-import { getWebdav, webdavPublicUrl } from '@/lib/webdavClient';
+import { isWebdavEnabled, davList, davPut, davDelete, davMove, davExists, webdavPublicUrl } from '@/lib/webdavClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+// @ts-ignore process is available at runtime in Node.js
+const uploadsDir = path.join((globalThis as any).process?.cwd?.() || '', 'public', 'uploads');
 const BLOB_PREFIX = 'uploads/';
-const useWebdav = !!process.env.WEBDAV_BASEURL && !!process.env.WEBDAV_USERNAME && !!process.env.WEBDAV_PASSWORD;
+const useWebdav = isWebdavEnabled();
 const useBlob = !useWebdav && ( !!process.env.VERCEL || !!process.env.BLOB_READ_WRITE_TOKEN );
 
 async function ensureUploadsDir(){
@@ -27,19 +28,13 @@ async function importVercelBlob() {
 
 export async function GET(){
   if(useWebdav){
-    const client = await getWebdav();
-    if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
     try{
-      const dirents = await client.getDirectoryContents(BLOB_PREFIX, { deep: false }) as any[];
-      const items = (dirents||[])
-        .filter(e=> e.type==='file')
-        .map(e=> ({ name: String(e.filename).replace(/^uploads\//,''), url: webdavPublicUrl(String(e.filename)), size: Number(e.size||0), mtime: new Date(e.lastmod || Date.now()).getTime(), key: String(e.filename) }))
-        .sort((a,b)=> b.mtime - a.mtime);
+      const items = await davList(BLOB_PREFIX);
       // auch lokale Dateien einmischen (falls vorhanden)
       try{
         await ensureUploadsDir();
         const entries = await fsp.readdir(uploadsDir, { withFileTypes: true });
-        for(const ent of entries){ if(!ent.isFile()) continue; const name = ent.name; if(items.some(x=>x.name===name)) continue; const st = await fsp.stat(path.join(uploadsDir,name)).catch(()=>null); if(!st) continue; items.push({ name, url: `/uploads/${encodeURIComponent(name)}`, size: st.size, mtime: st.mtimeMs }); }
+  for(const ent of entries){ if(!ent.isFile()) continue; const name = ent.name; if(items.some(x=>x.name===name)) continue; const st = await fsp.stat(path.join(uploadsDir,name)).catch(()=>null); if(!st) continue; items.push({ name, url: `/uploads/${encodeURIComponent(name)}`, size: st.size, mtime: st.mtimeMs, key: BLOB_PREFIX + name }); }
         items.sort((a,b)=> b.mtime - a.mtime);
       } catch{}
       return NextResponse.json({ success:true, items });
@@ -96,7 +91,7 @@ export async function GET(){
   }
 }
 
-export async function POST(req: NextRequest){
+export async function POST(req: any){
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role as string | undefined;
   if(!role || (role !== 'author' && role !== 'admin')){
@@ -111,11 +106,11 @@ export async function POST(req: NextRequest){
     const nameFromForm = (form.get('filename') as string | null) || (file as any).name || 'upload.bin';
     const safeName = path.basename(nameFromForm).replace(/[^a-zA-Z0-9._-]/g, '_');
     if(useWebdav){
-      const client = await getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
       // Duplikat prüfen
-      try{ const existing = await client.stat(BLOB_PREFIX + safeName); if(existing) return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 }); } catch{}
-  const arrayBuffer = await (file as Blob).arrayBuffer();
-  await client.putFileContents(BLOB_PREFIX + safeName, new Uint8Array(arrayBuffer), { overwrite: false });
+      const exists = await davExists(BLOB_PREFIX + safeName);
+      if(exists) return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 });
+      const blob = file as Blob;
+      await davPut(BLOB_PREFIX + safeName, blob, (blob as any).type || undefined);
       return NextResponse.json({ success:true, name: safeName, url: webdavPublicUrl(BLOB_PREFIX + safeName), key: BLOB_PREFIX + safeName });
     } else if(useBlob){
   const { list, put } = await importVercelBlob();
@@ -133,8 +128,9 @@ export async function POST(req: NextRequest){
     if(fs.existsSync(dest)){
       return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 });
     }
-    const arrayBuffer = await (file as Blob).arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+  const arrayBuffer = await (file as Blob).arrayBuffer();
+  // @ts-ignore Node runtime provides Buffer
+  const buffer = (globalThis as any).Buffer ? (globalThis as any).Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer);
     await fsp.writeFile(dest, buffer);
     return NextResponse.json({ success:true, name: safeName, url: `/uploads/${encodeURIComponent(safeName)}`, key: BLOB_PREFIX + safeName });
   }catch(e:any){
@@ -142,7 +138,7 @@ export async function POST(req: NextRequest){
   }
 }
 
-export async function DELETE(req: NextRequest){
+export async function DELETE(req: any){
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role as string | undefined;
   if(!role || (role !== 'author' && role !== 'admin')){
@@ -159,12 +155,11 @@ export async function DELETE(req: NextRequest){
       key = body?.key || key;
     }
     if(useWebdav){
-      const client = await getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
-  const key = (searchParams.get('key') || (body?.key)) as string | undefined;
-  const name = (searchParams.get('name') || (body?.name)) as string | undefined;
-      const target = key || (name ? (BLOB_PREFIX + path.basename(name)) : '');
+      const k = (searchParams.get('key') || (body?.key)) as string | undefined;
+      const n = (searchParams.get('name') || (body?.name)) as string | undefined;
+      const target = k || (n ? (BLOB_PREFIX + path.basename(n)) : '');
       if(!target) return NextResponse.json({ success:false, error:'name/key fehlt' }, { status:400 });
-      await client.deleteFile(target);
+      await davDelete(target);
       return NextResponse.json({ success:true });
     } else if(useBlob){
   const { list, del } = await importVercelBlob();
@@ -194,7 +189,7 @@ export async function DELETE(req: NextRequest){
   }
 }
 
-export async function PATCH(req: NextRequest){
+export async function PATCH(req: any){
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role as string | undefined;
   if(!role || (role !== 'author' && role !== 'admin')){
@@ -208,25 +203,16 @@ export async function PATCH(req: NextRequest){
     const safeOld = path.basename(name);
     const safeNew = path.basename(newName).replace(/[^a-zA-Z0-9._-]/g, '_');
     if(useWebdav){
-      const client = await getWebdav(); if(!client) return NextResponse.json({ success:false, error:'WebDAV nicht konfiguriert' }, { status:500 });
       const oldKey = BLOB_PREFIX + safeOld;
       const newKey = BLOB_PREFIX + safeNew;
-      // Existenz prüfen
-      try{ const st = await client.stat(newKey); if(st) return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 }); } catch{}
-      // Kopieren (WebDAV: via GET+PUT, da move/rename evtl. nicht cross-dir geht)
+      const exists = await davExists(newKey);
+      if(exists) return NextResponse.json({ success:false, error:'Dateiname existiert bereits' }, { status:409 });
       try{
-        const stream = await client.createReadStream(oldKey);
-        const chunks: Uint8Array[] = [];
-        await new Promise<void>((resolve,reject)=>{ stream.on('data',(c:any)=>chunks.push(new Uint8Array(c))); stream.on('end',()=>resolve()); stream.on('error',reject); });
-        const totalLen = chunks.reduce((n, c)=> n + c.byteLength, 0);
-        const merged = new Uint8Array(totalLen);
-        let off = 0; for(const c of chunks){ merged.set(c, off); off += c.byteLength; }
-        await client.putFileContents(newKey, merged, { overwrite: false });
-        await client.deleteFile(oldKey);
+        const res = await davMove(oldKey, newKey);
+        return NextResponse.json({ success:true, name: safeNew, url: res?.url || webdavPublicUrl(newKey), key: newKey });
       }catch{
         return NextResponse.json({ success:false, error:'Umbenennen fehlgeschlagen' }, { status:500 });
       }
-      return NextResponse.json({ success:true, name: safeNew, url: webdavPublicUrl(newKey), key: newKey });
     } else if(useBlob){
   const { list, put, del } = await importVercelBlob();
       const oldKey = BLOB_PREFIX + safeOld;

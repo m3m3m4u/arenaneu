@@ -51,7 +51,7 @@ const nextConfig: NextConfig = {
   'node_modules/is-plain-object/**',
   'node_modules/is-buffer/**',
   'node_modules/@fastify/busboy/**',
-  'node_modules/webdav/**'
+  // no explicit webdav client dependency anymore
     ]
   },
   eslint: { ignoreDuringBuilds: true },
