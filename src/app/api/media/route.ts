@@ -35,6 +35,21 @@ export async function GET(){
         mtime: new Date(b.uploadedAt || b.addedAt || Date.now()).getTime(),
         key: b.pathname || undefined,
   })).sort((a: {mtime:number}, b: {mtime:number})=> b.mtime - a.mtime);
+      // Zusätzlich lokale, statische Dateien aus /public/uploads einbeziehen (falls vorhanden)
+      try {
+        await ensureUploadsDir();
+        const entries = await fsp.readdir(uploadsDir, { withFileTypes: true });
+        for (const ent of entries) {
+          if (!ent.isFile()) continue;
+          const name = ent.name;
+          if (items.some(x => x.name === name)) continue; // Deduplizieren nach Name
+          const full = path.join(uploadsDir, name);
+          const st = await fsp.stat(full).catch(()=>null);
+          if (!st) continue;
+          items.push({ name, url: `/uploads/${encodeURIComponent(name)}`, size: st.size, mtime: st.mtimeMs });
+        }
+        items.sort((a,b)=> b.mtime - a.mtime);
+      } catch {}
       return NextResponse.json({ success:true, items });
     }catch(e:any){
       return NextResponse.json({ success:false, error: String(e?.message||e) }, { status:500 });
