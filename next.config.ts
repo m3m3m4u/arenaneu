@@ -32,7 +32,8 @@ const nextConfig: NextConfig = {
       'node_modules/@vercel/blob/**',
   'node_modules/undici/**',
   'node_modules/async-retry/**',
-  'node_modules/bytes/**'
+  'node_modules/bytes/**',
+  'node_modules/is-plain-object/**'
     ]
   },
   eslint: { ignoreDuringBuilds: true },
