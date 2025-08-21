@@ -34,7 +34,14 @@ export async function GET(){
       try{
         await ensureUploadsDir();
         const entries = await fsp.readdir(uploadsDir, { withFileTypes: true });
-  for(const ent of entries){ if(!ent.isFile()) continue; const name = ent.name; if(items.some(x=>x.name===name)) continue; const st = await fsp.stat(path.join(uploadsDir,name)).catch(()=>null); if(!st) continue; items.push({ name, url: `/uploads/${encodeURIComponent(name)}`, size: st.size, mtime: st.mtimeMs, key: BLOB_PREFIX + name }); }
+        for(const ent of entries){
+          if(!ent.isFile()) continue;
+          const name = ent.name;
+          if(items.some(x=>x.name===name)) continue;
+          const st = await fsp.stat(path.join(uploadsDir,name)).catch(()=>null);
+          if(!st) continue;
+          items.push({ name, url: `/uploads/${encodeURIComponent(name)}`, size: st.size, mtime: st.mtimeMs, key: BLOB_PREFIX + name });
+        }
         items.sort((a,b)=> b.mtime - a.mtime);
       } catch{}
       return NextResponse.json({ success:true, items });

@@ -26,7 +26,9 @@ export async function davList(prefix: string){
   const c = conf(); if(!c) return [] as Array<{ name: string; url: string; size: number; mtime: number; key: string }>;
   const encoded = encodeURIComponent(prefix).replace(/%2F/g,'/');
   const target = `${c.url}/${encoded.endsWith('/') ? encoded : encoded + '/'}`;
-  const res = await fetch(target, { method:'PROPFIND', headers: { Authorization: c.auth, Depth: '1' } });
+  // Einige Server liefern ohne Body nicht alle Props. Sende Minimal-Body mit gewünschten Props.
+  const body = `<?xml version="1.0" encoding="utf-8"?>\n<d:propfind xmlns:d="DAV:">\n  <d:prop>\n    <d:getlastmodified/>\n    <d:getcontentlength/>\n    <d:resourcetype/>\n  </d:prop>\n</d:propfind>`;
+  const res = await fetch(target, { method:'PROPFIND', headers: { Authorization: c.auth, Depth: '1', 'Content-Type': 'text/xml' }, body });
   if(!res.ok) return [];
   const xml = await res.text();
   const items: Array<{ name: string; url: string; size: number; mtime: number; key: string }> = [];
@@ -36,25 +38,29 @@ export async function davList(prefix: string){
   basePath = basePath.replace(/\/$/, '');
   const normPrefix = prefix.replace(/^\/+/, '');
   const prefixPath = `${basePath}/${normPrefix}`.replace(/\/+/, '/');
-  // Split on both D:response and d:response
-  const responses = xml.split(/<[^>]*:response/).slice(1);
-  for(const seg of responses){
-    const hrefMatch = seg.match(/<[^>]*:href>([\s\S]*?)<\/[a-zA-Z0-9_:-]*href>/);
+  // Grob in Responses splitten (case-insensitive)
+  const responses = xml.split(/<[^>]*response[^>]*>/i).slice(1);
+  for(const segRaw of responses){
+    const seg = segRaw; // Segment enthält restlichen Inhalt bis zum nächsten Tag
+    // HREF extrahieren (Namespace-agnostisch, case-insensitive)
+    const hrefMatch = seg.match(/<[^>]*href[^>]*>([\s\S]*?)<\/[\s\S]*?href[^>]*>/i);
     if(!hrefMatch) continue;
     let href = hrefMatch[1].trim();
-    // Normalize to pathname only
     try { if(/^https?:\/\//i.test(href)) href = new URL(href).pathname; } catch{}
     href = decodeURIComponent(href);
-    if(href.endsWith('/')) continue; // Ordner überspringen
-    // Ensure file is under the requested prefixPath
+    // resourcetype: directory? Dann überspringen
+    const isCollection = /<[^>]*resourcetype[^>]*>[\s\S]*?<[^>]*collection[^>]*\/>?[\s\S]*?<\/[\s\S]*?resourcetype>/i.test(seg);
+    if(isCollection) continue;
+    // Muss unter prefixPath liegen
     if(!href.startsWith(prefixPath)) continue;
     let rel = href.substring(prefixPath.length);
     rel = rel.replace(/^\/+/, '');
-    if(!rel || /\/$/.test(rel)) continue;
+    if(!rel) continue;
     const name = rel.split('/').pop() || rel;
     const key = `${normPrefix}${normPrefix.endsWith('/')?'':'/'}${rel}`;
-    const sizeMatch = seg.match(/<d:getcontentlength>(\d+)<\/d:getcontentlength>/) || seg.match(/<getcontentlength>(\d+)<\/getcontentlength>/);
-    const dateMatch = seg.match(/<d:getlastmodified>([\s\S]*?)<\/d:getlastmodified>/) || seg.match(/<getlastmodified>([\s\S]*?)<\/getlastmodified>/);
+    // Größe und Datum robuster (case-insensitive)
+    const sizeMatch = seg.match(/<[^>]*getcontentlength[^>]*>(\d+)<\/[\s\S]*?getcontentlength[^>]*>/i);
+    const dateMatch = seg.match(/<[^>]*getlastmodified[^>]*>([\s\S]*?)<\/[\s\S]*?getlastmodified[^>]*>/i);
     const size = sizeMatch ? Number(sizeMatch[1]) : 0;
     const mtime = dateMatch ? new Date(dateMatch[1]).getTime() : Date.now();
     items.push({ name, url: webdavPublicUrl(key), size, mtime, key });
