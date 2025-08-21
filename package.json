@@ -30,7 +30,8 @@
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "undici": "^5.29.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
