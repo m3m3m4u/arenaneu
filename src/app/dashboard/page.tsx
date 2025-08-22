@@ -54,25 +54,29 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      if (!session?.user?.username) return;
+    const fetchOverview = async () => {
+      if(!session?.user?.username) return;
       try {
         setLoadingUser(true);
-        const res = await fetch("/api/user?username=" + encodeURIComponent(session.user.username));
+        const res = await fetch('/api/dashboard/overview');
+        if (res.status === 401) return; // redirect handled elsewhere
         const data = await res.json();
-        if (res.ok && data.user) {
+        if(res.ok && data.success){
           setUser(data.user as DashboardUser);
+          if(typeof data.unreadCount === 'number') setUnread(data.unreadCount);
           setError(null);
         } else {
-          setError(data.error || "Fehler beim Laden der Nutzerdaten");
+          // Fallback: alter Weg, falls Endpoint nicht liefert
+          const res2 = await fetch("/api/user?username=" + encodeURIComponent(session.user.username));
+          const data2 = await res2.json();
+          if (res2.ok && data2.user) { setUser(data2.user as DashboardUser); }
+          else setError(data.error || data2.error || 'Fehler beim Laden');
         }
       } catch {
-        setError("Netzwerkfehler");
-      } finally {
-        setLoadingUser(false);
-      }
+        setError('Netzwerkfehler');
+      } finally { setLoadingUser(false); }
     };
-    void fetchUser();
+    void fetchOverview();
   }, [session?.user?.username]);
 
   // Letzte Aktivität (aus localStorage)
@@ -88,6 +92,9 @@ export default function DashboardPage() {
   // Ungelesene Nachrichten (eingehend) zählen und anzeigen
   useEffect(() => {
     let timer: any;
+    let hidden = false;
+    function visibilityHandler(){ hidden = document.hidden; }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', visibilityHandler);
     async function loadUnread(){
       try{
         const res = await fetch('/api/messages/unread');
@@ -97,12 +104,13 @@ export default function DashboardPage() {
     }
     const r = (session?.user as any)?.role;
     const allowed = r==='teacher' || (r==='learner' && (user as any)?.ownerTeacher);
-    if(status==='authenticated' && allowed){
-      void loadUnread();
-  const intervalMs = Number(process.env.NEXT_PUBLIC_UNREAD_POLL_MS||'60000');
-  timer = setInterval(loadUnread, Math.max(15000, intervalMs));
-    }
-    return () => { if(timer) clearInterval(timer); };
+      if(status==='authenticated' && allowed){
+        // Poll erst nach initialem Overview (unread evtl. schon gesetzt)
+        const base = Number(process.env.NEXT_PUBLIC_UNREAD_POLL_MS||'60000');
+        const intervalMs = Math.max(120000, base);
+        timer = setInterval(()=>{ if(!hidden) void loadUnread(); }, intervalMs);
+      }
+      return () => { if(timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', visibilityHandler); };
   }, [status, (session?.user as any)?.role, (user as any)?.ownerTeacher]);
 
   useEffect(() => {

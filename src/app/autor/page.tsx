@@ -57,80 +57,72 @@ export default function AutorPage() {
 
 // -------- Kurse Liste --------
 function CoursesTab() {
-    const [courses, setCourses] = useState<CourseUI[]>([]);
-    const [loading, setLoading] = useState(false);
-  // Filter & Pagination
+  const [courses, setCourses] = useState<CourseUI[]>([]);
+  const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<'published'|'draft'|''>('');
-  // dynamisch verwendete Kategorien
   const [usedCategories, setUsedCategories] = useState<string[]>([]);
-  const pageSize = 10;
   const [page, setPage] = useState(1);
+  const pageSize = 10; // fest: 10 aktuellste pro Seite
+  const [totalCount, setTotalCount] = useState(0);
   const sp = useSearchParams();
   const router = useRouter();
 
-    async function load() {
-      setLoading(true);
-      try {
-  // Autoren sollen auch Entwürfe sehen -> showAll=1
-  const res = await fetch('/api/kurse?showAll=1');
-        const data = await res.json();
-        if (res.ok && data.success && Array.isArray(data.courses)) {
-          const dbCourses: CourseDB[] = data.courses;
-          const lessonCounts = await Promise.all(dbCourses.map(async c => {
-            try {
-              const lr = await fetch(`/api/kurs/${c._id}/lektionen`);
-              const ld = await lr.json();
-              return Array.isArray(ld.lessons) ? ld.lessons.length : 0;
-            } catch { return 0; }
-          }));
-          setCourses(dbCourses.map((c,i)=>({ id:c._id, title:c.title, description:c.description, category:c.category, status:c.isPublished?'Veröffentlicht':'Entwurf', lessons: lessonCounts[i]||0 })));
-          // Kategorien extrahieren (nur definierte + nicht leer) & alphabetisch sortieren
+  async function load() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('showAll','1');
+      params.set('page', String(page));
+      params.set('limit', String(pageSize));
+      if (q) params.set('q', q);
+      if (categoryFilter) params.set('cat', categoryFilter);
+      if (statusFilter) params.set('status', statusFilter==='published'?'pub':'draft');
+      const res = await fetch('/api/kurse?'+params.toString());
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const dbCourses: CourseDB[] = Array.isArray(data.courses)? data.courses: [];
+        setCourses(dbCourses.map(c=>({ id:String(c._id), title:c.title, description:c.description, category:c.category, status:c.isPublished?'Veröffentlicht':'Entwurf', lessons: (c as any).lessonCount||0 })));
+        setTotalCount(typeof data.totalCount === 'number'? data.totalCount : dbCourses.length);
+        if (Array.isArray(data.categories)) {
+          setUsedCategories((data.categories as string[]).sort((a,b)=> a.localeCompare(b,'de')));
+        } else {
+          // fallback: nur aktuelle Seite
           const cats = Array.from(new Set(dbCourses.map(c=> (c.category||'').trim()).filter(Boolean))).sort((a,b)=> a.localeCompare(b,'de'));
           setUsedCategories(cats);
-        } else { setCourses([]); }
-      } catch { setCourses([]); }
-      setLoading(false);
-    }
-
-    useEffect(()=>{ load(); }, []);
-
-    // Init from URL on first render
-    useEffect(()=>{
-      try {
-        const q0 = sp?.get('q') || '';
-        const cat0 = sp?.get('cat') || '';
-        const p0 = parseInt(sp?.get('page') || '1', 10);
-  const st0 = sp?.get('stat') || '';
-        if(q0) setQ(q0);
-        if(cat0) setCategoryFilter(cat0);
-        if(!Number.isNaN(p0) && p0>0) setPage(p0);
-  if(st0==='pub') setStatusFilter('published'); else if (st0==='draft') setStatusFilter('draft');
-      } catch { /* noop */ }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Filtered + paginated view
-    const filtered = courses.filter(c => {
-      if (q) {
-        const needle = q.toLowerCase();
-        const hay = [c.title||"", c.description||""].join("\n").toLowerCase();
-        if (!hay.includes(needle)) return false;
+        }
+      } else {
+        setCourses([]); setTotalCount(0);
       }
-      if (categoryFilter && c.category !== categoryFilter) return false;
-      if (statusFilter) {
-        if (statusFilter==='published' && c.status !== 'Veröffentlicht') return false;
-        if (statusFilter==='draft' && c.status !== 'Entwurf') return false;
-      }
-      return true;
-    });
-    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-    if (page > totalPages && totalPages>0) { setPage(totalPages); }
-    const safePage = Math.min(page, totalPages);
-    const start = (safePage - 1) * pageSize;
-    const paginated = filtered.slice(start, start + pageSize);
+    } catch { setCourses([]); setTotalCount(0); }
+    setLoading(false);
+  }
+
+  // Initial URL -> State
+  useEffect(()=>{
+    try {
+      const q0 = sp?.get('q') || '';
+      const cat0 = sp?.get('cat') || '';
+      const p0 = parseInt(sp?.get('page') || '1', 10);
+      const st0 = sp?.get('stat') || '';
+      if(q0) setQ(q0);
+      if(cat0) setCategoryFilter(cat0);
+      if(!Number.isNaN(p0) && p0>0) setPage(p0);
+      if(st0==='pub') setStatusFilter('published'); else if (st0==='draft') setStatusFilter('draft');
+    } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Filterwechsel -> Seite 1
   useEffect(()=>{ setPage(1); }, [q, categoryFilter, statusFilter]);
+  // Laden bei Änderungen
+  useEffect(()=>{ load(); }, [page, q, categoryFilter, statusFilter]);
+
+  // Server-seitige Pagination Infos
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginated = courses; // bereits server-seitig gefiltert & paginiert
 
     // Reflect filters + page in URL (deep-linkable)
   useEffect(()=>{
@@ -189,12 +181,12 @@ function CoursesTab() {
             <option value="published">Veröffentlicht</option>
             <option value="draft">Entwürfe</option>
           </select>
-          {(q || categoryFilter) && (
-            <div className="text-[11px] text-gray-500 ml-2">Gefunden: {filtered.length} / {courses.length}</div>
+          {(q || categoryFilter || statusFilter) && (
+            <div className="text-[11px] text-gray-500 ml-2">Treffer gesamt: {totalCount}</div>
           )}
         </div>
         {loading && <div className="text-sm text-gray-500 py-8">Lade Kurse…</div>}
-        {!loading && filtered.length===0 && <div className="text-sm text-gray-500 py-6">Keine Kurse gefunden.</div>}
+        {!loading && totalCount===0 && <div className="text-sm text-gray-500 py-6">Keine Kurse gefunden.</div>}
         <div className="grid gap-4">
           {paginated.map(c=> (
             <div key={c.id} className="bg-white border rounded p-4 flex justify-between items-center">
@@ -213,9 +205,9 @@ function CoursesTab() {
           ))}
         </div>
         {/* Pagination */}
-        {filtered.length > pageSize && (
+    {totalCount > pageSize && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-sm">
-            <div className="text-xs text-gray-500">Seite {safePage} / {totalPages} • {filtered.length} Kurse</div>
+      <div className="text-xs text-gray-500">Seite {safePage} / {totalPages} • {totalCount} Kurse</div>
             <div className="flex flex-wrap gap-2 items-center">
               <button disabled={safePage===1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="px-2 py-1 border rounded disabled:opacity-40">← Zurück</button>
               {Array.from({length: totalPages}).slice(0,8).map((_,i)=>{

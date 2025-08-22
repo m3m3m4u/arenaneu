@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Lesson from "@/models/Lesson";
 import AuditLog from "@/models/AuditLog";
@@ -9,6 +9,13 @@ import User from '@/models/User';
 import ClassCourseAccess from '@/models/ClassCourseAccess';
 import { parseMemory } from '@/lib/memory';
 import { parseLueckentext } from '@/lib/lueckentext';
+import mongoose from 'mongoose';
+
+// In-Memory Cache pro Runtime für Lesson-Listen (nur für Leserollen). Struktur: key => { expires, etag, payload }
+type LessonCacheEntry = { expires: number; etag: string; body: any };
+const globalAny = global as any;
+if(!globalAny.__LESSON_LIST_CACHE__) globalAny.__LESSON_LIST_CACHE__ = new Map<string, LessonCacheEntry>();
+const LESSON_CACHE: Map<string, LessonCacheEntry> = globalAny.__LESSON_LIST_CACHE__;
 
 // Hilfstypen
 type ChoiceKind = 'single-choice' | 'multiple-choice';
@@ -35,7 +42,7 @@ type PostBody = {
 
 // Hinweis Next.js 15: params ist jetzt asynchron und muss awaited werden
 export async function GET(
-  request: NextRequest,
+  request: any,
   context: { params: Promise<{ courseId: string }> }
 ) {
   try {
@@ -54,15 +61,19 @@ export async function GET(
       const dev = process.env.NODE_ENV !== 'production';
       return NextResponse.json({ success: false, error: 'courseId fehlt', ...(dev ? { hint: 'Pfad erwartet: /api/kurs/{courseId}/lektionen' } : {}) }, { status: 400 });
     }
-  await dbConnect();
+    // Ungültige IDs früh abfangen, damit kein CastError -> 500 entsteht
+    const isVirtualPool = courseId === 'exercise-pool';
+    if (!isVirtualPool && !mongoose.Types.ObjectId.isValid(courseId)) {
+      return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
+    }
+    await dbConnect();
     // Zugriff prüfen
     const session = await getServerSession(authOptions);
     const role = (session?.user as any)?.role as string | undefined;
     const username = (session?.user as any)?.username as string | undefined;
-    // Kurs laden für Published-Check (Gäste)
-    const course = await Course.findById(courseId).lean();
-    const isVirtualPool = !course && (courseId === 'exercise-pool');
-    if (!course && !isVirtualPool) {
+  // Kurs laden für Published-Check (Gäste)
+  const course = isVirtualPool ? null : await Course.findById(courseId).lean();
+  if (!course && !isVirtualPool) {
       return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
     }
   if (!isVirtualPool && role === 'learner' && username) {
@@ -94,19 +105,49 @@ export async function GET(
         return NextResponse.json({ success: false, error: 'Kurs ist nicht veröffentlicht' }, { status: 403 });
       }
     }
+    // Cache nur für nicht verändernde Rollen: learner, guest/unauth (autoren/admin/teacher sehen Änderungen sofort)
+    const isWriterRole = role === 'author' || role === 'admin' || role === 'teacher';
+    const cacheTtlMs = parseInt(process.env.LESSON_LIST_CACHE_MS || '30000',10);
+    const allowCache = !isWriterRole && cacheTtlMs>0 && !request.nextUrl?.searchParams?.get('nocache');
+    const cacheKey = allowCache ? `${courseId}` : '';
+    if (allowCache) {
+      const hit = LESSON_CACHE.get(cacheKey);
+      if (hit && hit.expires > Date.now()) {
+        const inm = request.headers.get('if-none-match');
+        if (inm && inm === hit.etag) {
+          return new Response(null, { status: 304, headers: { 'ETag': hit.etag, 'Cache-Control': 'private, max-age=30' } });
+        }
+        return NextResponse.json(hit.body, { headers: { 'ETag': hit.etag, 'Cache-Control': 'private, max-age=30' } });
+      }
+    }
+
     const lessons = await Lesson.find({ courseId }).sort({ order: 1, createdAt: 1 });
     const coursePayload = isVirtualPool
       ? { _id: 'exercise-pool', title: 'Übungs-Pool', progressionMode: 'free', isPublished: true }
       : { _id: String(course?._id), title: (course as any)?.title, progressionMode: (course as any)?.progressionMode || 'free', isPublished: !!(course as any)?.isPublished };
-    return NextResponse.json({ success: true, lessons, course: coursePayload });
+    const lastUpdated = lessons.reduce<number>((acc, l: any)=>{ const t = new Date(l.updatedAt||l.createdAt||0).getTime(); return t>acc? t: acc; }, 0);
+    const etag = 'W/"'+courseId+':'+lessons.length+':'+lastUpdated+'"';
+    const payload = { success: true, lessons, course: coursePayload };
+    if (allowCache) {
+      LESSON_CACHE.set(cacheKey, { expires: Date.now()+cacheTtlMs, etag, body: payload });
+    }
+    const inm = request.headers.get('if-none-match');
+    if (inm && inm === etag) {
+      return new Response(null, { status: 304, headers: { 'ETag': etag, 'Cache-Control': 'private, max-age=30' } });
+    }
+    return NextResponse.json(payload, { headers: { 'ETag': etag, 'Cache-Control': 'private, max-age=30' } });
   } catch (error: unknown) {
     const details = error instanceof Error ? error.message : undefined;
+    if (details && /Cast to ObjectId failed/i.test(details)) {
+      return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
+    }
+    console.error('[lektionen][GET] Fehler', { details });
     return NextResponse.json({ success: false, error: 'Fehler beim Laden', details }, { status: 500 });
   }
 }
 
 export async function POST(
-  request: NextRequest,
+  request: any,
   context: { params: Promise<{ courseId: string }> }
 ) {
   try {

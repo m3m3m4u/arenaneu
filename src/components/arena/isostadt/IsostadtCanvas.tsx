@@ -1626,13 +1626,16 @@ export default function IsostadtCanvas({ width, height }: Props) {
   // Externe Redraw-Funktion bereitstellen
   redrawRef.current = () => { drawMap(); drawHover(); };
 
-  // Autosave-Intervall: konfigurierbar (default 10s) über ENV ARENA_AUTOSAVE_MS
-  const autosaveMs = Number(process.env.NEXT_PUBLIC_ARENA_AUTOSAVE_MS||'10000');
+  // Autosave-Intervall: konfigurierbar (default 15s) über ENV ARENA_AUTOSAVE_MS, pausiert wenn Tab verborgen
+  const autosaveMs = Number(process.env.NEXT_PUBLIC_ARENA_AUTOSAVE_MS||'15000');
+  let autosaveHidden = false;
+  const visHandler = () => { autosaveHidden = document.visibilityState === 'hidden'; };
+  document.addEventListener('visibilitychange', visHandler);
   const autosaveId = setInterval(() => {
-      if (dirtyRef.current) {
+      if (!autosaveHidden && dirtyRef.current) {
         saveRef.current?.();
       }
-  }, Math.max(3000, autosaveMs));
+  }, Math.max(5000, autosaveMs));
 
     // Lifecycle-Flush: Sichtbarkeit/Seitenwechsel/Unload
     const onVis = () => {
@@ -1662,6 +1665,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
   if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
   clearInterval(autosaveId);
   document.removeEventListener('visibilitychange', onVis);
+  document.removeEventListener('visibilitychange', visHandler);
   window.removeEventListener('pagehide', onPageHide);
   window.removeEventListener('beforeunload', onBeforeUnload);
     };

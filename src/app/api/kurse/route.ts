@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Course from "@/models/Course";
 import Lesson from "@/models/Lesson"; // hinzugefügt
@@ -12,36 +12,64 @@ type LeanCourse = { _id: unknown } & Record<string, unknown>;
 
 type CountAgg = { _id: string; count: number };
 
-export async function GET(req: NextRequest) {
+// Einfacher In-Memory Cache (pro Lambda/Runtime). Nur für non-learner Rollen.
+type CacheEntry = { expires: number; json: any };
+const globalAny = global as any;
+if (!globalAny.__COURSE_LIST_CACHE__) globalAny.__COURSE_LIST_CACHE__ = new Map<string, CacheEntry>();
+const COURSE_CACHE: Map<string, CacheEntry> = globalAny.__COURSE_LIST_CACHE__;
+
+export async function GET(req: any) {
   try {
     await dbConnect();
     const session = await getServerSession(authOptions);
     const url = new URL(req.url);
-    const showAll = url.searchParams.get("showAll") === "1";
-  const requestedMode = (url.searchParams.get('mode') || '').toLowerCase() === 'all' ? 'all' : 'class';
-    // Kategorie-Filter (?cat=)
-    const rawCat = url.searchParams.get("cat");
-    const normalizedCat = (() => {
+    const showAll = url.searchParams.get('showAll') === '1';
+    const requestedMode = (url.searchParams.get('mode') || '').toLowerCase() === 'all' ? 'all' : 'class';
+    const rawCat = url.searchParams.get('cat');
+    const searchQ = (url.searchParams.get('q') || '').trim().toLowerCase();
+    const statusFilter = (url.searchParams.get('status') || '').toLowerCase(); // 'pub' | 'draft'
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+    const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '10', 10)));
+
+  const normalizedCat = (() => {
       if (!rawCat) return undefined;
       const v = String(rawCat).trim();
-      if (!v || /^(alle|all|any)$/i.test(v)) return undefined; // keine Einschränkung
+      if (!v || /^(alle|all|any)$/i.test(v)) return undefined;
       return normalizeCategory(v);
     })();
-    const filter: Record<string, unknown> = showAll ? {} : { isPublished: true };
-    if (normalizedCat) filter.category = normalizedCat;
 
-  let courses: LeanCourse[] = [];
-  let learnerScope: 'class' | 'all' | undefined = undefined; // was ist grundsätzlich erlaubt?
-  let activeMode: 'class' | 'all' | undefined = undefined;   // was wurde angewendet?
-    // Rollen-/Klassenlogik: Lernende in Klassen sehen nur freigeschaltete Kurse.
+    // Grundfilter (Autoren/Admin: optional unveröffentlichte)
+    const baseFilter: Record<string, unknown> = {};
+    if (!showAll) baseFilter.isPublished = true;
+    if (normalizedCat) baseFilter.category = normalizedCat;
+    if (statusFilter === 'pub') baseFilter.isPublished = true;
+    if (statusFilter === 'draft') baseFilter.isPublished = false;
+    if (searchQ) baseFilter.$or = [
+      { title: { $regex: searchQ, $options: 'i' } },
+      { description: { $regex: searchQ, $options: 'i' } }
+    ];
+
+    let courses: LeanCourse[] = [];
+    let learnerScope: 'class' | 'all' | undefined;
+    let activeMode: 'class' | 'all' | undefined;
     const role = (session?.user as any)?.role as string | undefined;
     const username = (session?.user as any)?.username as string | undefined;
+
+    // Cache nur für nicht-learner anwenden (Autoren/Admin/Teacher), da Lernende ggf. individuelle Sicht haben
+    const cacheTtlMs = parseInt(process.env.COURSE_LIST_CACHE_MS || '30000', 10);
+    const allowCache = role !== 'learner' && cacheTtlMs > 0 && !url.searchParams.get('nocache');
+    const cacheKey = allowCache ? JSON.stringify({ baseFilter, page, limit, searchQ, statusFilter, normalizedCat }) : '';
+    if (allowCache) {
+      const hit = COURSE_CACHE.get(cacheKey);
+      if (hit && hit.expires > Date.now()) {
+        return NextResponse.json({ ...hit.json, cached: true });
+      }
+    }
+
     if (role === 'learner' && username) {
-      // Finde Lernenden inkl. Klassen-ID
       const me = await User.findOne({ username }, '_id class').lean();
       const classId = me?.class ? String(me.class) : null;
       if (classId) {
-        // Klassenmodus prüfen: 'all' => alle veröffentlichten Kurse sichtbar; 'class' => nur freigegebene
         const TeacherClass = (await import('@/models/TeacherClass')).default;
         const cls = await TeacherClass.findById(classId).select('courseAccess').lean();
         const allowed = (cls as any)?.courseAccess === 'all' ? 'all' : 'class';
@@ -54,47 +82,52 @@ export async function GET(req: NextRequest) {
           if (allowedCourseIds.length === 0) {
             courses = [];
           } else {
-            const f: Record<string, unknown> = { _id: { $in: allowedCourseIds } };
-            if (!showAll) f.isPublished = true;
-            if (normalizedCat) f.category = normalizedCat;
-            courses = await Course.find(f).sort({ createdAt: -1 }).lean();
+            const f: Record<string, unknown> = { ...baseFilter, _id: { $in: allowedCourseIds } };
+            const totalCount = await Course.countDocuments(f);
+            courses = await Course.find(f).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
+            const withMeta = await attachLessonCounts(courses);
+            return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount });
           }
         } else {
-          const f: Record<string, unknown> = {};
-          if (!showAll) f.isPublished = true;
-          if (normalizedCat) f.category = normalizedCat;
-          courses = await Course.find(f).sort({ createdAt: -1 }).lean();
+          const totalCount = await Course.countDocuments(baseFilter);
+          courses = await Course.find(baseFilter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
+          const withMeta = await attachLessonCounts(courses);
+          return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount });
         }
       } else {
-        // Lernende ohne Klasse sehen derzeit keine Kurse (Policy)
         courses = [];
+        return NextResponse.json({ success: true, courses: [], learnerScope: 'class', activeMode: 'class', page, pageSize: limit, totalCount: 0 });
       }
     } else {
-      // Für Teacher/Admin/Autoren weiterhin global, aber showAll steuert Veröffentlichungen
-      courses = await Course.find(filter).sort({ createdAt: -1 }).lean();
+      const totalCount = await Course.countDocuments(baseFilter);
+      courses = await Course.find(baseFilter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
+      const withMeta = await attachLessonCounts(courses);
+      let categories: string[] | undefined;
+      if (page === 1) {
+        categories = await Course.distinct('category', baseFilter);
+      }
+      const payload = { success: true, courses: withMeta, page, pageSize: limit, totalCount, categories };
+      if (allowCache) {
+        COURSE_CACHE.set(cacheKey, { expires: Date.now() + cacheTtlMs, json: payload });
+      }
+      return NextResponse.json(payload);
     }
-
-    const courseIds = courses.map((c) => String(c._id));
-    const counts = await Lesson.aggregate<CountAgg>([
-      { $match: { courseId: { $in: courseIds } } },
-      { $group: { _id: "$courseId", count: { $sum: 1 } } }
-    ]);
-    const countMap: Record<string, number> = {};
-    counts.forEach((c) => { countMap[c._id] = c.count; });
-
-    const coursesWithCounts = courses.map((c) => ({
-      ...c,
-      lessonCount: countMap[String(c._id)] || 0
-    }));
-
-  return NextResponse.json({ success: true, courses: coursesWithCounts, learnerScope, activeMode });
   } catch (error: unknown) {
-    console.error("Fehler beim Laden der Kurse:", error);
-    return NextResponse.json(
-      { success: false, error: "Fehler beim Laden der Kurse" },
-      { status: 500 }
-    );
+    console.error('Fehler beim Laden der Kurse:', error);
+    return NextResponse.json({ success: false, error: 'Fehler beim Laden der Kurse' }, { status: 500 });
   }
+}
+
+async function attachLessonCounts(courses: LeanCourse[]) {
+  const courseIds = courses.map(c=> String(c._id));
+  if (!courseIds.length) return courses.map(c=> ({...c, lessonCount: 0 }));
+  const counts = await Lesson.aggregate<CountAgg>([
+    { $match: { courseId: { $in: courseIds } } },
+    { $group: { _id: '$courseId', count: { $sum: 1 } } }
+  ]);
+  const map: Record<string, number> = {};
+  counts.forEach(c=>{ map[c._id] = c.count; });
+  return courses.map(c=> ({ ...c, lessonCount: map[String(c._id)] || 0 }));
 }
 
 interface PostBody {
@@ -106,7 +139,7 @@ interface PostBody {
   progressionMode?: unknown; // 'linear' | 'free'
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: any) {
   try {
     await dbConnect();
     const session = await getServerSession(authOptions);

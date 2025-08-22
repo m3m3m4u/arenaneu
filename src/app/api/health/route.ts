@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
-import process from 'node:process';
+// Zugriff auf Prozess-Infos über globalThis.process (verhindert TS Konflikte beim direkten Import)
 
 export const dynamic = 'force-dynamic'; // keine Cache Probleme
 
@@ -10,6 +10,7 @@ export async function GET() {
   const started = Date.now();
   const hasUri = !!process.env.MONGODB_URI;
   let dbOk = false; let dbErr: string | undefined; let pingMs: number | undefined;
+  let readyState: number | undefined; let poolInfo: any = undefined;
   if (hasUri) {
     try {
       const conn = await dbConnect();
@@ -19,6 +20,14 @@ export async function GET() {
         if (conn?.db?.admin) { await conn.db.admin().ping(); }
       } catch {}
       dbOk = true;
+      // Zusätzliche Infos
+      // @ts-ignore
+      readyState = conn?.readyState;
+      // Mongoose 6: driver private, heuristisch keine echte Poolgröße; zeigen env Werte
+      poolInfo = {
+        maxPoolSize: process.env.MONGODB_POOL_SIZE || 'n/a',
+        minPoolSize: process.env.MONGODB_MIN_POOL_SIZE || 'n/a'
+      };
     } catch (e: any) {
       dbErr = e?.message || String(e);
     } finally {
@@ -38,11 +47,18 @@ export async function GET() {
 
   // Metriken einsammeln (falls vorhanden)
   const metrics = (globalThis as any).__DB_METRICS__ || undefined;
+  const p: any = (globalThis as any).process;
+  const proc = p ? {
+    pid: p.pid,
+    uptimeSec: typeof p.uptime === 'function' ? p.uptime() : undefined,
+    memory: (()=>{ try { const m = p.memoryUsage(); return { rss: m.rss, heapUsed: m.heapUsed }; } catch { return undefined; } })()
+  } : undefined;
   return NextResponse.json({
     ok: true,
     time: new Date().toISOString(),
-    env: { hasMONGODB_URI: hasUri, nodeEnv: process.env.NODE_ENV },
-    db: { ok: dbOk, error: dbErr, pingMs, metrics },
+  env: { hasMONGODB_URI: hasUri, nodeEnv: (globalThis as any).process?.env?.NODE_ENV },
+    db: { ok: dbOk, error: dbErr, pingMs, readyState, pool: poolInfo, metrics },
+    process: proc,
     warnings: duplicateAuth ? ['duplicate-auth-route'] : []
   }, { status: (dbOk || !hasUri) && !duplicateAuth ? 200 : 500 });
 }
