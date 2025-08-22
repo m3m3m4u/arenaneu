@@ -36,11 +36,13 @@ export async function GET() {
     duplicateAuth = pagesExists && appExists; // sollte false sein
   } catch {}
 
+  // Metriken einsammeln (falls vorhanden)
+  const metrics = (globalThis as any).__DB_METRICS__ || undefined;
   return NextResponse.json({
     ok: true,
     time: new Date().toISOString(),
     env: { hasMONGODB_URI: hasUri, nodeEnv: process.env.NODE_ENV },
-    db: { ok: dbOk, error: dbErr, pingMs },
+    db: { ok: dbOk, error: dbErr, pingMs, metrics },
     warnings: duplicateAuth ? ['duplicate-auth-route'] : []
   }, { status: (dbOk || !hasUri) && !duplicateAuth ? 200 : 500 });
 }
