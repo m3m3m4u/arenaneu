@@ -1626,12 +1626,13 @@ export default function IsostadtCanvas({ width, height }: Props) {
   // Externe Redraw-Funktion bereitstellen
   redrawRef.current = () => { drawMap(); drawHover(); };
 
-    // Autosave-Intervall: alle 5s, wenn dirty
-    const autosaveId = setInterval(() => {
+  // Autosave-Intervall: konfigurierbar (default 10s) über ENV ARENA_AUTOSAVE_MS
+  const autosaveMs = Number(process.env.NEXT_PUBLIC_ARENA_AUTOSAVE_MS||'10000');
+  const autosaveId = setInterval(() => {
       if (dirtyRef.current) {
         saveRef.current?.();
       }
-    }, 5000);
+  }, Math.max(3000, autosaveMs));
 
     // Lifecycle-Flush: Sichtbarkeit/Seitenwechsel/Unload
     const onVis = () => {

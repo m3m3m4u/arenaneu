@@ -99,7 +99,8 @@ export default function DashboardPage() {
     const allowed = r==='teacher' || (r==='learner' && (user as any)?.ownerTeacher);
     if(status==='authenticated' && allowed){
       void loadUnread();
-      timer = setInterval(loadUnread, 30000);
+  const intervalMs = Number(process.env.NEXT_PUBLIC_UNREAD_POLL_MS||'60000');
+  timer = setInterval(loadUnread, Math.max(15000, intervalMs));
     }
     return () => { if(timer) clearInterval(timer); };
   }, [status, (session?.user as any)?.role, (user as any)?.ownerTeacher]);

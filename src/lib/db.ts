@@ -82,7 +82,7 @@ async function dbConnect() {
   if (!cached!.promise) {
     const uri = getMongoUri();
     if (!uri) throw new Error('MONGODB_URI env fehlt');
-    const poolSize = parseInt(process.env.MONGODB_POOL_SIZE || '5', 10); // klein für M0
+  const poolSize = parseInt(process.env.MONGODB_POOL_SIZE || '3', 10); // konservativer Default für M0
     const minPoolSize = Math.min(parseInt(process.env.MONGODB_MIN_POOL_SIZE || '0', 10), poolSize);
     const serverSelTimeout = parseInt(process.env.MONGODB_SRV_TIMEOUT || '5000', 10);
     const socketTimeout = parseInt(process.env.MONGODB_SOCKET_TIMEOUT || '45000', 10);
