@@ -23,7 +23,7 @@ export default function SingleChoiceLektionPage() {
 function SingleChoiceLektionPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const courseId = searchParams.get('courseId');
+  const courseId = (searchParams && (searchParams as any).get ? (searchParams as any).get('courseId') : undefined);
   const pathname = usePathname();
   const inTeacher = pathname?.startsWith('/teacher/');
   

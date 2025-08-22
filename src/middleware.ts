@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { recordRequest } from '@/lib/requestMetrics';
+import dbConnect from '@/lib/db';
+import User from '@/models/User';
 
 // Geschützte Admin-Routen Prefix
 const ADMIN_PREFIX = '/api/admin';
@@ -40,6 +42,31 @@ export async function middleware(req: any) {
   if (pathname.startsWith('/api/')) {
     // Globale API Request Metrik (leichtgewichtig)
     recordRequest(pathname, req.method || 'GET');
+    // Last-Online Tracking (throttled) – nur bei authentifizierten Requests
+    try {
+      const token = await getToken({ req });
+      const username = token && typeof token === 'object' ? (token as any).username : undefined;
+      if (username) {
+        const g:any = globalThis as any;
+        if(!g.__lastOnlineCache) g.__lastOnlineCache = new Map<string, number>();
+        const cache: Map<string, number> = g.__lastOnlineCache;
+        const now = Date.now();
+        const last = cache.get(username) || 0;
+        const THROTTLE_MS = 5 * 60 * 1000; // alle 5 Minuten schreiben
+        if(now - last > THROTTLE_MS) {
+          cache.set(username, now);
+          // Fire-and-forget (kein Await Blocker)
+          (async()=>{
+            try{
+              if(process.env.MONGODB_URI){
+                await dbConnect();
+                await User.updateOne({ username }, { $set: { lastOnline: new Date() } }).catch(()=>{});
+              }
+            }catch{/* ignore */}
+          })();
+        }
+      }
+    } catch {/* ignore tracking errors */}
   }
   if (pathname.startsWith(ADMIN_PREFIX)) {
   const key = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';

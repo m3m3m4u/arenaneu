@@ -28,7 +28,7 @@ export async function GET(req: Request){
   if(!teacherId) return NextResponse.json({ success:false, error:'Teacher nicht gefunden' }, { status:404 });
   const teacherUser = await User.findById(teacherId, 'username name').lean();
   const classes = await TeacherClass.find({ teacher: teacherId }, '_id name').lean();
-  const learners = await User.find({ ownerTeacher: teacherId }, '_id username name email class createdAt role').lean();
+  const learners = await User.find({ ownerTeacher: teacherId }, '_id username name email class createdAt role lastOnline').lean();
   return NextResponse.json({ success:true, classes, learners, teacherId, teacherUser: teacherUser? { id: String((teacherUser as any)._id), username: String((teacherUser as any).username||''), name: String((teacherUser as any).name||'') } : null });
 }
 

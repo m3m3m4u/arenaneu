@@ -12,8 +12,8 @@ import { resolveMediaPath, isImagePath, isAudioPath } from '../../../../../lib/m
 export default function LessonPage() {
   const params = useParams();
   const router = useRouter();
-  const courseId = params.courseId as string;
-  const lessonId = params.lessonId as string;
+  const courseId = (params && (params as any).courseId ? String((params as any).courseId) : '');
+  const lessonId = (params && (params as any).lessonId ? String((params as any).lessonId) : '');
   const { data: session } = useSession();
   
   const [lesson, setLesson] = useState<Lesson | null>(null);

@@ -27,7 +27,7 @@ export async function GET(req: Request){
   }
   if(role !== 'teacher') return NextResponse.json({ success:false, error:'Unauthorized' }, { status:403 });
   const classes = await TeacherClass.find({ teacher: teacherId }).lean();
-  const learners = await User.find({ ownerTeacher: teacherId }, '_id username name email class createdAt role').lean();
+  const learners = await User.find({ ownerTeacher: teacherId }, '_id username name email class createdAt role lastOnline').lean();
   return NextResponse.json({ success:true, classes, learners });
 }
 
@@ -63,8 +63,8 @@ export async function POST(req: Request){
       if(!cls) return NextResponse.json({ success:false, error:'Klasse nicht gefunden' }, { status:404 });
       classRef = cls._id;
     }
-    const learner = await User.create({ username, name, password: hashed, email: email||undefined, role:'learner', ownerTeacher: teacherId, class: classRef });
-    return NextResponse.json({ success:true, learner:{ username: learner.username, name: learner.name } });
+  const learner = await User.create({ username, name, password: hashed, email: email||undefined, role:'learner', ownerTeacher: teacherId, class: classRef });
+  return NextResponse.json({ success:true, learner:{ username: learner.username, name: learner.name, lastOnline: learner.lastOnline } });
   }
   if(action === 'bulkCreateLearners'){
     const { lines } = body as any;
@@ -87,8 +87,8 @@ export async function POST(req: Request){
         classId = cls._id;
       }
       const hashed = await hash(password,10);
-      const learner = await User.create({ username, name, password: hashed, email: email||undefined, role:'learner', ownerTeacher: teacherId, class: classId });
-      created.push({ username: learner.username, name: learner.name, class: className||null });
+  const learner = await User.create({ username, name, password: hashed, email: email||undefined, role:'learner', ownerTeacher: teacherId, class: classId });
+  created.push({ username: learner.username, name: learner.name, class: className||null, lastOnline: learner.lastOnline });
     }
     return NextResponse.json({ success:true, createdCount: created.length, skippedCount: skipped.length, created, skipped });
   }

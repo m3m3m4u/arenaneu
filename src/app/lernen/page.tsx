@@ -1,6 +1,6 @@
 "use client";
 import { Suspense } from 'react';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
@@ -16,12 +16,18 @@ type ProgressMap = Record<string, { completed: number; inProgress: number }>;
 
 function LernenPageInner() {
   const [courses, setCourses] = useState<CourseItem[]>([]);
+  // Pagination
+  const pageSize = 12; // gewünschte Anzahl pro Seite
+  const [serverPageSize, setServerPageSize] = useState<number>(pageSize);
+  const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ProgressMap>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [searchText, setSearchText] = useState<string>('');
   const [learnerScope, setLearnerScope] = useState<'class'|'all'|undefined>(undefined);
   const [activeMode, setActiveMode] = useState<'class'|'all'>('class');
+  const [allCategories, setAllCategories] = useState<string[]>([]);
   const { data: session } = useSession();
   const role = (session?.user as any)?.role as string | undefined;
 
@@ -54,10 +60,16 @@ function LernenPageInner() {
     try {
       const cat = search?.get('cat') || '';
       setSelectedCategory(cat);
+  const q = search?.get('q') || '';
+  setSearchText(q);
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
   const [viewTab, setViewTab] = useState<'general' | 'class'>(() => (search?.get('view') === 'class' ? 'class' : 'general'));
+  const [page, setPage] = useState<number>(() => {
+    const p = parseInt(search?.get('p') || '1', 10);
+    return isNaN(p) || p < 1 ? 1 : p;
+  });
   const [classes, setClasses] = useState<Array<{ _id: string; name: string; courses?: Array<{ course: CourseItem }>}> >([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string>(() => search?.get('classId') || '');
@@ -133,34 +145,42 @@ function LernenPageInner() {
   useEffect(() => {
     if (viewTab !== 'general') return;
     let cancelled = false;
-  const load = async () => {
+    const load = async () => {
       setLoading(true); setError(null);
       try {
-    const q = new URLSearchParams();
-    // Standard: Klassenkurse, außer Gast (Gast hat keinen Modus; bleibt class)
-    q.set('mode', activeMode);
-    // Wichtig: Keine serverseitige Kategorie-Filterung mehr, damit die Button-Leiste vollständig bleibt
-    const url = `/api/kurse${q.toString() ? `?${q.toString()}` : ''}`; // nur veröffentlichte
-    const res = await fetch(url);
+        const qParams = new URLSearchParams();
+        qParams.set('mode', activeMode); // Klassen/Alle Umschalter
+        qParams.set('page', String(page));
+        qParams.set('limit', String(pageSize));
+        if (selectedCategory) qParams.set('cat', selectedCategory);
+        if (searchText.trim()) qParams.set('q', searchText.trim());
+        const url = `/api/kurse?${qParams.toString()}`;
+        const res = await fetch(url);
         const data = await res.json();
         if (!cancelled) {
           if (res.ok && data.success) {
             setCourses(data.courses || []);
-      if (data.learnerScope) setLearnerScope(data.learnerScope);
-      if (data.activeMode) setActiveMode(data.activeMode);
+            setTotalCount(typeof data.totalCount === 'number' ? data.totalCount : (data.courses?.length || 0));
+            setServerPageSize(typeof data.pageSize === 'number' ? data.pageSize : pageSize);
+            if (data.learnerScope) setLearnerScope(data.learnerScope);
+            if (data.activeMode) setActiveMode(data.activeMode);
+            if (Array.isArray(data.categories)) {
+              setAllCategories((data.categories as string[]).filter(Boolean).sort((a,b)=>a.localeCompare(b,'de')));
+            }
           } else {
             setError(data.error || 'Fehler beim Laden');
+            setCourses([]); setTotalCount(0);
           }
         }
       } catch {
-        if (!cancelled) setError('Netzwerkfehler');
+        if (!cancelled) { setError('Netzwerkfehler'); setCourses([]); setTotalCount(0); }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
-  void load();
+    void load();
     return () => { cancelled = true; };
-  }, [viewTab, activeMode]);
+  }, [viewTab, activeMode, page, selectedCategory, searchText]);
 
   // Klassenliste laden (nur Lehrer) – unabhängig vom Tab, damit Auswahl immer verfügbar ist
   useEffect(() => {
@@ -219,9 +239,25 @@ function LernenPageInner() {
   useEffect(() => {
     const q = new URLSearchParams(Array.from(search?.entries?.()||[]));
     if (selectedCategory) q.set('cat', selectedCategory); else q.delete('cat');
+    // Kategorie-Wechsel -> erste Seite
+    q.delete('p');
+    setPage(1);
     router.replace(`?${q.toString()}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory]);
+
+  // URL-Query bei Suchtext-Wechsel aktualisieren (client-seitig, rücksetz auf Seite 1)
+  useEffect(() => {
+    const h = setTimeout(()=>{
+      const q = new URLSearchParams(Array.from(search?.entries?.()||[]));
+      if (searchText) q.set('q', searchText); else q.delete('q');
+      q.delete('p');
+      setPage(1);
+      router.replace(`?${q.toString()}`);
+    }, 250); // debounce klein
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchText]);
 
   // Modus in URL und localStorage spiegeln (nur Lernende)
   useEffect(() => {
@@ -229,9 +265,34 @@ function LernenPageInner() {
     try { localStorage.setItem('learner:mode', activeMode); } catch {}
     const q = new URLSearchParams(Array.from(search?.entries?.()||[]));
     q.set('mode', activeMode);
+    // Modus-Wechsel -> erste Seite
+    q.delete('p');
+    setPage(1);
     router.replace(`?${q.toString()}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMode, isTeacher, isAdmin]);
+
+  // Seite aus Query übernehmen wenn sich search ändert
+  useEffect(()=>{
+    const pRaw = parseInt(search?.get('p') || '1', 10);
+    const p = isNaN(pRaw) || pRaw < 1 ? 1 : pRaw;
+    if (p !== page) setPage(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  // Korrigiere Seite wenn über max hinaus (nach neuem Load)
+  useEffect(()=>{
+    const maxPage = Math.max(1, Math.ceil(totalCount / serverPageSize));
+    if (page > maxPage) setPage(1);
+  }, [totalCount, serverPageSize]);
+
+  // Query aktualisieren wenn Seite geändert wurde (manuell über Buttons)
+  useEffect(()=>{
+    const q = new URLSearchParams(Array.from(search?.entries?.()||[]));
+    if (page > 1) q.set('p', String(page)); else q.delete('p');
+    router.replace(`?${q.toString()}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   useEffect(() => {
     // Falls eingeloggt: serverseitigen Fortschritt holen und in localStorage mergen
@@ -296,27 +357,42 @@ function LernenPageInner() {
       )}
       {/* Kategorien-Filter */}
       {!loading && !error && courses.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2 items-center">
-          <span className="text-sm text-gray-600 mr-1">Fach:</span>
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('')}
-            className={`px-3 py-1.5 rounded border text-sm ${selectedCategory === '' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-gray-50'}`}
-          >Alle</button>
-          {Array.from(new Set((courses.map(c => c.category).filter(Boolean) as string[])))
-            .sort((a, b) => a.localeCompare(b, 'de'))
-            .map(cat => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded border text-sm ${selectedCategory.toLowerCase() === cat.toLowerCase() ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-gray-50'}`}
-              >{cat}</button>
-            ))}
+        <div className="mb-4 flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600" htmlFor="courseSearch">Suche:</label>
+            <input
+              id="courseSearch"
+              value={searchText}
+              onChange={e=>setSearchText(e.target.value)}
+              placeholder="Titel / Beschreibung"
+              className="border rounded px-3 py-1.5 text-sm w-56"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-gray-600">Fach:</span>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('')}
+              className={`px-3 py-1.5 rounded border text-sm ${selectedCategory === '' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-gray-50'}`}
+            >Alle</button>
+            {(allCategories.length? allCategories : Array.from(new Set((courses.map(c => c.category).filter(Boolean) as string[]))).sort((a,b)=>a.localeCompare(b,'de')))
+              .map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded border text-sm ${selectedCategory.toLowerCase() === cat.toLowerCase() ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-gray-50'}`}
+                >{cat}</button>
+              ))}
+          </div>
+          {(searchText || selectedCategory) && (
+            <div className="text-xs text-gray-500">Gefiltert (Server): {totalCount} Kurse</div>
+          )}
         </div>
       )}
+      {/** Gefilterte Kurse & Pagination */}
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-        {(selectedCategory ? courses.filter(c => (c.category || '').toLowerCase() === selectedCategory.toLowerCase()) : courses).map(course => {
+        {courses.map(course => {
           const p = progress[course._id] || { completed: 0, inProgress: 0 };
           const lessonTotal = course.lessonCount || 0;
           const isDone = lessonTotal > 0 && p.completed === lessonTotal;
@@ -354,6 +430,38 @@ function LernenPageInner() {
           );
         })}
       </div>
+      {/** Pagination Controls */}
+      {(() => {
+        const totalPages = Math.max(1, Math.ceil(totalCount / serverPageSize));
+        if (totalPages <= 1) return null;
+        const prev = () => setPage(p => Math.max(1, p-1));
+        const next = () => setPage(p => Math.min(totalPages, p+1));
+        // einfache Seitennavigation (bis zu 5 Buttons um aktuelle Seite)
+        const windowSize = 5;
+        let start = Math.max(1, page - Math.floor(windowSize/2));
+        let end = start + windowSize - 1;
+        if (end > totalPages) { end = totalPages; start = Math.max(1, end - windowSize + 1); }
+        const pages: number[] = [];
+        for (let i=start; i<=end; i++) pages.push(i);
+        return (
+          <div className="mt-8 flex items-center justify-center gap-2 flex-wrap">
+            <button onClick={prev} disabled={page===1} className={`px-3 py-1.5 rounded border text-sm ${page===1? 'text-gray-400 bg-gray-100 cursor-not-allowed':'bg-white hover:bg-gray-50'}`}>«</button>
+            {start > 1 && (
+              <button onClick={()=>setPage(1)} className={`px-3 py-1.5 rounded border text-sm ${page===1? 'bg-blue-600 text-white border-blue-600':'bg-white hover:bg-gray-50'}`}>1</button>
+            )}
+            {start > 2 && <span className="px-2 text-sm text-gray-500">…</span>}
+            {pages.map(pn => (
+              <button key={pn} onClick={()=>setPage(pn)} className={`px-3 py-1.5 rounded border text-sm ${pn===page? 'bg-blue-600 text-white border-blue-600':'bg-white hover:bg-gray-50'}`}>{pn}</button>
+            ))}
+            {end < totalPages-1 && <span className="px-2 text-sm text-gray-500">…</span>}
+            {end < totalPages && (
+              <button onClick={()=>setPage(totalPages)} className={`px-3 py-1.5 rounded border text-sm ${page===totalPages? 'bg-blue-600 text-white border-blue-600':'bg-white hover:bg-gray-50'}`}>{totalPages}</button>
+            )}
+            <button onClick={next} disabled={page===totalPages} className={`px-3 py-1.5 rounded border text-sm ${page===totalPages? 'text-gray-400 bg-gray-100 cursor-not-allowed':'bg-white hover:bg-gray-50'}`}>»</button>
+            <div className="basis-full text-center text-[11px] text-gray-500 mt-1">Seite {page} / {totalPages} • Gesamt {totalCount}</div>
+          </div>
+        );
+      })()}
   <a href="/dashboard" className="inline-block mt-8 bg-gray-600 text-white py-2 px-4 rounded font-semibold hover:bg-gray-700 transition">← Zurück zur Startseite</a>
     </main>
   );

@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import StickyTable from '@/components/shared/StickyTable';
 
-interface UserRow { username:string; name?:string; role:string; email?:string; createdAt?:string; ownerTeacherUsername?:string; ownerTeacherName?:string; className?:string; }
+interface UserRow { username:string; name?:string; role:string; email?:string; createdAt?:string; lastOnline?:string; ownerTeacherUsername?:string; ownerTeacherName?:string; className?:string; }
 
 export default function AdminUsersPage(){
   const { data: session, status } = useSession();
@@ -36,7 +36,10 @@ export default function AdminUsersPage(){
       const ct = res.headers.get('content-type') || '';
       let data: any = null;
       try { data = ct.includes('application/json') ? await res.json() : { success:false, error: await res.text() }; } catch { /* ignore parse */ }
-      if(res.ok && data?.success){ setUsers(data.users); setTotal(data.total ?? data.users.length); }
+      if(res.ok && data?.success){
+        const mapped = (data.users||[]).map((u:any)=>({ ...u, lastOnline: u.lastOnline || u.updatedAt || u.createdAt }));
+        setUsers(mapped); setTotal(data.total ?? mapped.length);
+      }
       else setError(data?.error || `Fehler (${res.status})`);
     } catch { setError('Netzwerkfehler'); }
     setLoading(false);
@@ -99,6 +102,7 @@ export default function AdminUsersPage(){
     { key:'username', header:'Username', sticky:true },
     { key:'name', header:'Name' },
     { key:'email', header:'E-Mail' },
+  { key:'lastOnline', header:'Zuletzt online', hideClassName:'hidden md:table-cell', render:(t:any)=> t.lastOnline ? new Date(t.lastOnline).toLocaleString('de-DE',{ dateStyle:'short', timeStyle:'short'}) : '—', tdClassName:'whitespace-nowrap' },
     { key:'__actions', header:'Aktion', stickyRight:true, thClassName:'bg-gray-50', tdClassName:'bg-white', render:(t:any)=> (
       <a href={`/admin/teacher?teacher=${encodeURIComponent(t.username)}`} className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50 inline-block">Klassen verwalten</a>
     )},
@@ -120,7 +124,10 @@ export default function AdminUsersPage(){
         let data: any = null;
         try { data = ct.includes('application/json') ? await res.json() : { success:false, error: await res.text() }; } catch { /* ignore parse */ }
         if(!abort){
-          if(res.ok && data?.success){ setTableRows(data.users); setTotal(data.total); }
+          if(res.ok && data?.success){
+            const mapped = (data.users||[]).map((u:any)=>({ ...u, lastOnline: u.lastOnline || u.updatedAt || u.createdAt }));
+            setTableRows(mapped); setTotal(data.total);
+          }
           else setError(data?.error || `Fehler (${res.status})`);
         }
       } catch { if(!abort) setError('Netzwerkfehler'); }
@@ -135,6 +142,7 @@ export default function AdminUsersPage(){
     { key:'name', header:'Name', tdClassName:'whitespace-nowrap' },
     { key:'className', header:'Klasse', hideClassName:'hidden sm:table-cell', tdClassName:'whitespace-nowrap' },
     { key:'ownerTeacher', header:'Lehrperson', hideClassName:'hidden md:table-cell', render:(u:any)=> (u.ownerTeacherName? `${u.ownerTeacherName} (${u.ownerTeacherUsername})` : (u.ownerTeacherUsername||'—')), tdClassName:'whitespace-nowrap' },
+    { key:'lastOnline', header:'Zuletzt online', hideClassName:'hidden md:table-cell', render:(u:any)=> u.lastOnline ? new Date(u.lastOnline).toLocaleString('de-DE',{ dateStyle:'short', timeStyle:'short'}) : '—', tdClassName:'whitespace-nowrap' },
     { key:'role', header:'Rolle', tdClassName:'whitespace-nowrap' },
     { key:'email', header:'E-Mail', hideClassName:'hidden md:table-cell', tdClassName:'whitespace-nowrap' },
     { key:'__actions', header:'Aktion', stickyRight:true, thClassName:'bg-gray-50', tdClassName:'bg-white', render:(u:any)=> (
@@ -166,7 +174,7 @@ export default function AdminUsersPage(){
         <div className="divide-y">
           {pending.map(p=> (
             <div key={p.username} className="py-2 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
-              <div className="text-sm"><span className="font-medium">{p.username}</span>{p.email && <span className="text-gray-500"> • {p.email}</span>}</div>
+              <div className="text-sm"><span className="font-medium">{p.username}</span>{p.email && <span className="text-gray-500"> • {p.email}</span>}{p.lastOnline && <span className="text-gray-400"> • zuletzt {new Date(p.lastOnline).toLocaleString('de-DE',{ dateStyle:'short', timeStyle:'short'})}</span>}</div>
               <div className="flex gap-2">
                 <button disabled={updating===p.username} onClick={()=>changeRole(p.username,'author')} className="px-3 py-1 text-xs rounded bg-green-600 text-white disabled:opacity-50">Freischalten → Autor</button>
                 <button disabled={updating===p.username} onClick={()=>changeRole(p.username,'learner')} className="px-3 py-1 text-xs rounded bg-gray-600 text-white disabled:opacity-50">Ablehnen</button>
@@ -182,7 +190,7 @@ export default function AdminUsersPage(){
         <div className="divide-y">
           {pendingTeacher.map(p=> (
             <div key={p.username} className="py-2 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
-              <div className="text-sm"><span className="font-medium">{p.username}</span>{p.email && <span className="text-gray-500"> • {p.email}</span>}</div>
+              <div className="text-sm"><span className="font-medium">{p.username}</span>{p.email && <span className="text-gray-500"> • {p.email}</span>}{p.lastOnline && <span className="text-gray-400"> • zuletzt {new Date(p.lastOnline).toLocaleString('de-DE',{ dateStyle:'short', timeStyle:'short'})}</span>}</div>
               <div className="flex gap-2">
                 <button disabled={updating===p.username} onClick={()=>changeRole(p.username,'teacher')} className="px-3 py-1 text-xs rounded bg-green-600 text-white disabled:opacity-50">Freischalten → Lehrperson</button>
                 <button disabled={updating===p.username} onClick={()=>changeRole(p.username,'learner')} className="px-3 py-1 text-xs rounded bg-gray-600 text-white disabled:opacity-50">Ablehnen</button>

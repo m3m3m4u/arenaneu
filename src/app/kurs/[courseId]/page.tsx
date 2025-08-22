@@ -26,7 +26,7 @@ interface CourseDoc {
 
 export default function KursAnsichtPage() {
   const params = useParams();
-  const courseId = params.courseId as string;
+  const courseId = (params && (params as any).courseId ? String((params as any).courseId) : '');
   const { data: session } = useSession();
   const search = useSearchParams();
   const [isGuest, setIsGuest] = useState(false);

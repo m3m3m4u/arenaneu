@@ -7,10 +7,11 @@ import bcrypt from 'bcryptjs';
   const existing = await User.findOne({ username: 'Kopernikus' });
   if (existing) {
     console.log('Autor existiert bereits.');
-    process.exit(0);
+    try { (globalThis as any).process?.exit?.(0); } catch {}
+    return;
   }
   const hash = await bcrypt.hash('12345', 10);
   await User.create({ username: 'Kopernikus', name: 'Kopernikus', password: hash, role: 'author', completedLessons: [], stars: 0 });
   console.log('Autor Kopernikus erstellt.');
-  process.exit(0);
+  try { (globalThis as any).process?.exit?.(0); } catch {}
 })();

@@ -1,7 +1,7 @@
-import type { Metadata } from 'next';
+// Metadata Typ entfernt wegen fehlender next Typen in kompiliertem Setup
 import type { ReactNode } from 'react';
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'Isostadt',
 };
 

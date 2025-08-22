@@ -34,7 +34,7 @@ export async function GET(request: Request){
     if(!q){
       const total = await User.countDocuments({});
       const pagedRaw = await User
-        .find({}, 'username name role email ownerTeacher class createdAt updatedAt')
+        .find({}, 'username name role email ownerTeacher class createdAt updatedAt lastOnline')
         .populate('ownerTeacher', 'username name')
         .populate('class', 'name')
         .sort({ createdAt:-1 })
@@ -47,6 +47,7 @@ export async function GET(request: Request){
         role: u.username === 'Kopernikus' ? 'admin' : u.role,
         email: u.email,
         createdAt: u.createdAt,
+        lastOnline: u.lastOnline || u.updatedAt || u.createdAt,
         ownerTeacherUsername: (u as any).ownerTeacher?.username,
         ownerTeacherName: (u as any).ownerTeacher?.name,
         className: (u as any).class?.name,
@@ -56,7 +57,7 @@ export async function GET(request: Request){
 
     // Mit Suche: aktuelles Verhalten beibehalten (Filter auch ueber populate-Felder)
     const usersRaw = await User
-      .find({}, 'username name role email ownerTeacher class createdAt updatedAt')
+      .find({}, 'username name role email ownerTeacher class createdAt updatedAt lastOnline')
       .populate('ownerTeacher', 'username name')
       .populate('class', 'name')
       .sort({ createdAt:-1 })
@@ -76,6 +77,7 @@ export async function GET(request: Request){
       role: u.username === 'Kopernikus' ? 'admin' : u.role,
       email: u.email,
       createdAt: u.createdAt,
+      lastOnline: u.lastOnline || u.updatedAt || u.createdAt,
       ownerTeacherUsername: (u as any).ownerTeacher?.username,
       ownerTeacherName: (u as any).ownerTeacher?.name,
       className: (u as any).class?.name,

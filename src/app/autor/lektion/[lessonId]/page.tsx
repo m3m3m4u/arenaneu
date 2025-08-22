@@ -99,12 +99,12 @@ const TextAnswerEditor = dynamic(()=>import('@/components/lessonEditor/TextAnswe
 export default function EditLessonPage() {
   const params = useParams();
   const router = useRouter();
-  const lessonId = params.lessonId as string;
+  const lessonId = (params && (params as any).lessonId ? String((params as any).lessonId) : '');
   const pathname = usePathname();
   const inTeacher = pathname?.startsWith('/teacher/');
   // Prüfe ob vom Übungen-Tab aufgerufen (Query ?from=uebungen) ohne window
   const sp = useSearchParams();
-  const initialReturnFlag = sp.get('from') === 'uebungen';
+  const initialReturnFlag = !!(sp && typeof (sp as any).get === 'function' && (sp as any).get('from') === 'uebungen');
   // Basis-State
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [returnToExercises, setReturnToExercises] = useState<boolean>(initialReturnFlag);

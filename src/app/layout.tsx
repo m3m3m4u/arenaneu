@@ -1,5 +1,5 @@
 
-import type { Metadata } from "next";
+// Metadata Typ entfernt (vereinfachtes Typing ohne Next Types)
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import CustomSessionProvider from "./SessionProvider";
@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "LernArena - Interaktive Lernplattform",
   description: "Eine moderne Lernplattform mit interaktiven Kursen und Quizzes",
 };

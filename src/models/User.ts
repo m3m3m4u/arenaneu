@@ -12,6 +12,7 @@ export interface IUser extends Document {
   class?: mongoose.Types.ObjectId; // Klasse (TeacherClass)
   createdAt: Date;
   updatedAt: Date;
+  lastOnline?: Date;
 }
 
 const UserSchema: Schema = new Schema({
@@ -25,7 +26,8 @@ const UserSchema: Schema = new Schema({
   ownerTeacher: { type: Schema.Types.ObjectId, ref: 'User', index: true },
   class: { type: Schema.Types.ObjectId, ref: 'TeacherClass', index: true },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  lastOnline: { type: Date, default: Date.now, index: true }
 });
 
 UserSchema.pre('save', function(next){ this.updatedAt = new Date(); next(); });

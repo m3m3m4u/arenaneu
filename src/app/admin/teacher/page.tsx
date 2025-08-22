@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import StickyTable from '@/components/shared/StickyTable';
 
 interface TeacherClass { _id:string; name:string; }
-interface Learner { _id:string; username:string; name?:string; email?:string; class?:string; }
+interface Learner { _id:string; username:string; name?:string; email?:string; class?:string; lastOnline?:string; }
 
 function AdminTeacherManageInner(){
   const { data: session, status } = useSession();
@@ -82,12 +82,13 @@ function AdminTeacherManageInner(){
     { key:'username', header:'User', sticky:true, tdClassName:'font-medium whitespace-nowrap' },
     { key:'name', header:'Name', tdClassName:'whitespace-nowrap' },
     { key:'email', header:'E-Mail', hideClassName:'hidden sm:table-cell', tdClassName:'whitespace-nowrap' },
-    { key:'class', header:'Klasse', render:(l:any)=> (
+  { key:'class', header:'Klasse', render:(l:any)=> (
       <select value={l.class||''} onChange={(e)=>moveLearner(l.username, e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
         <option value="">(keine)</option>
         {classes.map(c=> <option key={c._id} value={c._id}>{c.name}</option>)}
       </select>
     )},
+  { key:'lastOnline', header:'Zuletzt online', hideClassName:'hidden md:table-cell', render:(l:any)=> l.lastOnline ? new Date(l.lastOnline).toLocaleString('de-DE',{ dateStyle:'short', timeStyle:'short'}) : '—', tdClassName:'whitespace-nowrap' },
     { key:'__actions', header:'Aktion', stickyRight:true, thClassName:'bg-gray-50', tdClassName:'bg-white', render:(l:any)=> (
       <button onClick={()=>deleteLearner(l.username)} className="text-red-600 hover:underline">Löschen</button>
     )},
