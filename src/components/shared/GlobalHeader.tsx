@@ -45,7 +45,7 @@ export default function GlobalHeader(){
         <nav className="flex items-center gap-4 text-sm">
           {[...leftLinks,
             ...(role==='teacher' ? teacherExtras: []),
-            ...(role==='author' ? authorExtras: []),
+            ...(role==='author' || role==='admin' ? authorExtras: []),
             ...(role==='admin' ? adminExtras: []),
           ].map(l=> (
             <Link key={l.href} href={l.href} className={`px-2 py-1 rounded hover:bg-gray-100 ${(pathname===l.href || pathname.startsWith(l.href + '/'))? 'font-semibold text-blue-700':''}`}>

@@ -35,10 +35,20 @@ async function dbConnect() {
   }
 
   if (!cached!.promise) {
-  const uri = getMongoUri();
-  if (!uri) throw new Error('MONGODB_URI env fehlt');
-  const opts = { bufferCommands: false };
-  cached!.promise = mongoose.connect(uri, opts);
+    const uri = getMongoUri();
+    if (!uri) throw new Error('MONGODB_URI env fehlt');
+    const poolSize = parseInt(process.env.MONGODB_POOL_SIZE || '5', 10); // klein halten für M0
+    const serverSelTimeout = parseInt(process.env.MONGODB_SRV_TIMEOUT || '5000', 10);
+    const opts: mongoose.ConnectOptions = {
+      bufferCommands: false,
+      maxPoolSize: poolSize,
+      serverSelectionTimeoutMS: serverSelTimeout,
+      // keepAlive standardmäßig true beim Node Driver >= 4; explizit lassen wir es aktiv
+    } as any;
+    if (process.env.DB_LOG_ON_CONNECT === '1') {
+      console.log(`[db] connecting uri=${uri.replace(/:[^:@/]+@/, ':***@')} poolSize=${poolSize}`);
+    }
+    cached!.promise = mongoose.connect(uri, opts);
   }
 
   try {
@@ -49,6 +59,10 @@ async function dbConnect() {
     throw e;
   }
 
+  if (process.env.DB_LOG_ON_CONNECT === '1' && cached!.conn) {
+    // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+    console.log('[db] connected readyState=' + cached!.conn.readyState);
+  }
   return cached!.conn;
 }
 

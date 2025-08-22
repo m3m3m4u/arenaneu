@@ -164,7 +164,11 @@ export default function EditLessonPage() {
       const first = lines[0];
       let qText = first; let media = '';
       const m = first.match(/^(.+?)\s*\[(.+?)\]$/);
-      if (m) { qText = m[1].trim(); media = m[2].trim(); }
+      if (m) {
+        qText = m[1].trim();
+        // Medienangabe robust zu absolutem Pfad auflösen (uploads/…, /uploads/…, http…)
+        media = resolveMediaPath(m[2].trim());
+      }
       const answersRaw = lines.slice(1);
       if (lesson?.type === 'multiple-choice') {
         const marked = answersRaw.map(l => ({ text: l.replace(/^\*\s*/, '').trim(), isCorrect: /^\*/.test(l) })).filter(a => a.text);
@@ -707,11 +711,11 @@ export default function EditLessonPage() {
                     <div className="mb-3 p-3 bg-gray-100 rounded border">
                       {q.mediaLink.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={q.mediaLink} alt="Frage Media" className="max-w-full max-h-48 object-contain border rounded bg-white" />
+                        <img src={resolveMediaPath(q.mediaLink)} alt="Frage Media" className="max-w-full max-h-48 object-contain border rounded bg-white" />
                       ) : q.mediaLink.match(/\.(mp3|wav|ogg|m4a)$/i) ? (
-                        <audio controls className="w-full max-w-md"><source src={q.mediaLink} /></audio>
+                        <audio controls className="w-full max-w-md"><source src={resolveMediaPath(q.mediaLink)} /></audio>
                       ) : (
-                        <a href={q.mediaLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">📎 {q.mediaLink}</a>
+                        <a href={resolveMediaPath(q.mediaLink)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">📎 {resolveMediaPath(q.mediaLink)}</a>
                       )}
                     </div>
                   )}
@@ -754,8 +758,8 @@ export default function EditLessonPage() {
 // (MarkdownPreview & extractYouTubeId ausgelagert)
 
 function MemoryCardSide({ side }: { side: { kind: string; value: string } }) {
-  if (side.kind === 'image') return <img src={side.value} alt="" className="w-full h-16 object-contain bg-white rounded" />;
-  if (side.kind === 'audio') return <audio controls className="w-full"><source src={side.value} /></audio>;
+  if (side.kind === 'image') return <img src={resolveMediaPath(side.value)} alt="" className="w-full h-16 object-contain bg-white rounded" />;
+  if (side.kind === 'audio') return <audio controls className="w-full"><source src={resolveMediaPath(side.value)} /></audio>;
   return <div className="h-16 flex items-center justify-center text-center p-1 break-words">{side.value}</div>;
 }
 

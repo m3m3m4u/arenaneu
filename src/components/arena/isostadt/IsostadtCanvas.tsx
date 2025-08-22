@@ -166,6 +166,24 @@ export default function IsostadtCanvas({ width, height }: Props) {
     }
   }, [inspectMode]);
   useEffect(() => { inspectRef.current = inspect; redrawRef.current?.(); }, [inspect]);
+  // Touch-Hinweis einmalig anzeigen
+  useEffect(()=>{
+    if (typeof window === 'undefined') return;
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    if (!isTouch) return;
+    try {
+      const el = document.querySelector('.touch-help') as HTMLElement | null;
+      if (!el) return;
+      el.style.display = 'block';
+      el.style.opacity = '0';
+      requestAnimationFrame(()=>{ el.style.transition='opacity 0.6s'; el.style.opacity='1'; });
+      const hideTimer = setTimeout(()=>{
+        el.style.opacity='0';
+        setTimeout(()=>{ el.style.display='none'; }, 800);
+      }, 6500);
+      return ()=> { clearTimeout(hideTimer); };
+    } catch {}
+  }, []);
   
   useEffect(() => {
     demolishModeRef.current = demolishMode;
@@ -1445,6 +1463,135 @@ export default function IsostadtCanvas({ width, height }: Props) {
       drawHover();
     };
 
+    // ---- Touch Support (Pan, Tap, Pinch Zoom) ----
+    let touchMode: 'none'|'pan'|'pinch' = 'none';
+    let touchStartDist = 0;
+    let touchStartScale = 1;
+    let panTouchStart: { x: number; y: number; panX: number; panY: number } | null = null;
+    let tapCandidate = true;
+    let tapTimeout: number | null = null;
+
+    function distance(a: Touch, b: Touch){
+      const dx = a.clientX - b.clientX; const dy = a.clientY - b.clientY; return Math.sqrt(dx*dx+dy*dy);
+    }
+    const clearTapTimeout = () => { if (tapTimeout){ clearTimeout(tapTimeout); tapTimeout = null as any; } };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchMode = 'pan';
+        const t = e.touches[0];
+        panTouchStart = { x: t.clientX, y: t.clientY, panX, panY };
+        tapCandidate = true;
+        clearTapTimeout();
+        // Kurzer Longpress-Abbruch des Tap-Kandidaten nach 220ms wenn Bewegung beginnt
+        tapTimeout = window.setTimeout(()=>{ tapCandidate = false; }, 220);
+      } else if (e.touches.length === 2) {
+        touchMode = 'pinch';
+        tapCandidate = false;
+        clearTapTimeout();
+        const d = distance(e.touches[0], e.touches[1]);
+        touchStartDist = d || 1;
+        touchStartScale = scale;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchMode === 'pan' && e.touches.length === 1 && panTouchStart) {
+        const t = e.touches[0];
+        const dx = t.clientX - panTouchStart.x;
+        const dy = t.clientY - panTouchStart.y;
+        // Wenn Finger sich merklich bewegt, kein Tap mehr
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) tapCandidate = false;
+        panX = panTouchStart.panX + dx;
+        panY = panTouchStart.panY + dy;
+        drawMap();
+        drawHover();
+      } else if (touchMode === 'pinch' && e.touches.length === 2) {
+        const d = distance(e.touches[0], e.touches[1]);
+        if (d > 0) {
+          // Zoom-Faktor relativ zur Startdistanz
+          const factor = d / touchStartDist;
+          const target = Math.min(maxScale, Math.max(minScale, touchStartScale * factor));
+          // Zoom am Mittelpunkt der beiden Finger
+          const rect = fg.getBoundingClientRect();
+          const cx = (e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left;
+          const cy = (e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top;
+          // Simuliere zoomAt indem wir delta Richtung ableiten
+          const prev = scale;
+          scale = target;
+          const originX = w / 2 + panX;
+          const originY = ISO_H * 2 + panY;
+          const dx = cx - originX;
+          const dy = cy - originY;
+          panX -= (dx / prev) * (scale - prev);
+          panY -= (dy / prev) * (scale - prev);
+          drawMap();
+          drawHover();
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      clearTapTimeout();
+      if (touchMode === 'pan' && tapCandidate && panTouchStart) {
+        // Tap interpretiert wie Klick: Platzierung oder Inspect
+        const rect = fg.getBoundingClientRect();
+        const lx = panTouchStart.x - rect.left; // Startkoordinate (Finger hebt an fast selber Stelle ab)
+        const ly = panTouchStart.y - rect.top;
+        if (demolishModeRef.current) {
+          performDemolish(lx, ly);
+        } else if (toolRef.current) {
+          // Simuliere MouseUp Logik: Platzieren falls möglich
+          const pos = gridFromPoint(lx, ly);
+          if (pos.inBounds) {
+            const ok = canPlaceAt(pos.x, pos.y);
+            const selIdx = toolRef.current[0] * SHEET_COLS + toolRef.current[1];
+            const getPrice = (idx: number): number => {
+              if (ROAD_META[idx]) return ROAD_META[idx].price;
+              if (HOUSE_META[idx]) return HOUSE_META[idx].price;
+              if (MARKET_META[idx]) return MARKET_META[idx].price;
+              if (TOWNHOUSE_META[idx]) return TOWNHOUSE_META[idx].price;
+              if (KIOSK_META[idx]) return KIOSK_META[idx].price;
+              if (OFFICE_META[idx]) return OFFICE_META[idx].price;
+              return 0;
+            };
+            if (!ok) {
+              if (isRoadIdx(selIdx)) setErrorMsg("Straße muss an eine Straße angrenzen.");
+              else setErrorMsg("Gebäude kann nur neben einer Straße gebaut werden.");
+            } else {
+              const price = getPrice(selIdx);
+              if (price > 0 && balanceRef.current < price) setErrorMsg("Nicht genug Guthaben.");
+              else {
+                const [cti, ctj] = map[pos.x][pos.y];
+                if (cti===0 && ctj===0){
+                  map[pos.x][pos.y] = [toolRef.current[0], toolRef.current[1]];
+                  drawMap();
+                  hover = { x: pos.x, y: pos.y }; drawHover();
+                  if (price>0) setBalance(b=>b-price);
+                  try{ const ts=Date.now(); setLastModified(ts); localStorage.setItem('isostadt:lastModified', String(ts)); }catch{}
+                  scheduleSave();
+                } else setErrorMsg('Feld ist belegt. Nutze \'Abreißen\'.');
+              }
+            }
+          }
+        } else if (inspectModeRef.current) {
+          performInspect(lx, ly);
+        }
+      }
+      // Reset
+      tapCandidate = false;
+      touchMode = 'none';
+      panTouchStart = null;
+      if (e.touches.length === 0) {
+        // Ende Pinch -> nichts
+      }
+    };
+
+    fg.addEventListener('touchstart', onTouchStart, { passive: true });
+    fg.addEventListener('touchmove', onTouchMove, { passive: true });
+    fg.addEventListener('touchend', onTouchEnd, { passive: true });
+    fg.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "+" || e.key === "=") {
         zoomAt(w / 2, h / 2, -1);
@@ -1506,6 +1653,10 @@ export default function IsostadtCanvas({ width, height }: Props) {
   fg.removeEventListener("click", onClick);
   fg.removeEventListener("wheel", onWheel as any);
       window.removeEventListener("keydown", onKey);
+  fg.removeEventListener('touchstart', onTouchStart as any);
+  fg.removeEventListener('touchmove', onTouchMove as any);
+  fg.removeEventListener('touchend', onTouchEnd as any);
+  fg.removeEventListener('touchcancel', onTouchEnd as any);
   if (ro) ro.disconnect();
   if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
   clearInterval(autosaveId);
@@ -2214,6 +2365,11 @@ export default function IsostadtCanvas({ width, height }: Props) {
       </aside>
 
       <div ref={areaRef} id="area" aria-label="Spielfläche" style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+  {/* Touch-Hinweis (nur kleine Bildschirme) */}
+  <div style={{ position:'absolute', bottom:8, left:8, zIndex:40, background:'rgba(0,0,0,0.55)', color:'#fff', padding:'4px 8px', borderRadius:6, fontSize:12, lineHeight:1.2, backdropFilter:'blur(2px)', display:'none' }}
+       className="touch-help">
+    Ziehen: Verschieben · Pinch: Zoom · Tipp: Bauen/Info
+  </div>
   <canvas ref={bgRef} id="bg" style={{ position: "absolute", inset: 0, zIndex: 0 }} />
   <canvas ref={fgRef} id="fg" style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: "auto" }} />
 

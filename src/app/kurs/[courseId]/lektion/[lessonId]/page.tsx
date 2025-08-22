@@ -25,6 +25,8 @@ export default function LessonPage() {
   const [selectedAnswer, setSelectedAnswer] = useState<string>("");
   // Neu: Auswahl für Multiple-Choice
   const [selectedAnswers, setSelectedAnswers] = useState<string[]>([]);
+  // Zufällige Reihenfolge der Antworten pro Frage (Index -> gemischte Antworten)
+  const [answerOrderMap, setAnswerOrderMap] = useState<Record<number,string[]>>({});
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [score, setScore] = useState(0);
@@ -384,6 +386,7 @@ export default function LessonPage() {
     setScore(0);
     setCompleted(false);
     setSelectedAnswers([]);
+  setAnswerOrderMap({}); // neu mischen beim Neustart
   };
 
   useEffect(() => {
@@ -473,11 +476,27 @@ export default function LessonPage() {
   const totalQuestions = lesson.questions?.length || 0;
   const progress = totalQuestions > 0 ? (mastered.size / totalQuestions) * 100 : 0;
   const currentQuestion = lesson.questions && questionQueue.length > 0 ? lesson.questions[questionQueue[0]] : undefined;
+  const currentQuestionIndex = questionQueue.length ? questionQueue[0] : -1;
   const currentMedia = currentQuestion?.mediaLink ? resolveMediaPath(String(currentQuestion.mediaLink)) : '';
   // Vorberechnete korrekte Antworten (normalisiert) für Anzeige/Checks
   const correctListNormalized = (currentQuestion && (Array.isArray(currentQuestion.correctAnswers) && currentQuestion.correctAnswers.length
     ? currentQuestion.correctAnswers
     : (currentQuestion?.correctAnswer ? [currentQuestion.correctAnswer] : [])).map(norm)) || [];
+
+  // Initialisiere gemischte Antworten für aktuelle Frage falls noch nicht vorhanden
+  useEffect(()=>{
+    if(!currentQuestion) return;
+    if(currentQuestionIndex < 0) return;
+    if(answerOrderMap[currentQuestionIndex]) return; // schon vorhanden
+    if(!Array.isArray((currentQuestion as any).allAnswers)) return;
+    const shuffle = <T,>(arr: T[]) => arr.map(v=>[Math.random(),v] as const).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
+    const mixed = shuffle([...(currentQuestion as any).allAnswers]);
+    setAnswerOrderMap(prev=> ({ ...prev, [currentQuestionIndex]: mixed }));
+  }, [currentQuestion, currentQuestionIndex, answerOrderMap]);
+
+  const answersForRender: string[] = (currentQuestion && currentQuestionIndex >=0)
+    ? (answerOrderMap[currentQuestionIndex] || (currentQuestion as any).allAnswers || [])
+    : [];
 
   // Snake frühe Rückgabe
   // Lock-Redirect bei linearer Progression: wenn vorherige Lektion nicht abgeschlossen
@@ -597,7 +616,7 @@ export default function LessonPage() {
             ) : (
               <div className="space-y-3 mb-6">
                 {isMultiple ? (
-                  currentQuestion.allAnswers.map((answer, index) => {
+                  answersForRender.map((answer, index) => {
                     const isSelected = selectedAnswers.includes(answer);
                     const isCorrectAns = correctListNormalized.includes(norm(answer));
                     let buttonClass = "w-full p-4 text-left border-2 rounded-lg transition-all ";
@@ -628,7 +647,7 @@ export default function LessonPage() {
                     );
                   })
                 ) : (
-                  currentQuestion.allAnswers.map((answer, index) => (
+                  answersForRender.map((answer, index) => (
                     <button
                       key={index}
                       onClick={() => handleAnswerSelect(answer)}

@@ -28,12 +28,15 @@ export function resolveMediaPath(input: string): string {
   // "public/" gehört nicht in die URL; strippen
   if (cleaned.toLowerCase().startsWith('public/')) cleaned = cleaned.slice(7);
   if (ABSOLUTE_OR_DATA.test(cleaned)) return cleaned;
+  // Umgebung erkennen: auf Vercel bevorzugen wir den Medien-Proxy
+  const isBrowser = typeof window !== 'undefined';
+  const isVercelHost = isBrowser ? /vercel\.app$/i.test(window.location.hostname) : !!(process as any)?.env?.VERCEL;
   // Wenn bereits ein Pfad mit Slash: ggf. auf Proxy umbiegen
   if (HAS_SLASH.test(cleaned)) {
     const withSlash = cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
-    // uploads-Pfade über Proxy ausliefern, wenn vorhanden
-    if (/^\/uploads\//i.test(withSlash) && typeof process !== 'undefined' && process.env && process.env.WEBDAV_BASEURL) {
-      return withSlash.replace(/^\/uploads\//i, '/medien/uploads/');
+    // uploads-Pfade über Proxy ausliefern: auf Vercel immer, sonst nur direkt aus /uploads
+    if (/^\/uploads\//i.test(withSlash)) {
+      return isVercelHost ? withSlash.replace(/^\/uploads\//i, '/medien/uploads/') : withSlash;
     }
     return withSlash;
   }
@@ -41,11 +44,11 @@ export function resolveMediaPath(input: string): string {
   // Standardmäßig bevorzugen wir Uploads als Quelle
   switch (kind) {
     case 'image':
-      return (typeof process !== 'undefined' && process.env && process.env.WEBDAV_BASEURL) ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
+      return isVercelHost ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
     case 'audio':
-      return (typeof process !== 'undefined' && process.env && process.env.WEBDAV_BASEURL) ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
+      return isVercelHost ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
     default:
-      return (typeof process !== 'undefined' && process.env && process.env.WEBDAV_BASEURL) ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
+      return isVercelHost ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
   }
 }
 
