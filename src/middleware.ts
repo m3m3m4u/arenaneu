@@ -1,5 +1,6 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { recordRequest } from '@/lib/requestMetrics';
 
 // Geschützte Admin-Routen Prefix
 const ADMIN_PREFIX = '/api/admin';
@@ -34,8 +35,12 @@ function rateLimit(key: string) {
   return { allowed: true };
 }
 
-export async function middleware(req: NextRequest) {
+export async function middleware(req: any) {
   const { pathname } = req.nextUrl;
+  if (pathname.startsWith('/api/')) {
+    // Globale API Request Metrik (leichtgewichtig)
+    recordRequest(pathname, req.method || 'GET');
+  }
   if (pathname.startsWith(ADMIN_PREFIX)) {
   const key = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     const rl = rateLimit(key);
@@ -60,5 +65,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/admin/:path*']
+  matcher: ['/api/:path*']
 };

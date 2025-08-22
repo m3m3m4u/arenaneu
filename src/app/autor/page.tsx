@@ -293,24 +293,25 @@ function ExercisesTab() {
     // Sortierung: neueste zuerst (Fallback createdAt, sonst _id Timestamp Schätzung nicht implementiert)
     arr.sort((a: any,b: any)=> new Date(b.createdAt||0).getTime() - new Date(a.createdAt||0).getTime());
     setLessons(arr as LessonLite[]);
-        // Kurs-Titel nachladen (nur für Lektionen mit Kursbindung != exercise-pool)
-  const uniqueCourseIds: string[] = Array.from(new Set((arr as any[]).map(l=> String(l.courseId||'')).filter(id=> id && id !== 'exercise-pool')));
-        if (uniqueCourseIds.length){
-          // Parallel holen
-          Promise.all(uniqueCourseIds.map(async id => {
-            if (courseTitles[id]) return { id, title: courseTitles[id] }; // schon vorhanden
-            try {
-              const r = await fetch(`/api/kurs/${id}`);
-              if(!r.ok) return null;
-              const d = await r.json();
-              const t = d?.course?.title || id;
-              return { id, title: t as string };
-            } catch { return null; }
-          })).then(results => {
-            const patch: Record<string,string> = {};
-            results.filter(Boolean).forEach((r:any)=>{ patch[r.id]=r.title; });
-            if (Object.keys(patch).length) setCourseTitles(prev=>({...prev,...patch}));
-          });
+        // Kurs-Titel bulk laden (vermeidet N+1 Requests)
+        const uniqueCourseIds: string[] = Array.from(new Set((arr as any[])
+          .map(l=> String(l.courseId||''))
+          .filter(id=> id && id !== 'exercise-pool')));
+        const missing = uniqueCourseIds.filter(id => !courseTitles[id]);
+        if (missing.length) {
+          try {
+            const bulkRes = await fetch('/api/kurs/bulk?ids=' + encodeURIComponent(missing.join(',')));
+            if (bulkRes.ok) {
+              const bulkData = await bulkRes.json();
+              if (bulkData?.success && Array.isArray(bulkData.courses)) {
+                const patch: Record<string,string> = {};
+                for (const c of bulkData.courses) {
+                  patch[c.id] = c.title;
+                }
+                if (Object.keys(patch).length) setCourseTitles(prev => ({ ...prev, ...patch }));
+              }
+            }
+          } catch { /* ignore */ }
         }
       } catch { /* ignore */ }
       setLoading(false);

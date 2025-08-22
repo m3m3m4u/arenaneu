@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import { exportRequestMetrics } from '@/lib/requestMetrics';
 // Zugriff auf Prozess-Infos über globalThis.process (verhindert TS Konflikte beim direkten Import)
 
 export const dynamic = 'force-dynamic'; // keine Cache Probleme
@@ -59,6 +60,7 @@ export async function GET() {
   env: { hasMONGODB_URI: hasUri, nodeEnv: (globalThis as any).process?.env?.NODE_ENV },
     db: { ok: dbOk, error: dbErr, pingMs, readyState, pool: poolInfo, metrics },
     process: proc,
-    warnings: duplicateAuth ? ['duplicate-auth-route'] : []
+  requests: exportRequestMetrics(),
+  warnings: duplicateAuth ? ['duplicate-auth-route'] : []
   }, { status: (dbOk || !hasUri) && !duplicateAuth ? 200 : 500 });
 }

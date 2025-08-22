@@ -91,9 +91,9 @@ export default function DashboardPage() {
 
   // Ungelesene Nachrichten (eingehend) zählen und anzeigen
   useEffect(() => {
-    let timer: any;
-    let hidden = false;
-    function visibilityHandler(){ hidden = document.hidden; }
+  let timer: any;
+  let hidden = false;
+  function visibilityHandler(){ hidden = document.hidden; }
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', visibilityHandler);
     async function loadUnread(){
       try{
@@ -106,9 +106,12 @@ export default function DashboardPage() {
     const allowed = r==='teacher' || (r==='learner' && (user as any)?.ownerTeacher);
       if(status==='authenticated' && allowed){
         // Poll erst nach initialem Overview (unread evtl. schon gesetzt)
-        const base = Number(process.env.NEXT_PUBLIC_UNREAD_POLL_MS||'60000');
-        const intervalMs = Math.max(120000, base);
-        timer = setInterval(()=>{ if(!hidden) void loadUnread(); }, intervalMs);
+  const base = Number(process.env.NEXT_PUBLIC_UNREAD_POLL_MS||'60000');
+  const intervalMs = Math.max(120000, base);
+  // Zufälliger Start-Offset (0..intervalMs*0.3) verteilt erste Abfragen, verhindert thundering herd
+  const jitter = Math.floor(Math.random()*intervalMs*0.3);
+  setTimeout(()=>{ if(!hidden) void loadUnread(); }, 500 + jitter);
+  timer = setInterval(()=>{ if(!hidden) void loadUnread(); }, intervalMs + Math.floor(Math.random()*intervalMs*0.1));
       }
       return () => { if(timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', visibilityHandler); };
   }, [status, (session?.user as any)?.role, (user as any)?.ownerTeacher]);

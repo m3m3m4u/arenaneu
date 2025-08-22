@@ -7,6 +7,9 @@ Kurzüberblick der implementierten Maßnahmen zur Senkung gleichzeitiger MongoDB
 3. In-Memory Cache pro Runtime:
    - Kursliste (`/api/kurse`) – 30s TTL (`COURSE_LIST_CACHE_MS`).
    - Lesson-Liste eines Kurses (`/api/kurs/:id/lektionen`) – 30s TTL (`LESSON_LIST_CACHE_MS`) + ETag Unterstützung.
+   - Einzelne Lesson Details (`/api/lessons/:id`) – 15s TTL (`LESSON_DETAIL_CACHE_MS`) + ETag.
+   - Dashboard Overview (`/api/dashboard/overview`) – 15s TTL (`DASHBOARD_OVERVIEW_CACHE_MS`) + ETag.
+   - Fortschritt GET (`/api/progress?username=..`) – 10s TTL (`PROGRESS_GET_CACHE_MS`).
 4. Polling reduziert / pausiert:
    - Unread Messages min. 120s & Tab-Visibility gesteuert.
    - Arena Autosave Default 15s & pausiert im Hintergrund.
@@ -19,6 +22,10 @@ MONGODB_POOL_SIZE=3
 MONGODB_MIN_POOL_SIZE=0
 COURSE_LIST_CACHE_MS=30000
 LESSON_LIST_CACHE_MS=30000
+LESSON_DETAIL_CACHE_MS=15000
+DASHBOARD_OVERVIEW_CACHE_MS=15000
+PROGRESS_GET_CACHE_MS=10000
+PROGRESS_POST_DEDUPE_MS=5000
 NEXT_PUBLIC_UNREAD_POLL_MS=120000   # client kann erhöhen, Backend setzt Minimum
 NEXT_PUBLIC_ARENA_AUTOSAVE_MS=15000
 ```

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Course from '@/models/Course';
 import Lesson from '@/models/Lesson';
@@ -6,7 +6,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 
 // PATCH: Teil-Update von Kurs-Einstellungen (z.B. progressionMode)
-export async function PATCH(req: NextRequest, context: { params: Promise<{ courseId: string }> }) {
+export async function PATCH(req: Request, context: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await context.params;
   try {
     await dbConnect();

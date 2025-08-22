@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createRoom, listRooms } from '../store';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
@@ -11,7 +11,7 @@ export async function GET(){
   return res;
 }
 
-export async function POST(req: NextRequest){
+export async function POST(req: Request){
   try{
   const { name, exerciseId } = await req.json();
   const session = await getServerSession(authOptions).catch(()=>null as any);

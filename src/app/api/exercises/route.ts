@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Lesson from '@/models/Lesson';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 
 // GET: Liste aller als Übung markierten Lektionen
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
     await dbConnect();
     const url = new URL(req.url);
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: vorhandene Lektion als Übung markieren ODER neue Standalone-Übung anlegen
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
 }
 
 // PATCH: Übung bearbeiten (Titel, Inhalt, Fragen, Typ)
-export async function PATCH(req: NextRequest) {
+export async function PATCH(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ success: false, error: 'Nicht authentifiziert' }, { status: 401 });
@@ -135,7 +135,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 // DELETE: Übung entfernen (isExercise=false) oder vollständig löschen wenn standalone + delete=1
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ success: false, error: 'Nicht authentifiziert' }, { status: 401 });

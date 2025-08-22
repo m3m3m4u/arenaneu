@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import dbConnect from '@/lib/db';
@@ -16,7 +16,7 @@ async function resolveTeacherId(teacherUsername?: string|null, teacherId?: strin
   return null;
 }
 
-export async function GET(req: NextRequest){
+export async function GET(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:`DB ${e?.message||e}` }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role;
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest){
   return NextResponse.json({ success:true, classes, learners, teacherId, teacherUser: teacherUser? { id: String((teacherUser as any)._id), username: String((teacherUser as any).username||''), name: String((teacherUser as any).name||'') } : null });
 }
 
-export async function POST(req: NextRequest){
+export async function POST(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:`DB ${e?.message||e}` }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role;
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest){
   return NextResponse.json({ success:false, error:'Unbekannte Aktion' }, { status:400 });
 }
 
-export async function PATCH(req: NextRequest){
+export async function PATCH(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:`DB ${e?.message||e}` }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role;
@@ -118,7 +118,7 @@ export async function PATCH(req: NextRequest){
   return NextResponse.json({ success:false, error:'Unbekannte Aktion' }, { status:400 });
 }
 
-export async function DELETE(req: NextRequest){
+export async function DELETE(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:`DB ${e?.message||e}` }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role;

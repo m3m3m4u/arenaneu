@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import dbConnect from '@/lib/db';
@@ -14,7 +14,7 @@ import { isValidObjectId } from 'mongoose';
 // POST action=enable { classId, courseId, mode? } (teacher owns class)
 // DELETE action=disable { classId, courseId }
 
-export async function GET(req: NextRequest){
+export async function GET(req: Request){
   try { await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:`DB-Verbindung fehlgeschlagen: ${e?.message||e}` }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role;
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest){
   return NextResponse.json({ success:true, classes: classes.map(c=>({ _id:String(c._id), name:c.name, courseAccess: (c as any).courseAccess||'class', courses: byClass[String(c._id)]||[] })) });
 }
 
-export async function POST(req: NextRequest){
+export async function POST(req: Request){
   try { await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:`DB-Verbindung fehlgeschlagen: ${e?.message||e}` }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role;
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest){
   return NextResponse.json({ success:false, error:'Unbekannte Aktion' }, { status:400 });
 }
 
-export async function PATCH(req: NextRequest){
+export async function PATCH(req: Request){
   try {
     await dbConnect();
     const session = await getServerSession(authOptions);
@@ -190,7 +190,7 @@ export async function PATCH(req: NextRequest){
   }
 }
 
-export async function DELETE(req: NextRequest){
+export async function DELETE(req: Request){
   try { await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:`DB-Verbindung fehlgeschlagen: ${e?.message||e}` }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role;

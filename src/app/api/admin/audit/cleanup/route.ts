@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import AuditLog from '@/models/AuditLog';
 
 // DELETE /api/admin/audit/cleanup?days=90  -> löscht Logs älter als X Tage (default 90)
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: Request) {
   await dbConnect();
   const url = new URL(req.url);
   const days = Math.max(1, Math.min(365, Number(url.searchParams.get('days') || '90')));

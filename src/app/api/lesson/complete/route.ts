@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 import Lesson from "@/models/Lesson";
 import AuditLog from "@/models/AuditLog";
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   await dbConnect();
   const { username, lessonId, courseId, earnedStar: clientEarnedStar } = await req.json();
 

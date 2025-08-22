@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import dbConnect from '@/lib/db';
@@ -7,7 +7,7 @@ import Message from '@/models/Message';
 import User from '@/models/User';
 import TeacherClass from '@/models/TeacherClass';
 
-export async function GET(_req: NextRequest){
+export async function GET(_req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:'DB '+(e?.message||e) }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const meId = (session?.user as any)?.id;

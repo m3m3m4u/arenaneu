@@ -1631,11 +1631,20 @@ export default function IsostadtCanvas({ width, height }: Props) {
   let autosaveHidden = false;
   const visHandler = () => { autosaveHidden = document.visibilityState === 'hidden'; };
   document.addEventListener('visibilitychange', visHandler);
+  const autosaveBase = Math.max(5000, autosaveMs);
+  const autosaveJitter = () => autosaveBase + Math.floor(Math.random()*autosaveBase*0.15);
+  let autosaveIntervalMs = autosaveJitter();
   const autosaveId = setInterval(() => {
       if (!autosaveHidden && dirtyRef.current) {
         saveRef.current?.();
       }
-  }, Math.max(5000, autosaveMs));
+      // Intervall leicht anpassen um Drift / Gleichlauf zu reduzieren
+      const next = autosaveJitter();
+      if (Math.abs(next - autosaveIntervalMs) > autosaveBase*0.05) {
+        clearInterval(autosaveId);
+        autosaveIntervalMs = next;
+      }
+  }, autosaveIntervalMs);
 
     // Lifecycle-Flush: Sichtbarkeit/Seitenwechsel/Unload
     const onVis = () => {

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
 import Lesson from '@/models/Lesson';
@@ -6,7 +6,7 @@ import Lesson from '@/models/Lesson';
 // Normalisiert completedLessons Einträge: akzeptiert beide Formate (lessonId oder courseId-lessonId)
 // Ziel: Ein einheitliches Format lessonId behalten (redundanzfrei)
 // Optionaler Query ?dry=1 für Trockenlauf
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   await dbConnect();
   const url = new URL(req.url);
   const dry = url.searchParams.get('dry') === '1';

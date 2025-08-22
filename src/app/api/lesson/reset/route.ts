@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 import AuditLog from "@/models/AuditLog";
@@ -9,7 +9,7 @@ import AuditLog from "@/models/AuditLog";
   Wirkung: Entfernt lessonId aus completedLessons falls vorhanden.
   Sterne werden NICHT reduziert (Gamification: einmal verdiente Sterne bleiben bestehen).
 */
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   await dbConnect();
   try {
     const { username, lessonId } = await req.json() as { username?: string; lessonId?: string };

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Lesson from '@/models/Lesson';
 import Course from '@/models/Course';
@@ -11,7 +11,7 @@ import Course from '@/models/Course';
   POST wendet Migration an.
 */
 
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
     await dbConnect();
     const lessons = await Lesson.find({ $or: [{ category: { $exists: false } }, { category: null }, { category: '' }] }).lean();
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     await dbConnect();
     const body = await req.json().catch(()=>({}));

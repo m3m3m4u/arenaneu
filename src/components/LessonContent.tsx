@@ -104,7 +104,7 @@ function VideoLesson({ content, onComplete, lessonCompleted }: { content: VideoC
                     }
                     return newTime;
                   });
-                }, 100); // für Demo
+                }, 110 + Math.floor(Math.random()*40)); // leichte Jitter für gleichzeitige Tabs
                 setTimeout(() => {
                   setIsWatching(false);
                   clearInterval(interval);

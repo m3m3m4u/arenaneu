@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Lesson from '@/models/Lesson';
 import Course from '@/models/Course';
@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/authOptions';
 
 // POST: Reorder lessons in a course
 // Body: { order: string[] }  (array of lesson ids in desired order)
-export async function POST(req: NextRequest, context: { params: Promise<{ courseId: string }> }) {
+export async function POST(req: Request, context: { params: Promise<{ courseId: string }> }) {
   try {
     await dbConnect();
     const session = await getServerSession(authOptions);
