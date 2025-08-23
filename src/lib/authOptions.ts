@@ -71,7 +71,7 @@ export const authOptions: NextAuthOptions = {
       const tokAny = token as Record<string, unknown>;
       const defaultAdmins = (process.env.DEFAULT_ADMINS || 'Kopernikus')
         .split(',')
-        .map(s=>s.trim())
+        .map(s=> s.split('#')[0].trim()) // inline Kommentar abschneiden
         .filter(Boolean);
       if (defaultAdmins.includes(String(tokAny.username)) && tokAny.role !== 'admin') {
         tokAny.role = 'admin';
