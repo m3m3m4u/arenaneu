@@ -6,7 +6,8 @@
   },
   "private": true,
   "scripts": {
-    "dev": "cross-env PORT=3001 next dev",
+  "dev": "cross-env PORT=3001 next dev",
+  "dev:port": "node -e \"process.env.PORT=process.env.PORT||process.argv.slice(2).find(a=>/^--PORT=/.test(a))?.split('=')[1]||'3001'; const bin=require('path').join('node_modules','.bin','next'); require('child_process').spawn(bin, ['dev'], {stdio:'inherit', env: process.env, shell:true});\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

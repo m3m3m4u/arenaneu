@@ -36,32 +36,7 @@ export default function LessonPage() {
   const [completedLessons, setCompletedLessons] = useState<string[]>([]); // erledigte Lektionen
   // Wohin zurück? Kurs oder Übungsmenü
   const [backHref, setBackHref] = useState<string>(`/kurs/${courseId}`);
-  // Lückentext States (immer aufrufen, nicht konditional)
-  const [ltAnswersState, setLtAnswersState] = useState<Record<number, string>>({});
-  const [ltChecked, setLtChecked] = useState(false);
-  const [ltCorrectAll, setLtCorrectAll] = useState(false);
-  const [ltUsedAnswers, setLtUsedAnswers] = useState<string[]>([]);
-  const [ltFocusGap, setLtFocusGap] = useState<number | null>(null);
-  // Lückentext derived Daten (immer Hooks gleich halten)
-  const ltMasked = useMemo(() => (lesson?.type === 'lueckentext') ? String((lesson?.content as any)?.markdownMasked || '') : '', [lesson]);
-  const ltGaps = useMemo(() => (lesson?.type === 'lueckentext') ? (Array.isArray((lesson?.content as any)?.gaps) ? (lesson?.content as any).gaps.map((g: any) => ({ id: g.id, answer: String(g.answer) })) : []) : [], [lesson]);
-  const ltMode: 'input' | 'drag' = (lesson?.type === 'lueckentext' && (lesson?.content as any)?.mode === 'drag') ? 'drag' : 'input';
-  const ltParts = useMemo(() => ltMasked ? ltMasked.split(/(___\d+___)/g).filter(Boolean) : [], [ltMasked]);
-  const ltBank = useMemo(() => {
-    if (ltMode !== 'drag') return [] as string[];
-    const shuffle = <T,>(arr: T[]) => arr.map(v => [Math.random(), v] as const).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
-    return shuffle(ltGaps.map((g: { id: number; answer: string }) => g.answer));
-  }, [ltMode, ltGaps]);
-  useEffect(() => {
-    // Reset bei Lektionstyp-Wechsel
-    if (lesson?.type === 'lueckentext') {
-      setLtAnswersState({});
-      setLtChecked(false);
-      setLtCorrectAll(false);
-      setLtUsedAnswers([]);
-      setLtFocusGap(null);
-    }
-  }, [lesson?._id, lesson?.type]);
+  // (Lückentext lokaler Player rendert vollständig in eigener Komponente)
 
   const loadLesson = useCallback(async () => {
     try {
@@ -569,6 +544,8 @@ export default function LessonPage() {
       <div className="bg-white rounded-lg shadow-lg p-8">
         {isVideo ? (
           <YouTubeLesson lesson={lesson} onCompleted={markVideoCompleted} />
+        ) : isLueckentext ? (
+          <LueckentextPlayer lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} sessionUsername={session?.user?.username} allLessons={allLessons} progressionMode={progressionMode} backHref={backHref} />
         ) : effectiveType === 'memory' ? (
           <MemoryGame lesson={{ ...lesson, type: 'memory' }} onCompleted={() => { setIsCorrect(true); setShowResult(true); setCompleted(true); }} completedLessons={completedLessons} />
         ) : currentQuestion ? (
@@ -696,7 +673,9 @@ export default function LessonPage() {
       </div>
 
       {/* Footer Navigation */}
-  <LessonFooterNavigation allLessons={allLessons} currentLessonId={lessonId} courseId={courseId} completedLessons={completedLessons} progressionMode={progressionMode} backHref={backHref} />
+      {!isLueckentext && (
+        <LessonFooterNavigation allLessons={allLessons} currentLessonId={lessonId} courseId={courseId} completedLessons={completedLessons} progressionMode={progressionMode} backHref={backHref} />
+      )}
       {isMemory && completed && <div className="mt-6 text-green-700 font-medium">✔️ Memory abgeschlossen!</div>}
     </div>
   );

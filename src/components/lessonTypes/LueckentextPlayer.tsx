@@ -7,8 +7,18 @@ import { useMaskedMarkdown } from './lueckentext/useMaskedMarkdown';
 import { useGapState } from './lueckentext/useGapState';
 import type { Gap, Mode } from './lueckentext/types';
 
-interface Props { lesson: Lesson; courseId: string; completedLessons: string[]; setCompletedLessons: (v: string[] | ((p:string[])=>string[]))=>void; sessionUsername?: string }
-export default function LueckentextPlayer({ lesson, courseId, completedLessons, setCompletedLessons, sessionUsername }: Props){
+interface Props {
+  lesson: Lesson;
+  courseId: string;
+  completedLessons: string[];
+  setCompletedLessons: (v: string[] | ((p: string[]) => string[])) => void;
+  sessionUsername?: string;
+  allLessons?: Lesson[]; // optional für Footer Navigation
+  progressionMode?: 'linear' | 'free';
+  backHref?: string;
+  showFooter?: boolean; // Standard: true
+}
+export default function LueckentextPlayer({ lesson, courseId, completedLessons, setCompletedLessons, sessionUsername, allLessons = [], progressionMode = 'free', backHref, showFooter = true }: Props) {
   const [InlineMD, setInlineMD]= useState<ComponentType<any>|null>(null); const [gfm,setGfm]=useState<any>(null);
   useEffect(()=>{ let mounted=true;(async()=>{ const m= await import('react-markdown'); const g= await import('remark-gfm'); if(!mounted) return; setInlineMD(()=> m.default as any); setGfm(()=> (g as any).default ?? g);})(); return ()=>{mounted=false}; },[]);
   const c= (lesson.content||{}) as any; const masked: string= String(c.markdownMasked||''); const gaps: Gap[] = Array.isArray(c.gaps)? c.gaps.map((g:any)=>({id:g.id, answer:String(g.answer)})):[]; const mode: Mode = c.mode==='drag'?'drag':'input';
@@ -32,6 +42,6 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
       {checked && correctAll && <span className="text-base text-green-600">Alle richtig!</span>}
       {!allFilled && mode==='input' && <span className="text-sm text-gray-500">Alle Felder ausfüllen.</span>}
     </div>
-    <LessonFooterNavigation allLessons={[]} currentLessonId={lesson._id} courseId={courseId} completedLessons={completedLessons}/>
+    {showFooter && <LessonFooterNavigation allLessons={allLessons} currentLessonId={lesson._id} courseId={courseId} completedLessons={completedLessons} progressionMode={progressionMode} backHref={backHref} />}
   </div>;
 }
