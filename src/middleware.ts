@@ -76,11 +76,17 @@ export async function middleware(req: any) {
     }
     // JWT Token (next-auth)
     const token = await getToken({ req });
-    const role = (token && typeof token === 'object' ? (token as Record<string, unknown>).role as string | undefined : undefined);
-    // Admin-only für /api/admin – konsistent zu serverseitigem Guard
-    if (role === 'admin') {
+    const role = (token && typeof token === 'object' ? (token as any).role as string | undefined : undefined);
+    const username = (token && typeof token === 'object' ? (token as any).username as string | undefined : undefined);
+    const isKopernikus = username && username.toLowerCase() === 'kopernikus';
+    if (process.env.ADMIN_DEBUG) {
+      console.log('[admin-mw]', { role, username, isKopernikus, hasToken: !!token });
+    }
+    // Admin-only (plus temporärer Username-Fallback)
+    if (role === 'admin' || isKopernikus) {
       return NextResponse.next();
     }
+    if (process.env.ADMIN_DEBUG) console.warn('[admin-mw] unauthorized', { username, role });
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
   return NextResponse.next();
