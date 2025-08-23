@@ -76,24 +76,13 @@ export async function middleware(req: any) {
     }
     // JWT Token (next-auth)
     const token = await getToken({ req });
-    const role = (token && typeof token === 'object' ? (token as any).role as string | undefined : undefined);
-    const username = (token && typeof token === 'object' ? (token as any).username as string | undefined : undefined);
-    const isKopernikus = username && username.toLowerCase() === 'kopernikus';
-    if (process.env.ADMIN_DEBUG) {
-      console.log('[admin-mw]', { role, username, isKopernikus, hasToken: !!token });
-    }
-    // Admin-only (plus temporärer Username-Fallback)
-    if (role === 'admin' || isKopernikus) {
-      const res = NextResponse.next();
-      if (process.env.ADMIN_DEBUG) {
-        res.headers.set('x-admin-debug', `allow role=${role||''} user=${username||''} kop=${isKopernikus}`);
-      }
-      return res;
-    }
-    if (process.env.ADMIN_DEBUG) console.warn('[admin-mw] unauthorized', { username, role });
-    const headers: Record<string,string> = {};
-    if (process.env.ADMIN_DEBUG) headers['x-admin-debug'] = `deny role=${role||''} user=${username||''} hasToken=${!!token}`;
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401, headers });
+    const role = token && typeof token === 'object' ? (token as any).role as string | undefined : undefined;
+    const username = token && typeof token === 'object' ? (token as any).username as string | undefined : undefined;
+    const admins = (process.env.ADMIN_USERNAMES || '')
+      .split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+    const allow = role === 'admin' || (username && admins.includes(username.toLowerCase()));
+    if (allow) return NextResponse.next();
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
   return NextResponse.next();
 }

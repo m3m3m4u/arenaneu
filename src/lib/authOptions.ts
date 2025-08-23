@@ -67,11 +67,18 @@ export const authOptions: NextAuthOptions = {
         if (u.name) token.name = u.name;
         if (u.role) (token as Record<string, unknown>).role = u.role;
       }
-      // Vereinfachung: Fester Benutzername 'Kopernikus' ist immer admin
-      const tokAny = token as Record<string, unknown>;
-      if (String(tokAny.username).toLowerCase() === 'kopernikus' && tokAny.role !== 'admin') {
-        tokAny.role = 'admin';
-      }
+      // Bootstrap: ADMIN_USERNAMES=alice,bob (kommagetrennt) -> werden immer zu admin eskaliert
+      try {
+        const list = (process.env.ADMIN_USERNAMES || '')
+          .split(',')
+          .map(s=>s.trim().toLowerCase())
+          .filter(Boolean);
+        if (list.length) {
+          const tokAny = token as Record<string, unknown>;
+            const uname = String(tokAny.username||'').toLowerCase();
+            if (uname && list.includes(uname)) tokAny.role = 'admin';
+        }
+      } catch { /* ignore */ }
       return token;
     },
     async session({ session, token }) {
