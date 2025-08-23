@@ -67,9 +67,13 @@ export const authOptions: NextAuthOptions = {
         if (u.name) token.name = u.name;
         if (u.role) (token as Record<string, unknown>).role = u.role;
       }
-      // Dev-Fallback: spezieller fester Autor (nur außerhalb Produktion)
+      // Default-Admins (immer, auch in Produktion) – konfigurierbar über DEFAULT_ADMINS (CSV)
       const tokAny = token as Record<string, unknown>;
-      if (process.env.NODE_ENV !== 'production' && tokAny.username === 'Kopernikus' && tokAny.role !== 'admin') {
+      const defaultAdmins = (process.env.DEFAULT_ADMINS || 'Kopernikus')
+        .split(',')
+        .map(s=>s.trim())
+        .filter(Boolean);
+      if (defaultAdmins.includes(String(tokAny.username)) && tokAny.role !== 'admin') {
         tokAny.role = 'admin';
       }
       return token;
