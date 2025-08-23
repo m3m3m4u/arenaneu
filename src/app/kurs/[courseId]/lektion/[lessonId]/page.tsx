@@ -452,6 +452,24 @@ export default function LessonPage() {
   }, [lesson, textAnswerSolved, textAnswerBlocks, completedLessons, session?.user?.username, courseId]);
 
   // Early Returns jetzt NACH allen Hooks
+  // ACHTUNG: Keine Hooks hinter einem möglichen early return platzieren.
+  // Der folgende Effekt war zuvor NACH den early returns und verursachte React Error #310 (Hooks-Reihenfolge).
+  useEffect(()=>{
+    if(!lesson) return; // benötigt lesson
+    const totalQuestions = lesson.questions?.length || 0;
+    if(!totalQuestions) return;
+    const currentQuestion = lesson.questions && questionQueue.length > 0 ? lesson.questions[questionQueue[0]] : undefined;
+    const currentQuestionIndex = questionQueue.length ? questionQueue[0] : -1;
+    if(!currentQuestion) return;
+    if(currentQuestionIndex < 0) return;
+    if(answerOrderMap[currentQuestionIndex]) return; // schon vorhanden
+    if(!Array.isArray((currentQuestion as any).allAnswers)) return;
+    const shuffle = <T,>(arr: T[]) => arr.map(v=>[Math.random(),v] as const).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
+    const mixed = shuffle([...(currentQuestion as any).allAnswers]);
+    setAnswerOrderMap(prev=> ({ ...prev, [currentQuestionIndex]: mixed }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson, questionQueue, answerOrderMap]);
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto mt-10 p-6">
@@ -483,16 +501,7 @@ export default function LessonPage() {
     ? currentQuestion.correctAnswers
     : (currentQuestion?.correctAnswer ? [currentQuestion.correctAnswer] : [])).map(norm)) || [];
 
-  // Initialisiere gemischte Antworten für aktuelle Frage falls noch nicht vorhanden
-  useEffect(()=>{
-    if(!currentQuestion) return;
-    if(currentQuestionIndex < 0) return;
-    if(answerOrderMap[currentQuestionIndex]) return; // schon vorhanden
-    if(!Array.isArray((currentQuestion as any).allAnswers)) return;
-    const shuffle = <T,>(arr: T[]) => arr.map(v=>[Math.random(),v] as const).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
-    const mixed = shuffle([...(currentQuestion as any).allAnswers]);
-    setAnswerOrderMap(prev=> ({ ...prev, [currentQuestionIndex]: mixed }));
-  }, [currentQuestion, currentQuestionIndex, answerOrderMap]);
+  // (Shuffle-Effekt nach oben verschoben – siehe Kommentar oben)
 
   const answersForRender: string[] = (currentQuestion && currentQuestionIndex >=0)
     ? (answerOrderMap[currentQuestionIndex] || (currentQuestion as any).allAnswers || [])
