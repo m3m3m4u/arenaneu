@@ -59,9 +59,11 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
   const renderPart=(part:string,idx:number)=>{
     const m= part.match(/^___(\d+)___$/);
     if(!m){
-      if(!InlineMD) return <span key={idx} className="whitespace-pre-wrap leading-relaxed">{part}</span>;
+      // Führende Spaces nach Zeilenumbrüchen entfernen -> sonst "Freiraum" am Zeilenanfang
+      const cleaned = part.replace(/(^|\n)[ \t]+/g, '$1');
+      if(!InlineMD) return <span key={idx} className="whitespace-pre-wrap leading-relaxed">{cleaned}</span>;
       const Comp=InlineMD;
-      return <span key={idx} className="inline whitespace-pre-wrap leading-relaxed"><Comp remarkPlugins={gfm? [gfm]: []} components={{ p: ({children}:{children:any})=> <span className="inline">{children}</span> }}>{part}</Comp></span>;
+      return <span key={idx} className="inline whitespace-pre-wrap leading-relaxed"><Comp remarkPlugins={gfm? [gfm]: []} components={{ p: ({children}:{children:any})=> <span className="inline">{children}</span> }}>{cleaned}</Comp></span>;
     }
     const id= Number(m[1]);
     const status= answerStatus(id);
