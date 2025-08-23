@@ -84,10 +84,16 @@ export async function middleware(req: any) {
     }
     // Admin-only (plus temporärer Username-Fallback)
     if (role === 'admin' || isKopernikus) {
-      return NextResponse.next();
+      const res = NextResponse.next();
+      if (process.env.ADMIN_DEBUG) {
+        res.headers.set('x-admin-debug', `allow role=${role||''} user=${username||''} kop=${isKopernikus}`);
+      }
+      return res;
     }
     if (process.env.ADMIN_DEBUG) console.warn('[admin-mw] unauthorized', { username, role });
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const headers: Record<string,string> = {};
+    if (process.env.ADMIN_DEBUG) headers['x-admin-debug'] = `deny role=${role||''} user=${username||''} hasToken=${!!token}`;
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401, headers });
   }
   return NextResponse.next();
 }
