@@ -61,9 +61,9 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
     if(!m){
       // Führende Spaces nach Zeilenumbrüchen entfernen -> sonst "Freiraum" am Zeilenanfang
       const cleaned = part.replace(/(^|\n)[ \t]+/g, '$1');
-      if(!InlineMD) return <span key={idx} className="whitespace-pre-wrap leading-relaxed">{cleaned}</span>;
-      const Comp=InlineMD;
-      return <span key={idx} className="inline whitespace-pre-wrap leading-relaxed"><Comp remarkPlugins={gfm? [gfm]: []} components={{ p: ({children}:{children:any})=> <span className="inline">{children}</span> }}>{cleaned}</Comp></span>;
+  if(!InlineMD) return <span key={idx} className="whitespace-pre-wrap leading-relaxed mr-1">{cleaned}</span>;
+  const Comp=InlineMD;
+  return <span key={idx} className="inline whitespace-pre-wrap leading-relaxed mr-1"><Comp remarkPlugins={gfm? [gfm]: []} components={{ p: ({children}:{children:any})=> <span className="inline">{children}</span> }}>{cleaned}</Comp></span>;
     }
     const id= Number(m[1]);
     const status= answerStatus(id);
@@ -74,12 +74,12 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
         value={val}
         onFocus={()=>setFocusGap(id)}
         onChange={e=>{ setAnswersState(s=>({...s,[id]:e.target.value})); resetChecked(); }}
-        className={`mx-1 px-2 pb-0.5 border-b-2 outline-none bg-transparent min-w-[60px] text-base transition-colors font-medium tracking-wide focus:border-blue-600 ${status==='correct'? 'border-green-500 text-green-700': status==='wrong'? 'border-red-500 text-red-600':'border-blue-400'} ${focusGap===id? 'bg-blue-50':''}`}
+        className={`mr-1 px-2 pb-0.5 border-b-2 outline-none bg-transparent min-w-[60px] text-base transition-colors font-medium tracking-wide focus:border-blue-600 ${status==='correct'? 'border-green-500 text-green-700': status==='wrong'? 'border-red-500 text-red-600':'border-blue-400'} ${focusGap===id? 'bg-blue-50':''}`}
         aria-label={`Lücke ${id}`}
       />;
     }
     const val= answersState[id];
-    const base='mx-1 align-baseline inline-flex items-center justify-center rounded-md text-sm font-medium px-2 h-7 min-w-[56px] transition-all duration-150';
+    const base='mr-1 align-baseline inline-flex items-center justify-center rounded-md text-sm font-medium px-2 h-7 min-w-[56px] transition-all duration-150';
     const cls = status==='correct'
       ? 'bg-green-100 text-green-800 ring-1 ring-green-300'
       : status==='wrong'

@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
+import { getToken } from 'next-auth/jwt';
 
 type RateBucket = {
   tokens: number;
@@ -28,12 +29,21 @@ export async function isAdminRequest(request: Request): Promise<boolean> {
   }
   // Session prüfen
   try {
-  const session = await getServerSession(authOptions);
-  const role = session?.user?.role;
-  const username = session?.user?.username;
-    if(role === 'admin') return true;
-    if(username && username.toLowerCase() === 'kopernikus') return true;
-  return false;
+    const session = await getServerSession(authOptions);
+    const role = session?.user?.role;
+    if (role === 'admin') return true;
+    // Fallback: direkt JWT Token decodieren (entspricht Middleware-Check)
+    try {
+      const token = await getToken({ req: request as any });
+      if (token && typeof token === 'object') {
+        const tRole = (token as any).role;
+        if (tRole === 'admin') return true;
+        // Optionaler Username-Fallback analog jwt Callback (falls session leer war)
+        const uname = (token as any).username;
+        if (uname && String(uname).toLowerCase() === 'kopernikus') return true;
+      }
+    } catch { /* ignore token fallback errors */ }
+    return false;
   } catch {
     return false;
   }
