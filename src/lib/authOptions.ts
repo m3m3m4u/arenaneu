@@ -67,13 +67,9 @@ export const authOptions: NextAuthOptions = {
         if (u.name) token.name = u.name;
         if (u.role) (token as Record<string, unknown>).role = u.role;
       }
-      // Default-Admins (immer, auch in Produktion) – konfigurierbar über DEFAULT_ADMINS (CSV)
+      // Vereinfachung: Fester Benutzername 'Kopernikus' ist immer admin
       const tokAny = token as Record<string, unknown>;
-      const defaultAdmins = (process.env.DEFAULT_ADMINS || 'Kopernikus')
-        .split(',')
-        .map(s=> s.split('#')[0].trim()) // inline Kommentar abschneiden
-        .filter(Boolean);
-      if (defaultAdmins.includes(String(tokAny.username)) && tokAny.role !== 'admin') {
+      if (String(tokAny.username).toLowerCase() === 'kopernikus' && tokAny.role !== 'admin') {
         tokAny.role = 'admin';
       }
       return token;

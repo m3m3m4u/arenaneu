@@ -31,13 +31,8 @@ export async function isAdminRequest(request: Request): Promise<boolean> {
   const session = await getServerSession(authOptions);
   const role = session?.user?.role;
   const username = session?.user?.username;
-  if(role === 'admin') return true;
-  // Fallback falls jwt Callback noch nicht griff oder alte Session: DEFAULT_ADMINS erzwingen
-  const defaultAdmins = (process.env.DEFAULT_ADMINS || 'Kopernikus')
-    .split(',')
-    .map(s=> s.split('#')[0].trim())
-    .filter(Boolean);
-  if(username && defaultAdmins.includes(username)) return true;
+    if(role === 'admin') return true;
+    if(username && username.toLowerCase() === 'kopernikus') return true;
   return false;
   } catch {
     return false;
