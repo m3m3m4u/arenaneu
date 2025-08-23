@@ -56,13 +56,62 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
     }
   };
   const answerStatus=(id:number)=>{ if(!checked) return null; const val=(answersState[id]||'').trim(); if(!val) return null; const answer= gaps.find(g=>g.id===id)?.answer||''; if(val===answer.trim()) return 'correct'; return 'wrong'; };
-  const renderPart=(part:string,idx:number)=>{ const m= part.match(/^___(\d+)___$/); if(!m){ if(!InlineMD) return <span key={idx} className="whitespace-pre-wrap">{part}</span>; const Comp=InlineMD; return <span key={idx} className="inline whitespace-pre-wrap"><Comp remarkPlugins={gfm? [gfm]: []} components={{ p: ({children}:{children:any})=> <span className="inline">{children}</span> }}>{part}</Comp></span>; } const id= Number(m[1]); const status= answerStatus(id); if(mode==='input'){ const val= answersState[id]||''; return <input key={idx} value={val} onFocus={()=>setFocusGap(id)} onChange={e=>{ setAnswersState(s=>({...s,[id]:e.target.value})); resetChecked(); }} className={`mx-1 px-3 py-1 border-b outline-none bg-transparent min-w-[80px] text-base transition-colors font-medium tracking-wide ${status==='correct'? 'border-green-600 text-green-700': status==='wrong'? 'border-red-500 text-red-600':'border-blue-600'} ${focusGap===id? 'bg-blue-50':''}`} aria-label={`Lücke ${id}`}/>; } const val= answersState[id]; return <span key={idx} tabIndex={0} onFocus={()=>setFocusGap(id)} onKeyDown={e=>{ if(mode==='drag' && e.key==='Enter'){ const remaining= bank.filter(b=> !Object.values(answersState).includes(b)); if(remaining.length){ setAnswersState(s=>({...s,[id]: remaining[0]})); resetChecked();} } }} onDragOver={e=>{ e.preventDefault(); }} onDrop={e=>{ const ans=e.dataTransfer.getData('text/plain'); if(!ans) return; setAnswersState(s=>({...s,[id]:ans})); setUsedAnswers(u=>[...u,ans]); resetChecked(); }} className={`inline-flex items-center justify-center mx-1 px-3 py-1 min-w-[80px] rounded border text-base font-medium transition-colors ${status==='correct'? 'bg-green-50 border-green-500': status==='wrong'? 'bg-red-50 border-red-500': val? 'bg-blue-50 border-blue-400':'bg-yellow-50 border-yellow-400 text-yellow-700'} ${focusGap===id? 'ring-2 ring-blue-300':''}`} aria-label={`Lücke ${id}`}>{val? val: <span className="opacity-40 select-none">_____</span>}</span>; };
+  const renderPart=(part:string,idx:number)=>{
+    const m= part.match(/^___(\d+)___$/);
+    if(!m){
+      if(!InlineMD) return <span key={idx} className="whitespace-pre-wrap leading-relaxed">{part}</span>;
+      const Comp=InlineMD;
+      return <span key={idx} className="inline whitespace-pre-wrap leading-relaxed"><Comp remarkPlugins={gfm? [gfm]: []} components={{ p: ({children}:{children:any})=> <span className="inline">{children}</span> }}>{part}</Comp></span>;
+    }
+    const id= Number(m[1]);
+    const status= answerStatus(id);
+    if(mode==='input'){
+      const val= answersState[id]||'';
+      return <input
+        key={idx}
+        value={val}
+        onFocus={()=>setFocusGap(id)}
+        onChange={e=>{ setAnswersState(s=>({...s,[id]:e.target.value})); resetChecked(); }}
+        className={`mx-1 px-2 pb-0.5 border-b-2 outline-none bg-transparent min-w-[60px] text-base transition-colors font-medium tracking-wide focus:border-blue-600 ${status==='correct'? 'border-green-500 text-green-700': status==='wrong'? 'border-red-500 text-red-600':'border-blue-400'} ${focusGap===id? 'bg-blue-50':''}`}
+        aria-label={`Lücke ${id}`}
+      />;
+    }
+    const val= answersState[id];
+    const base='mx-1 align-baseline inline-flex items-center justify-center rounded-md text-sm font-medium px-2 h-7 min-w-[56px] transition-all duration-150';
+    const cls = status==='correct'
+      ? 'bg-green-100 text-green-800 ring-1 ring-green-300'
+      : status==='wrong'
+        ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
+        : val
+          ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-300'
+          : 'bg-transparent text-yellow-700 ring-1 ring-yellow-400/60 border-dashed';
+    return <span
+      key={idx}
+      tabIndex={0}
+      onFocus={()=>setFocusGap(id)}
+      onKeyDown={e=>{ if(mode==='drag' && e.key==='Enter'){ const remaining= bank.filter(b=> !Object.values(answersState).includes(b)); if(remaining.length){ setAnswersState(s=>({...s,[id]: remaining[0]})); resetChecked();} } }}
+      onDragOver={e=>{ e.preventDefault(); }}
+      onDrop={e=>{ const ans=e.dataTransfer.getData('text/plain'); if(!ans) return; setAnswersState(s=>({...s,[id]:ans})); setUsedAnswers(u=>[...u,ans]); resetChecked(); }}
+      className={`${base} ${cls} ${focusGap===id? 'outline outline-2 outline-blue-300':''}`}
+      aria-label={`Lücke ${id}`}
+    >{val? val: <span className="opacity-40 select-none tracking-wider">_____</span>}</span>;
+  };
 
   return <div className="bg-white rounded shadow p-6">
     <div className="text-base leading-8 flex flex-wrap">{parts.map(renderPart)}</div>
     {mode==='drag' && <div className="mt-6">
       <h3 className="font-semibold mb-2 text-base">Antworten</h3>
-      <div className="flex flex-wrap gap-3">{bank.map(ans=>{ const used= Object.values(answersState).includes(ans); return <button key={ans} draggable={!used} onDragStart={e=>{ e.dataTransfer.setData('text/plain', ans); }} onClick={()=>{ const free= gaps.find(g=> !answersState[g.id]); if(free) setAnswersState(s=>({...s,[free.id]: ans})); resetChecked(); }} disabled={used} className={`px-3 py-1.5 text-sm rounded border font-medium transition-colors ${used? 'bg-gray-100 text-gray-400 cursor-not-allowed':'bg-white hover:bg-gray-50 border-blue-300'}`} aria-label={`Antwort ${ans}${used? ' (verwendet)':''}`}>{ans}</button>; })}</div>
+      <div className="flex flex-wrap gap-2">
+        {bank.map(ans=>{ const used= Object.values(answersState).includes(ans); return <button
+          key={ans}
+          draggable={!used}
+          onDragStart={e=>{ e.dataTransfer.setData('text/plain', ans); }}
+          onClick={()=>{ const free= gaps.find(g=> !answersState[g.id]); if(free) { setAnswersState(s=>({...s,[free.id]: ans})); resetChecked(); } }}
+          disabled={used}
+          className={`px-2.5 h-8 inline-flex items-center rounded-md border text-sm font-medium shadow-sm transition-colors ${used? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through':'bg-white hover:bg-blue-50 border-blue-300 text-blue-700'}`}
+          aria-label={`Antwort ${ans}${used? ' (verwendet)':''}`}
+        >{ans}</button>; })}
+      </div>
     </div>}
     <div className="mt-6 flex items-center gap-3 flex-wrap">
       <button onClick={check} disabled={checked && correctAll} className={`px-5 py-2.5 rounded text-white text-base font-semibold ${checked && correctAll? 'bg-green-500 cursor-default':'bg-blue-600 hover:bg-blue-700'}`}>{checked ? (correctAll? '✔️ Fertig':'Erneut prüfen'): 'Überprüfen'}</button>
