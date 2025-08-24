@@ -5,6 +5,7 @@ import "./globals.css";
 import CustomSessionProvider from "./SessionProvider";
 import { ToastProvider } from "@/components/shared/ToastProvider";
 import GlobalHeader from "@/components/shared/GlobalHeader";
+import GlobalFooter from "../components/shared/GlobalFooter";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,11 +32,12 @@ export default function RootLayout({
       <head>
         <meta charSet="UTF-8" />
       </head>
-  <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans min-h-screen flex flex-col`}>        
         <CustomSessionProvider>
           <ToastProvider>
             <GlobalHeader />
-            {children}
+            <main className="flex-1 w-full">{children}</main>
+            <GlobalFooter />
           </ToastProvider>
         </CustomSessionProvider>
       </body>
