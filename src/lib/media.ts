@@ -31,6 +31,10 @@ export function resolveMediaPath(input: string): string {
   // Umgebung erkennen: auf Vercel bevorzugen wir den Medien-Proxy
   const isBrowser = typeof window !== 'undefined';
   const isVercelHost = isBrowser ? /vercel\.app$/i.test(window.location.hostname) : !!(process as any)?.env?.VERCEL;
+  // Falls ein bereits proxied Pfad (/medien/uploads/...) vorliegt aber wir NICHT auf Vercel sind -> zurück auf /uploads/
+  if (/^\/medien\/uploads\//i.test(cleaned) && !isVercelHost) {
+    cleaned = cleaned.replace(/^\/medien\/uploads\//i, '/uploads/');
+  }
   // Wenn bereits ein Pfad mit Slash: ggf. auf Proxy umbiegen
   if (HAS_SLASH.test(cleaned)) {
     const withSlash = cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
@@ -50,6 +54,26 @@ export function resolveMediaPath(input: string): string {
     default:
       return isVercelHost ? `/medien/uploads/${cleaned}` : `/uploads/${cleaned}`;
   }
+}
+
+// Kanonische Form für Speicherung in DB: immer /uploads/<name> für interne Dateien
+export function canonicalizeMediaPath(input: string | undefined | null): string | undefined {
+  if (!input) return undefined;
+  let p = String(input).trim();
+  if (!p) return undefined;
+  if (ABSOLUTE_OR_DATA.test(p)) return p; // absolute Pfade unverändert
+  p = p.replace(/\\/g,'/');
+  if (p.toLowerCase().startsWith('public/')) p = p.slice(7);
+  // Entferne Proxy-Präfix
+  if (/^\/medien\/uploads\//i.test(p)) p = p.replace(/^\/medien\/uploads\//i, '/uploads/');
+  // Falls ohne führenden Slash aber bereits Ordner referenziert
+  if (!p.startsWith('/') && /\//.test(p)) p = '/' + p;
+  // Reiner Dateiname?
+  if (!/\//.test(p)) p = '/uploads/' + p;
+  // Falls noch kein /uploads/ Präfix aber nur Dateiname -> oben behandelt
+  // Normalisiere doppelte Slashes
+  p = p.replace(/\/+/g,'/');
+  return p;
 }
 
 export function isImagePath(p: string) { return IMG_EXT.test(p); }

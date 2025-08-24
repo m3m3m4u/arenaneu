@@ -9,6 +9,7 @@ import User from '@/models/User';
 import ClassCourseAccess from '@/models/ClassCourseAccess';
 import { parseMemory } from '@/lib/memory';
 import { parseLueckentext } from '@/lib/lueckentext';
+import { canonicalizeMediaPath } from '@/lib/media';
 import mongoose from 'mongoose';
 
 // In-Memory Cache pro Runtime für Lesson-Listen (nur für Leserollen). Struktur: key => { expires, etag, payload }
@@ -194,8 +195,8 @@ export async function POST(
         const first = lines[0];
         let qText = first;
         let mediaLink = '';
-        const m = first.match(/^(.+?)\s*\[(.+?)\]$/);
-        if (m) { qText = m[1].trim(); mediaLink = m[2].trim(); }
+  const m = first.match(/^(.+?)\s*\[(.+?)\]$/);
+  if (m) { qText = m[1].trim(); mediaLink = canonicalizeMediaPath(m[2].trim()) || ''; }
         const answerLines = lines.slice(1);
         const corrects: string[] = [];
         const wrongs: string[] = [];
@@ -216,7 +217,7 @@ export async function POST(
         if (qText && corrects.length >= 1 && all.length >= 2) {
           parsed.push({
             question: qText,
-            mediaLink: mediaLink || undefined,
+            mediaLink: canonicalizeMediaPath(mediaLink) || undefined,
             correctAnswers: kind === 'multiple-choice' ? corrects : undefined,
             correctAnswer: kind === 'single-choice' ? corrects[0] : undefined,
             wrongAnswers: wrongs,
@@ -268,7 +269,7 @@ export async function POST(
 
         return {
           question: toText(q.question || (q as Record<string, unknown>).text || ''),
-          mediaLink: (q.mediaLink as string) || (q.media as string) || undefined,
+          mediaLink: canonicalizeMediaPath((q.mediaLink as string) || (q.media as string) || undefined),
           correctAnswer: finalCorrects.length === 1 ? finalCorrects[0] : undefined,
           correctAnswers: finalCorrects.length > 1 ? finalCorrects : undefined,
           wrongAnswers: finalWrong,
