@@ -19,7 +19,8 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         const wantUser = String(credentials?.username || '');
         const wantPass = String(credentials?.password || '');
-        const allowDemo = process.env.NODE_ENV !== 'production';
+  // Demo-Login jetzt nur noch explizit über ENV Flag aktivierbar
+  const allowDemo = process.env.ENABLE_DEMO_LOGIN === '1';
         const hasDb = !!process.env.MONGODB_URI;
         // Dev-Shortcut: Wenn keine DB konfiguriert ist, optional Demo-Login zulassen
         if (!hasDb && allowDemo) {

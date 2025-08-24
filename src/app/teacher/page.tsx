@@ -140,7 +140,7 @@ function TeacherPanelContent(){
   if(status==='loading' || loading) return <div className="p-6">Lade…</div>;
 
   return (
-    <main className="max-w-5xl mx-auto p-6 space-y-10">
+  <main className="max-w-6xl mx-auto p-6 space-y-10">
       <div className="flex items-center justify-between">
         <button type="button" onClick={()=>router.back()} className="text-sm text-blue-600 hover:underline">← Zurück</button>
   <h1 className="text-2xl font-bold">Klasse verwalten</h1>
@@ -156,7 +156,7 @@ function TeacherPanelContent(){
         <ul className="list-disc pl-5 mt-2 space-y-1">
           <li>Lege zuerst Klassen an. Du kannst Lernende einzeln oder per Mehrfach-Import hinzufügen.</li>
           <li>Unter „Zugriff“ stellst du ein, ob Lernende nur klassenbezogene Kurse sehen (Nur Klassenkurse) oder alle veröffentlichten Kurse (Alle Kurse).</li>
-          <li>Kurse ordnest du im Bereich „Kurse zuordnen“ deiner Klasse zu. Entweder als Link (Original bleibt erhalten) oder als anpassbare Klassenkopie.</li>
+          <li>Kurse erstellst und ordnest du im Bereich „Kurse erstellen/zuordnen“ deiner Klasse zu. Entweder als Link (Original bleibt erhalten) oder als anpassbare Klassenkopie.</li>
           <li>Entwürfe sind für Lernende unsichtbar. Sichtbar werden Kurse erst nach Veröffentlichung oder wenn sie als Klassenkopie zugeordnet und freigegeben sind – je nach Zugriffseinstellung.</li>
           <li>Statistiken zu Fortschritt und Sternen findest du im Bereich „Statistik“.</li>
         </ul>
@@ -210,10 +210,10 @@ function TeacherPanelContent(){
       </section>
 
       <section className="bg-white border rounded p-4">
-        <h2 className="font-semibold">Kurse zuordnen</h2>
-        <p className="text-xs text-gray-600">Wechsle zum Bereich „Kurse zuordnen“, um Kurse für deine Klassen freizuschalten oder neue Kurse zu erstellen.</p>
+        <h2 className="font-semibold">Kurse erstellen/zuordnen</h2>
+        <p className="text-xs text-gray-600">Wechsle zum Bereich „Kurse erstellen/zuordnen“, um neue Kurse anzulegen oder vorhandene Kurse deiner Klasse zuzuweisen.</p>
         <div className="mt-2">
-          <a href="/teacher/kurse" className="inline-block text-xs px-3 py-1 border rounded bg-white hover:bg-gray-50">→ Zu „Kurse zuordnen“</a>
+          <a href="/teacher/kurse" className="inline-block text-xs px-3 py-1 border rounded bg-white hover:bg-gray-50">→ Zu „Kurse erstellen/zuordnen“</a>
         </div>
       </section>
 

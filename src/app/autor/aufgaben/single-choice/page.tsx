@@ -188,7 +188,11 @@ Falsche Audio-Antwort`);
                             onError={(e) => {
                               const parent = (e.target as HTMLImageElement).parentElement;
                               if (parent) {
-                                parent.innerHTML = `<p class=\"text-red-600 text-sm\">❌ Bild konnte nicht geladen werden: ${q.mediaLink}</p>`;
+                                while (parent.firstChild) parent.removeChild(parent.firstChild);
+                                const p = document.createElement('p');
+                                p.className = 'text-red-600 text-sm';
+                                p.textContent = `❌ Bild konnte nicht geladen werden: ${q.mediaLink}`;
+                                parent.appendChild(p);
                               }
                             }}
                           />

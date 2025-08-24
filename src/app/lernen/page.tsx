@@ -223,6 +223,9 @@ function LernenPageInner() {
   category: (x?.course as any)?.category
     })).filter((c:CourseItem) => !!c._id && !!c.title);
     setCourses(mapped);
+  // Für Klassensicht separate Gesamtanzahl setzen (serverseitige totalCount bezieht sich auf globalen Kursindex)
+  setTotalCount(mapped.length);
+  setPage(1); // Beim Klassenwechsel auf Seite 1
   }, [selectedClassId, classes, isTeacher, viewTab]);
 
   // URL-Query aktualisieren wenn Tab/Classe geändert
@@ -391,8 +394,17 @@ function LernenPageInner() {
         </div>
       )}
       {/** Gefilterte Kurse & Pagination */}
-      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-        {courses.map(course => {
+      {/** Kurse ggf. client-seitig paginieren in Klassensicht */}
+      {(() => {
+        const effectiveTotal = (isTeacher && viewTab==='class') ? courses.length : totalCount;
+        const effectivePageSize = serverPageSize || pageSize;
+        const totalPages = Math.max(1, Math.ceil(effectiveTotal / effectivePageSize));
+        const pagedCourses = (isTeacher && viewTab==='class')
+          ? courses.slice((page-1)*effectivePageSize, (page-1)*effectivePageSize + effectivePageSize)
+          : courses; // server-seitig bereits paginiert
+        return (
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            {pagedCourses.map(course => {
           const p = progress[course._id] || { completed: 0, inProgress: 0 };
           const lessonTotal = course.lessonCount || 0;
           const isDone = lessonTotal > 0 && p.completed === lessonTotal;
@@ -428,11 +440,15 @@ function LernenPageInner() {
               </div>
             </div>
           );
-        })}
-      </div>
+            })}
+          </div>
+        );
+      })()}
       {/** Pagination Controls */}
       {(() => {
-        const totalPages = Math.max(1, Math.ceil(totalCount / serverPageSize));
+        const effectiveTotal = (isTeacher && viewTab==='class') ? courses.length : totalCount;
+        const effectivePageSize = serverPageSize || pageSize;
+        const totalPages = Math.max(1, Math.ceil(effectiveTotal / effectivePageSize));
         if (totalPages <= 1) return null;
         const prev = () => setPage(p => Math.max(1, p-1));
         const next = () => setPage(p => Math.min(totalPages, p+1));
@@ -458,7 +474,7 @@ function LernenPageInner() {
               <button onClick={()=>setPage(totalPages)} className={`px-3 py-1.5 rounded border text-sm ${page===totalPages? 'bg-blue-600 text-white border-blue-600':'bg-white hover:bg-gray-50'}`}>{totalPages}</button>
             )}
             <button onClick={next} disabled={page===totalPages} className={`px-3 py-1.5 rounded border text-sm ${page===totalPages? 'text-gray-400 bg-gray-100 cursor-not-allowed':'bg-white hover:bg-gray-50'}`}>»</button>
-            <div className="basis-full text-center text-[11px] text-gray-500 mt-1">Seite {page} / {totalPages} • Gesamt {totalCount}</div>
+            <div className="basis-full text-center text-[11px] text-gray-500 mt-1">Seite {page} / {totalPages} • Gesamt {(isTeacher && viewTab==='class') ? courses.length : totalCount}</div>
           </div>
         );
       })()}

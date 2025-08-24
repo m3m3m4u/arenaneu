@@ -313,7 +313,12 @@ Falsche Audio-Antwort`}
                               target.style.display = 'none';
                               const parent = target.parentElement;
                               if (parent) {
-                                parent.innerHTML = `<p class="text-red-600 text-sm">❌ Bild konnte nicht geladen werden: ${q.mediaLink}</p>`;
+                                // Sichere Fallback-Ausgabe ohne innerHTML (verhindert potentielle XSS)
+                                while (parent.firstChild) parent.removeChild(parent.firstChild);
+                                const p = document.createElement('p');
+                                p.className = 'text-red-600 text-sm';
+                                p.textContent = `❌ Bild konnte nicht geladen werden: ${q.mediaLink}`;
+                                parent.appendChild(p);
                               }
                             }}
                           />

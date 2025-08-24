@@ -91,7 +91,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
           <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
             <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
-            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
+            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍 Snake ×2</button>
         </div>
         <PlaneGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
       </div>
@@ -107,7 +107,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <button disabled className="px-5 py-2 text-sm rounded border bg-violet-600 text-white shadow-sm">🛸 Space</button>
           <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
             <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
-            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
+            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍 Snake ×2</button>
         </div>
         <SpaceImpactGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
       </div>
@@ -123,7 +123,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
           <button disabled className="px-5 py-2 text-sm rounded border bg-amber-600 text-white shadow-sm">👻 Pacman</button>
             <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
-            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
+            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍 Snake ×2</button>
         </div>
         <PacmanGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
       </div>
@@ -139,7 +139,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
           <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
             <button disabled className="px-5 py-2 text-sm rounded border bg-blue-600 text-white shadow-sm">🚗 Auto</button>
-            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
+            <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍 Snake ×2</button>
         </div>
         <AutoGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
       </div>
@@ -155,7 +155,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
             <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
             <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
             <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
-            <button disabled className="px-5 py-2 text-sm rounded border bg-amber-200 text-gray-800 shadow-sm">🐍×2 Zwei</button>
+            <button disabled className="px-5 py-2 text-sm rounded border bg-amber-200 text-gray-800 shadow-sm">🐍 Snake ×2</button>
           </div>
           <TwoSnakeGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
         </div>
@@ -170,7 +170,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
         <button onClick={()=> setVariant('space')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🛸 Space</button>
         <button onClick={()=> setVariant('pacman')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">👻 Pacman</button>
   <button onClick={()=> setVariant('auto')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🚗 Auto</button>
-  <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍×2 Zwei</button>
+  <button onClick={()=> setVariant('twosnake')} className="px-5 py-2 text-sm rounded border bg-white shadow-sm hover:bg-gray-50">🐍 Snake ×2</button>
       </div>
       <div
         ref={wrapperRef}

@@ -179,31 +179,33 @@ function TeacherCoursesContent(){
   <a href="/dashboard" className="text-sm text-blue-600 hover:underline">🏠 Startseite</a>
       </div>
 
-      {/* Hilfe: Wie funktionieren Kurse und Freigaben? */}
+  {/* Hilfe: Aktualisierte Erläuterung Kurs-Erstellung & Zuordnung */}
       <details className="bg-blue-50 border border-blue-200 text-blue-900 rounded p-4 mb-6 text-sm">
         <summary className="font-semibold cursor-pointer">Wie funktioniert das? (Hilfe)</summary>
         <ul className="list-disc pl-5 mt-2 space-y-1">
-          <li>„Eigene“ zeigt Kurse, die du erstellt hast. „Übernommene“ zeigt Kurse anderer.</li>
-          <li>Ordne Kurse deiner Klasse zu: als <strong>Link</strong> (Original bleibt synchron) oder wandel den Link später in eine <strong>Kopie</strong> um, um Inhalte für die Klasse anzupassen.</li>
-          <li>Unter „Freigaben“ siehst du pro Klasse alle zugeordneten Kurse und kannst den <strong>Zugriff</strong> umschalten: Nur Klassenkurse vs. Alle veröffentlichten Kurse.</li>
-          <li>Ein Kurs ist für Lernende erst sichtbar, wenn er veröffentlicht ist <em>oder</em> als Klassenkopie zugeordnet und freigegeben wurde – abhängig von der Zugriffseinstellung.</li>
-          <li>Lektionen erstellst und bearbeitest du im Kurs-Editor. Unterstützte Typen: Markdown, Multiple Choice, Lückentext, Matching, Ordering, Textantwort, Video, Minigame.</li>
+          <li><strong>Eigene</strong>: Kurse, die du erstellt hast. <strong>Kurse zuordnen</strong>: Andere verfügbare Kurse, die du deiner Klasse hinzufügen kannst.</li>
+          <li>Nutze „Klasse zuordnen“, um einen Kurs zu einer Klasse hinzuzufügen. Standard: <strong>Link</strong> (du siehst spätere Änderungen am Original). Du kannst später eine Kopie erzeugen und Inhalte speziell für die Klasse anpassen.</li>
+          <li>Im Tab „Klassenkurse verwalten“ stellst du für eine Klasse die Sichtbarkeit ein (Nur Klassenkurse vs. Alle veröffentlichten Kurse) und siehst alle zugeordneten Kurse.</li>
+          <li>Sichtbarkeit für Lernende: Veröffentlicht oder als Klassenkopie zugeordnet (abhängig von der gewählten Zugriffseinstellung der Klasse).</li>
+          <li>Lektionen-Typen: Markdown, Multiple Choice, Lückentext, Matching, Ordering, Textantwort, Video, Minigame.</li>
+          <li>Beim Minigame wählen Lernende selbst Snake, Autospiel, Flugzeugspiel, PacMan oder Space Impact.</li>
+          <li>Standalone-Übungen (Autor-Bereich) kannst du später einem Kurs hinzufügen oder als Übungs-Pool lassen.</li>
         </ul>
-  <div className="mt-2 text-xs text-blue-800">Hinweis: Bei „Minigame“ wählen Lernende die Spielform (Snake, Autospiel, Flugzeugspiel, PacMan oder Space Impact). Standalone-Übungen ohne Kurs kannst du im Autor-Bereich anlegen und später einem Kurs hinzufügen.</div>
+        <div className="mt-2 text-xs text-blue-800">Tipp: Erstelle zunächst einen Kurs mit Grundstruktur (Einführungslektion), ordne ihn einer Klasse zu und erweitere dann schrittweise.</div>
       </details>
 
       {/* Tabs */}
       <div className="flex gap-6 border-b border-gray-200 mb-6 text-sm">
         <button onClick={()=>changeTab('eigene')} className={"pb-2 -mb-px border-b-2 "+(tab==='eigene'?'border-blue-600 font-semibold text-blue-700':'border-transparent text-gray-500 hover:text-gray-800')}>Eigene</button>
-        <button onClick={()=>changeTab('uebernommen')} className={"pb-2 -mb-px border-b-2 "+(tab==='uebernommen'?'border-blue-600 font-semibold text-blue-700':'border-transparent text-gray-500 hover:text-gray-800')}>Übernommene</button>
-        <button onClick={()=>changeTab('freigaben')} className={"pb-2 -mb-px border-b-2 "+(tab==='freigaben'?'border-blue-600 font-semibold text-blue-700':'border-transparent text-gray-500 hover:text-gray-800')}>Freigaben</button>
+    <button onClick={()=>changeTab('uebernommen')} className={"pb-2 -mb-px border-b-2 "+(tab==='uebernommen'?'border-blue-600 font-semibold text-blue-700':'border-transparent text-gray-500 hover:text-gray-800')}>Kurse zuordnen</button>
+  <button onClick={()=>changeTab('freigaben')} className={"pb-2 -mb-px border-b-2 "+(tab==='freigaben'?'border-blue-600 font-semibold text-blue-700':'border-transparent text-gray-500 hover:text-gray-800')}>Klassenkurse verwalten</button>
         <button onClick={()=>changeTab('medien')} className={"pb-2 -mb-px border-b-2 "+(tab==='medien'?'border-blue-600 font-semibold text-blue-700':'border-transparent text-gray-500 hover:text-gray-800')}>Medien</button>
       </div>
 
       {(tab==='eigene' || tab==='uebernommen') && (
         <section>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">{tab==='eigene' ? 'Eigene Kurse' : 'Übernommene Kurse'}</h2>
+            <h2 className="text-xl font-bold">{tab==='eigene' ? 'Eigene Kurse' : 'Kurse zuordnen'}</h2>
             <button onClick={load} disabled={loading} className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 disabled:opacity-50">{loading?'⏳':'⟲'}</button>
           </div>
           {tab==='eigene' && (
@@ -318,7 +320,7 @@ function TeacherCoursesContent(){
         <section className="space-y-4">
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-bold">Freigaben</h2>
+              <h2 className="text-xl font-bold">Kurs Klassen zuordnen</h2>
               <select value={selectedFreigabeClassId} onChange={e=>setSelectedFreigabeClassId(e.target.value)} className="border rounded px-2 py-1 text-sm">
                 {classes.map(c=> <option key={c._id} value={c._id}>{c.name}</option>)}
               </select>

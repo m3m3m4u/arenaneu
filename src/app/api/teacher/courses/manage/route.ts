@@ -6,6 +6,7 @@ import User from '@/models/User';
 import TeacherClass from '@/models/TeacherClass';
 import Course from '@/models/Course';
 import ClassCourseAccess from '@/models/ClassCourseAccess';
+import ExerciseAssignment, { IExerciseAssignment } from '../../../../../models/ExerciseAssignment'; // neues Modell (Mapping Klasse->Übung) (relativer Pfad wegen Auflösungsproblem)
 import Lesson from '@/models/Lesson';
 import { isValidObjectId } from 'mongoose';
 
@@ -30,6 +31,11 @@ export async function GET(req: Request){
   const classIds = classes.map(c=>String(c._id));
   const accesses = await ClassCourseAccess.find({ class: { $in: classIds } }).lean();
   const courseIds = accesses.map(a=>String(a.course));
+  // Exercises pro Klasse
+  const exerciseAssignments: IExerciseAssignment[] = await ExerciseAssignment.find({ class: { $in: classIds } }).lean();
+  const lessonIds = exerciseAssignments.map(e => String(e.lesson));
+  const lessons = lessonIds.length? await Lesson.find({ _id: { $in: lessonIds } }, '_id title type category createdAt').lean():[];
+  const lessonMap = new Map(lessons.map(l=>[String(l._id), l]));
   const courses = courseIds.length>0 ? await Course.find({ _id: { $in: courseIds } }, '_id title description category tags isPublished progressionMode createdAt updatedAt').lean() : [];
   const courseMap = new Map(courses.map(c=>[String(c._id), c]));
   const byClass: Record<string, any[]> = {};
@@ -40,7 +46,17 @@ export async function GET(req: Request){
     if(!byClass[cid]) byClass[cid] = [];
     byClass[cid].push({ course: { ...course, _id: String(course._id) }, mode: a.mode, accessId: String((a as any)._id) });
   });
-  return NextResponse.json({ success:true, classes: classes.map(c=>({ _id:String(c._id), name:c.name, courseAccess: (c as any).courseAccess||'class', courses: byClass[String(c._id)]||[] })) });
+  // Übungen gruppieren
+  const exercisesByClass: Record<string, any[]> = {};
+  exerciseAssignments.forEach((a: IExerciseAssignment) => {
+    const lid = String(a.lesson);
+    const clsId = String(a.class);
+    const l = lessonMap.get(lid);
+    if(!l) return;
+    if(!exercisesByClass[clsId]) exercisesByClass[clsId] = [];
+    exercisesByClass[clsId].push({ lesson: { ...l, _id: String(l._id) }, assignmentId: String((a as any)._id) });
+  });
+  return NextResponse.json({ success:true, classes: classes.map(c=>({ _id:String(c._id), name:c.name, courseAccess: (c as any).courseAccess||'class', courses: byClass[String(c._id)]||[], exercises: exercisesByClass[String(c._id)]||[] })) });
 }
 
 export async function POST(req: Request){
@@ -70,6 +86,29 @@ export async function POST(req: Request){
       if(e?.code===11000) return NextResponse.json({ success:true, already:true });
       return NextResponse.json({ success:false, error:'Anlegen fehlgeschlagen', message: String(e?.message||e) }, { status:500 });
     }
+  }
+  if(action==='enableExercise') {
+    const { classId, lessonId } = body as any;
+    if(!isValidObjectId(classId) || !isValidObjectId(lessonId)) return NextResponse.json({ success:false, error:'Ungültige IDs' }, { status:400 });
+    const cls = await TeacherClass.findOne({ _id: classId, teacher: teacherId }, '_id');
+    if(!cls) return NextResponse.json({ success:false, error:'Klasse nicht gefunden' }, { status:404 });
+    const lesson = await Lesson.findById(lessonId, '_id isExercise');
+    if(!lesson || !lesson.isExercise) return NextResponse.json({ success:false, error:'Übung nicht gefunden' }, { status:404 });
+    try {
+      const a = await ExerciseAssignment.create({ class: cls._id, lesson: lesson._id, assignedBy: teacherId });
+      return NextResponse.json({ success:true, assignmentId: String(a._id) });
+    } catch(e:any){
+      if(e?.code===11000) return NextResponse.json({ success:true, already:true });
+      return NextResponse.json({ success:false, error:'Zuordnung fehlgeschlagen' }, { status:500 });
+    }
+  }
+  if(action==='disableExercise') {
+    const { classId, lessonId } = body as any;
+    if(!isValidObjectId(classId) || !isValidObjectId(lessonId)) return NextResponse.json({ success:false, error:'Ungültige IDs' }, { status:400 });
+    const cls = await TeacherClass.findOne({ _id: classId, teacher: teacherId }, '_id');
+    if(!cls) return NextResponse.json({ success:false, error:'Klasse nicht gefunden' }, { status:404 });
+    await ExerciseAssignment.deleteOne({ class: classId, lesson: lessonId });
+    return NextResponse.json({ success:true });
   }
   if(action==='copy'){
     // Erwartet: { classId, sourceCourseId, title? }

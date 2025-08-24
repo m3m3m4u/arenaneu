@@ -10,6 +10,14 @@ export default function GlobalFooter(){
           <Link href="/impressum" className="hover:text-gray-900">Impressum</Link>
           <Link href="/datenschutz" className="hover:text-gray-900">Datenschutz</Link>
           <Link href="/about" className="hover:text-gray-900">Über LernArena</Link>
+          <button
+            type="button"
+            onClick={() => {
+              try { window.dispatchEvent(new Event('open-cookie-consent')); } catch {}
+            }}
+            className="hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
+            aria-label="Cookie-Einstellungen öffnen"
+          >Cookies</button>
         </nav>
         <span className="text-[10px] text-gray-400">© {new Date().getFullYear()} LernArena.org</span>
       </div>

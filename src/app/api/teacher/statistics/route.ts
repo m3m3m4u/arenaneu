@@ -94,6 +94,23 @@ export async function GET(req: Request) {
     };
   });
 
+  // Filter: bei mode=all nur Kurse behalten, in denen mindestens ein Learner >=1 Lektion abgeschlossen hat
+  if (mode === 'all') {
+    const learnerCompletedSets = resultLearners.map(l => new Set(normalizeCompleted((learners.find(u=> (u as any).username === l.username) as any)?.completedLessons)));
+    const keepCourseIds = new Set<string>();
+    for (let i=0;i<resultLearners.length;i++) {
+      const completedSet = learnerCompletedSets[i];
+      if (!completedSet || !completedSet.size) continue;
+      for (const cid of courseIds) {
+        const lessonIds = lessonsByCourse[cid] || [];
+        if (lessonIds.some(id => completedSet.has(id))) {
+          keepCourseIds.add(cid);
+        }
+      }
+    }
+    courses = courses.filter(c => keepCourseIds.has(String((c as any)._id)));
+  }
+
   return NextResponse.json({
     success: true,
     class: { _id: String((cls as any)._id), name: (cls as any).name },

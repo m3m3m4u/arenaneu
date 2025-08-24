@@ -33,7 +33,7 @@ export default function GlobalHeader(){
   ];
   const teacherExtras = [
     { href: '/teacher', label: 'Klassenverwaltung' },
-    { href: '/teacher/kurse', label: 'Kurse zuordnen' },
+  { href: '/teacher/kurse', label: 'Kurse erstellen/zuordnen' },
     { href: '/teacher/statistik', label: 'Statistik' },
   ];
   const authorExtras = [ { href: '/autor', label: 'Autor' } ];

@@ -6,6 +6,7 @@ import CustomSessionProvider from "./SessionProvider";
 import { ToastProvider } from "@/components/shared/ToastProvider";
 import HeaderGate from "@/components/shared/HeaderGate";
 import GlobalFooter from "../components/shared/GlobalFooter";
+import CookieConsent from "@/components/legal/CookieConsent";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,6 +39,7 @@ export default function RootLayout({
             <HeaderGate />
             <main className="flex-1 w-full">{children}</main>
             <GlobalFooter />
+            <CookieConsent />
           </ToastProvider>
         </CustomSessionProvider>
       </body>

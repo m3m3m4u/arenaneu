@@ -10,14 +10,22 @@ const getStore = () => {
   if (!g.__adminRateLimiter) g.__adminRateLimiter = new Map<string, Bucket>();
   return g.__adminRateLimiter as Map<string, Bucket>;
 };
+// Separater Store für Auth (niedrigere Limits)
+const getAuthStore = () => {
+  const g = globalThis as any;
+  if (!g.__authRateLimiter) g.__authRateLimiter = new Map<string, Bucket>();
+  return g.__authRateLimiter as Map<string, Bucket>;
+};
 function rateLimit(key: string) {
-  const store = getStore();
+  return genericRateLimit(getStore(), key, Number(process.env.ADMIN_RATE_LIMIT_POINTS || '60'), Number(process.env.ADMIN_RATE_LIMIT_WINDOW_MS || '60000'));
+}
+function rateLimitAuth(key: string) {
+  return genericRateLimit(getAuthStore(), key, Number(process.env.AUTH_RATE_LIMIT_POINTS || '10'), Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || '300000'));
+}
+function genericRateLimit(store: Map<string, Bucket>, key: string, limit: number, windowMs: number) {
   const now = Date.now();
-  const limit = Number(process.env.ADMIN_RATE_LIMIT_POINTS || '60');
-  const windowMs = Number(process.env.ADMIN_RATE_LIMIT_WINDOW_MS || '60000');
   let b = store.get(key);
   if (!b) { b = { tokens: limit, updated: now }; store.set(key, b); }
-  // Refill
   const elapsed = now - b.updated;
   if (elapsed > 0) {
     const refill = (elapsed / windowMs) * limit;
@@ -59,6 +67,20 @@ export async function middleware(req: any) {
         }
       }
     } catch { /* ignore tracking errors */ }
+    // Rate Limiting für Auth (Credentials Login / Registrierung) – härtere Limits
+    if (pathname.startsWith('/api/auth/') && req.method === 'POST') {
+      const ip = req.headers.get?.('x-forwarded-for')?.split(',')[0]?.trim() || req.ip || 'anon';
+      const rl = rateLimitAuth(`auth:${ip}`);
+      if (!rl.allowed) {
+        return new NextResponse(JSON.stringify({ error: 'Zu viele Versuche – bitte kurz warten.' }), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(rl.retryAfter || 60)
+          }
+        });
+      }
+    }
   }
   // Admin-Auth nicht mehr in Middleware (Edge) – stattdessen nur im Route-Handler (Node) prüfen.
   return NextResponse.next();
