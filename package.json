@@ -12,6 +12,7 @@
     "start": "next start",
     "lint": "next lint",
     "init:author": "tsx src/scripts/initAuthor.ts",
+  "make:admin": "tsx src/scripts/makeAdmin.ts",
     "typecheck": "tsc --noEmit",
     "analyze": "cross-env ANALYZE=1 next build",
     "ci": "npm run lint && npm run typecheck && npm run build",
