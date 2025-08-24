@@ -43,7 +43,28 @@ export default function DashboardPage() {
         const res = await fetch('/api/buttons', { cache: 'no-store' });
         const d = await res.json();
         if (res.ok && d?.items) {
-          setButtons(d.items.map((it: any) => ({ ...it, href: mapHref(it.name) })));
+          const role = (session?.user as any)?.role;
+          const raw = d.items.map((it: any) => ({ ...it, href: mapHref(it.name) }));
+          const filtered = raw.filter((btn: any) => {
+            const h = btn.href;
+            if (!h) return false; // ohne Ziel nicht anzeigen
+            // Lernende: nur lernen, üben, arena, dashboard, messages/guest falls vorhanden
+            if (role === 'learner') {
+              return ['/lernen','/ueben','/arena','/dashboard','/guest'].some(p=>h.startsWith(p));
+            }
+            // Teacher: keine Autor- oder Admin-Bereiche anzeigen
+            if (role === 'teacher') {
+              if (h.startsWith('/admin') || h.startsWith('/autor')) return false;
+              return true;
+            }
+            // Pending Rollen wie learner behandeln (nur Basiszugriff)
+            if (role === 'pending-author' || role === 'pending-teacher') {
+              return ['/lernen','/ueben','/arena','/dashboard','/guest'].some(p=>h.startsWith(p));
+            }
+            // Default (admin, author etc.): alles lassen
+            return true;
+          });
+          setButtons(filtered);
         } else {
           setButtons([]);
         }
@@ -51,7 +72,7 @@ export default function DashboardPage() {
         setButtons([]);
       }
     })();
-  }, []);
+  }, [session?.user]);
 
   useEffect(() => {
     const fetchOverview = async () => {
