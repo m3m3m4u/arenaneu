@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   await dbConnect();
   const { searchParams } = new URL(req.url);
   const username = searchParams.get("username");
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ user });
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PATCH(req: Request) {
   try {
     await dbConnect();
     const body = await req.json();

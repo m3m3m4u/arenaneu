@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import AuditLog from '@/models/AuditLog';
 
 // GET /api/admin/audit?action=lesson.create&user=Kopernikus&limit=50
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   await dbConnect();
   const url = new URL(req.url);
   const action = url.searchParams.get('action') || undefined;
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST minimal: { action, user, targetType, targetId, courseId, meta }
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   await dbConnect();
   const body = await req.json();
   const { action, user, targetType, targetId, courseId, meta } = body || {};

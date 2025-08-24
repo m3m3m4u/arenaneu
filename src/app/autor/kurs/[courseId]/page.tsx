@@ -20,6 +20,42 @@ type LessonListItem = {
   content?: Record<string, unknown>;
 };
 
+// Ermittelt eine kompakte Zähl-Info für die Lektion, je nach Typ
+function getLessonCounter(lesson: LessonListItem): string | null {
+  const t = (lesson.type === 'snake' ? 'minigame' : lesson.type) as string;
+  const c: any = lesson.content || {};
+  // Helper: robuste Array-Länge
+  const len = (v: any) => (Array.isArray(v) ? v.length : 0);
+
+  if (t === 'single-choice' || t === 'multiple-choice') {
+    const n = len(lesson.questions) || len(c?.questions);
+    return `❓ ${n} Fragen`;
+  }
+  if (t === 'minigame') {
+  // Minigame: Anzahl Blöcke = Fragenanzahl. Import kann content.blocks (Editor) ODER content.questions (Import-Parsen) liefern.
+  const n = len(c?.blocks) || (Array.isArray(c?.questions) ? c.questions.length : 0) || len(lesson.questions);
+    return `❓ ${n} Fragen`;
+  }
+  if (t === 'matching') {
+    // Matching: Paare aus content.pairs; Fallback: Summe correctAnswers je Frage
+    let n = len(c?.pairs);
+    if (!n && Array.isArray(lesson.questions)) {
+      try {
+        n = (lesson.questions as any[]).reduce((acc, q) => {
+          const ca = (q as any)?.correctAnswers;
+          return acc + (Array.isArray(ca) ? ca.length : 0);
+        }, 0);
+      } catch {/* ignore */}
+    }
+    return `🧩 ${n} Paare`;
+  }
+  if (t === 'memory') {
+    const n = len(c?.pairs);
+    return `🧩 ${n} Paare`;
+  }
+  return null;
+}
+
 export default function CourseEditorPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -228,12 +264,12 @@ function LessonsOverviewTab({ courseId, onDelete, onLessonsCountChange }: { cour
                   <div>
                     <h3 className="font-semibold">{lesson.title}</h3>
                     <p className="text-sm text-gray-600 mb-1">
-                      {lesson.description || (lesson.questions && `${(lesson.questions as any[]).length} Fragen`) || (lesson.type === 'markdown' ? 'Markdown-Text' : 'Single Choice Quiz')}
+                      {lesson.description || getLessonCounter(lesson) || (lesson.type === 'markdown' ? 'Markdown-Text' : getLessonTypeName(lesson.type))}
                     </p>
                     <div className="flex flex-wrap gap-3 text-sm text-gray-600 items-center">
                       <span>{getLessonTypeIcon(lesson.type)} {getLessonTypeName(lesson.type)}</span>
                       <span>📅 {new Date(lesson.createdAt || (lesson as any).addedAt || Date.now()).toLocaleDateString('de-DE')}</span>
-                      {Array.isArray(lesson.questions) && <span>❓ {(lesson.questions as any[]).length} Fragen</span>}
+                      {getLessonCounter(lesson) && <span>{getLessonCounter(lesson)}</span>}
                       <span className="flex items-center gap-1">🏷️ {(lesson as any).category || '–'}</span>
                     </div>
                   </div>
@@ -354,7 +390,7 @@ function ExistingLessonsTab({ courseId, onLessonAdded }: { courseId: string; onL
           <div key={l._id || l.id} className="border rounded p-4 bg-white flex justify-between items-start">
             <div>
               <h3 className="font-semibold flex items-center gap-2">{getLessonTypeIcon(l.type)} {l.title}</h3>
-              {Array.isArray(l.questions) && <p className="text-xs text-gray-500">{(l.questions as any[]).length} Fragen</p>}
+              {getLessonCounter(l) && <p className="text-xs text-gray-500">{getLessonCounter(l)}</p>}
               {l.courseIds && Array.isArray(l.courseIds) && (
                 <p className="text-xs text-gray-400">Verwendet in {(l.courseIds?.length) || 1} Kurs(en)</p>
               )}

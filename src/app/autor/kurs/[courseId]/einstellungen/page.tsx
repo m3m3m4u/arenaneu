@@ -13,6 +13,7 @@ interface CourseSettings {
   category: string;
   isPublic: boolean;
   progressionMode: 'linear' | 'free';
+  reviewStatus?: string;
 }
 
 export default function CourseSettingsPage() {
@@ -26,6 +27,7 @@ export default function CourseSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [reviewInfo, setReviewInfo] = useState<{pending:boolean; approved:boolean}|null>(null);
 
   // neue Version: loadCourse via useCallback und als Dependency nutzen
   const loadCourse = useCallback(async () => {
@@ -41,7 +43,8 @@ export default function CourseSettingsPage() {
           description: mongodbCourse.description,
           category: mongodbCourse.category,
           isPublic: mongodbCourse.isPublished || false,
-          progressionMode: mongodbCourse.progressionMode === 'linear' ? 'linear' : 'free'
+          progressionMode: mongodbCourse.progressionMode === 'linear' ? 'linear' : 'free',
+          reviewStatus: mongodbCourse.reviewStatus || 'none'
         });
       } else {
         setError('Kurs nicht gefunden');
@@ -55,6 +58,14 @@ export default function CourseSettingsPage() {
 
   useEffect(() => {
     void loadCourse();
+    // Review State getrennt laden
+    (async()=>{
+      try {
+        const r = await fetch(`/api/kurs/${courseId}/review-state`);
+        const d = await r.json();
+        if(r.ok && d?.success) setReviewInfo({ pending:d.pending, approved:d.approved }); else setReviewInfo(null);
+      } catch { setReviewInfo(null); }
+    })();
   }, [loadCourse]);
 
   const handleSave = async () => {
@@ -94,7 +105,8 @@ export default function CourseSettingsPage() {
             description: updatedCourse.description,
             category: updatedCourse.category,
             isPublic: updatedCourse.isPublished || false,
-            progressionMode: updatedCourse.progressionMode === 'linear' ? 'linear' : 'free'
+            progressionMode: updatedCourse.progressionMode === 'linear' ? 'linear' : 'free',
+            reviewStatus: updatedCourse.reviewStatus || 'none'
           });
         }
       } else {
@@ -249,23 +261,25 @@ export default function CourseSettingsPage() {
               </div>
             </div>
 
-            {/* Öffentlich */}
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={course.isPublic}
-                  onChange={(e) => handleInputChange('isPublic', e.target.checked)}
-                  disabled={inTeacher}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">
-                  Kurs öffentlich verfügbar machen
-                </span>
-                {inTeacher && (
-                  <span className="ml-3 text-xs text-gray-500">Nur Autor/Admin darf veröffentlichen</span>
-                )}
-              </label>
+            {/* Review Workflow */}
+            <div className="space-y-2">
+              {!inTeacher && (
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={course.isPublic}
+                    onChange={(e) => handleInputChange('isPublic', e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Kurs direkt veröffentlichen</span>
+                </label>
+              )}
+              {inTeacher && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                  {course.reviewStatus === 'pending' && <span>⏳ Kurs steht zur Prüfung durch Admin. Änderungen kannst du trotzdem speichern.</span>}
+                  {course.reviewStatus !== 'pending' && <span>Reiche den Kurs zur Prüfung ein. Nach Freigabe wird er allen angezeigt. <strong>Für dich und deine Klassen ist der Kurs aber ab sofort verfügbar.</strong></span>}
+                </div>
+              )}
             </div>
 
             {/* Speichern Button */}
@@ -277,6 +291,34 @@ export default function CourseSettingsPage() {
                 >
                   Abbrechen
                 </Link>
+                {inTeacher && (
+                  <div className="flex flex-col gap-2 mr-auto text-sm">
+                    {reviewInfo?.approved && (
+                      <div className="px-3 py-2 rounded border border-green-300 bg-green-50 text-green-800">✅ Kurs ist für alle Nutzer veröffentlicht.</div>
+                    )}
+                    {!reviewInfo?.approved && reviewInfo?.pending && (
+                      <div className="px-3 py-2 rounded border border-purple-300 bg-purple-50 text-purple-800">⏳ Kurs zur Veröffentlichung eingereicht. Änderungen hier betreffen dein Original; erneut einreichen für Aktualisierung.</div>
+                    )}
+                    {!reviewInfo?.approved && !reviewInfo?.pending && (
+                      <button
+                        disabled={saving}
+                        onClick={async ()=>{
+                          setSaving(true); setError(''); setSuccess('');
+                          try {
+                            const res = await fetch(`/api/kurs/${courseId}/submit-review`, { method:'POST' });
+                            const d = await res.json();
+                            if(res.ok && d?.success){
+                              setSuccess('Kurs zur Veröffentlichung eingereicht');
+                              setReviewInfo({ pending:true, approved:false });
+                            } else setError(d?.error||'Einreichen fehlgeschlagen');
+                          } catch { setError('Netzwerkfehler beim Einreichen'); } finally { setSaving(false); }
+                        }}
+                        className="px-4 py-2 bg-purple-600 text-white rounded disabled:opacity-50"
+                      >Kurs zur Veröffentlichung einreichen</button>
+                    )}
+                    {reviewInfo?.pending && !reviewInfo?.approved && <p className="text-xs text-purple-700">Status: wartet auf Prüfung.</p>}
+                  </div>
+                )}
                 <button
                   onClick={handleSave}
                   disabled={saving}

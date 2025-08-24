@@ -1,10 +1,11 @@
 
-import type { Metadata } from "next";
+// Metadata Typ entfernt (vereinfachtes Typing ohne Next Types)
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import CustomSessionProvider from "./SessionProvider";
 import { ToastProvider } from "@/components/shared/ToastProvider";
-import GlobalHeader from "@/components/shared/GlobalHeader";
+import HeaderGate from "@/components/shared/HeaderGate";
+import GlobalFooter from "../components/shared/GlobalFooter";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +17,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "LernArena - Interaktive Lernplattform",
   description: "Eine moderne Lernplattform mit interaktiven Kursen und Quizzes",
 };
@@ -31,11 +32,12 @@ export default function RootLayout({
       <head>
         <meta charSet="UTF-8" />
       </head>
-  <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans min-h-screen flex flex-col`}>        
         <CustomSessionProvider>
           <ToastProvider>
-            <GlobalHeader />
-            {children}
+            <HeaderGate />
+            <main className="flex-1 w-full">{children}</main>
+            <GlobalFooter />
           </ToastProvider>
         </CustomSessionProvider>
       </body>

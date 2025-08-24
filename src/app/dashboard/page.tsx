@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -19,27 +20,84 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [unread, setUnread] = useState<number>(0);
   const [lastLink, setLastLink] = useState<{ courseId?: string; lessonId?: string } | null>(null);
+  // Buttons aus public/media/buttons (via /api/buttons)
+  type BtnItem = { src: string; name: string; href?: string; downSrc?: string; upSrc?: string };
+  const [buttons, setButtons] = useState<BtnItem[]>([]);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      if (!session?.user?.username) return;
+    const mapHref = (name: string): string | undefined => {
+      const k = name.toLowerCase();
+      if (k.includes('autor')) return '/autor';
+      if (k.includes('teacher') || k.includes('lehrer')) return '/teacher';
+      if (k.includes('lern') || k.includes('kurs')) return '/lernen';
+      if (k.includes('ueb') || k.includes('übung') || k.includes('uebung')) return '/ueben';
+  if (k.includes('arena')) return '/arena';
+      if (k.includes('medien')) return '/autor?tab=medien';
+      if (k.includes('dashboard')) return '/dashboard';
+      if (k.includes('admin')) return '/admin/users';
+      if (k.includes('gast') || k.includes('guest')) return '/guest';
+      return undefined;
+    };
+    (async () => {
       try {
-        setLoadingUser(true);
-        const res = await fetch("/api/user?username=" + encodeURIComponent(session.user.username));
-        const data = await res.json();
-        if (res.ok && data.user) {
-          setUser(data.user as DashboardUser);
-          setError(null);
+        const res = await fetch('/api/buttons', { cache: 'no-store' });
+        const d = await res.json();
+        if (res.ok && d?.items) {
+          const role = (session?.user as any)?.role;
+          const raw = d.items.map((it: any) => ({ ...it, href: mapHref(it.name) }));
+          const filtered = raw.filter((btn: any) => {
+            const h = btn.href;
+            if (!h) return false; // ohne Ziel nicht anzeigen
+            // Lernende: nur lernen, üben, arena, dashboard, messages/guest falls vorhanden
+            if (role === 'learner') {
+              return ['/lernen','/ueben','/arena','/dashboard','/guest'].some(p=>h.startsWith(p));
+            }
+            // Teacher: keine Autor- oder Admin-Bereiche anzeigen
+            if (role === 'teacher') {
+              if (h.startsWith('/admin') || h.startsWith('/autor')) return false;
+              return true;
+            }
+            // Pending Rollen wie learner behandeln (nur Basiszugriff)
+            if (role === 'pending-author' || role === 'pending-teacher') {
+              return ['/lernen','/ueben','/arena','/dashboard','/guest'].some(p=>h.startsWith(p));
+            }
+            // Default (admin, author etc.): alles lassen
+            return true;
+          });
+          setButtons(filtered);
         } else {
-          setError(data.error || "Fehler beim Laden der Nutzerdaten");
+          setButtons([]);
         }
       } catch {
-        setError("Netzwerkfehler");
-      } finally {
-        setLoadingUser(false);
+        setButtons([]);
       }
+    })();
+  }, [session?.user]);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      if(!session?.user?.username) return;
+      try {
+        setLoadingUser(true);
+        const res = await fetch('/api/dashboard/overview');
+        if (res.status === 401) return; // redirect handled elsewhere
+        const data = await res.json();
+        if(res.ok && data.success){
+          setUser(data.user as DashboardUser);
+          if(typeof data.unreadCount === 'number') setUnread(data.unreadCount);
+          setError(null);
+        } else {
+          // Fallback: alter Weg, falls Endpoint nicht liefert
+          const res2 = await fetch("/api/user?username=" + encodeURIComponent(session.user.username));
+          const data2 = await res2.json();
+          if (res2.ok && data2.user) { setUser(data2.user as DashboardUser); }
+          else setError(data.error || data2.error || 'Fehler beim Laden');
+        }
+      } catch {
+        setError('Netzwerkfehler');
+      } finally { setLoadingUser(false); }
     };
-    void fetchUser();
+    void fetchOverview();
   }, [session?.user?.username]);
 
   // Letzte Aktivität (aus localStorage)
@@ -54,7 +112,10 @@ export default function DashboardPage() {
 
   // Ungelesene Nachrichten (eingehend) zählen und anzeigen
   useEffect(() => {
-    let timer: any;
+  let timer: any;
+  let hidden = false;
+  function visibilityHandler(){ hidden = document.hidden; }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', visibilityHandler);
     async function loadUnread(){
       try{
         const res = await fetch('/api/messages/unread');
@@ -64,11 +125,16 @@ export default function DashboardPage() {
     }
     const r = (session?.user as any)?.role;
     const allowed = r==='teacher' || (r==='learner' && (user as any)?.ownerTeacher);
-    if(status==='authenticated' && allowed){
-      void loadUnread();
-      timer = setInterval(loadUnread, 30000);
-    }
-    return () => { if(timer) clearInterval(timer); };
+      if(status==='authenticated' && allowed){
+        // Poll erst nach initialem Overview (unread evtl. schon gesetzt)
+  const base = Number(process.env.NEXT_PUBLIC_UNREAD_POLL_MS||'60000');
+  const intervalMs = Math.max(120000, base);
+  // Zufälliger Start-Offset (0..intervalMs*0.3) verteilt erste Abfragen, verhindert thundering herd
+  const jitter = Math.floor(Math.random()*intervalMs*0.3);
+  setTimeout(()=>{ if(!hidden) void loadUnread(); }, 500 + jitter);
+  timer = setInterval(()=>{ if(!hidden) void loadUnread(); }, intervalMs + Math.floor(Math.random()*intervalMs*0.1));
+      }
+      return () => { if(timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', visibilityHandler); };
   }, [status, (session?.user as any)?.role, (user as any)?.ownerTeacher]);
 
   useEffect(() => {
@@ -144,34 +210,33 @@ export default function DashboardPage() {
         {/* Kachel-Spalte */}
         <section className="bg-white rounded shadow p-6">
           <h2 className="text-2xl font-bold mb-4">Schnellzugriff</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <a href="/lernen" className="bg-blue-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-blue-700 transition">📚 Kurse</a>
-            <a href="/ueben" className="bg-green-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-green-700 transition">✏️ Übungen</a>
-            <a href="/arena" className="bg-purple-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-purple-700 transition">🏆 Arena</a>
-            {(['author','admin'] as string[]).includes((session?.user as any)?.role) && (
-              <a href="/autor" className="bg-orange-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-orange-700 transition">🛠️ Autor</a>
-            )}
-            {(session && (session?.user as any)?.role==='teacher') && (
-              <>
-                <a href="/teacher" className="bg-indigo-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-indigo-700 transition">👩‍🏫 Klasse verwalten</a>
-                <a href="/teacher/kurse" className="bg-indigo-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-indigo-700 transition">📚 Kurse zuordnen</a>
-              </>
-            )}
-            {(session?.user as any)?.role === 'admin' && (
-              <>
-                <a href="/admin/users" className="bg-red-600 text-white py-3 px-4 rounded text-center font-semibold hover:bg-red-700 transition">🔐 Admin</a>
-                <a href="/guest" className="bg-yellow-500 text-white py-3 px-4 rounded text-center font-semibold hover:bg-yellow-600 transition" title="Gastmodus: Daten werden nur lokal gespeichert">🧪 Gastzugang</a>
-              </>
-            )}
-            {(((session?.user as any)?.role==='teacher') || (((session?.user as any)?.role==='learner') && (user as any)?.ownerTeacher)) && (
-              <a href="/messages" className="relative bg-gray-700 text-white py-3 px-4 rounded text-center font-semibold hover:bg-gray-800 transition" title="Liste: Hintergrund zeigt deinen Lese-Status. Punkt: Orange = Empfänger noch nicht gelesen, Grün = Empfänger hat gelesen.">
-                💬 Nachrichten
-                {unread>0 && (
-                  <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-5 text-center">{unread}</span>
-                )}
-              </a>
-            )}
-          </div>
+          {buttons.length === 0 ? (
+            <div className="text-sm text-gray-500">Keine Buttons gefunden (public/media/buttons).</div>
+          ) : (
+            <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+              {buttons.map((b) => {
+                const defaultSrc = b.downSrc || b.src;
+                const hoverSrc = b.upSrc || b.src;
+                return (
+                  <li key={b.src}>
+                    {b.href ? (
+                      <a href={b.href} className="block group">
+                        <span className="relative block">
+                          <Image src={defaultSrc} alt={b.name} width={640} height={240} className="w-full h-auto object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                          <Image src={hoverSrc} alt={b.name} width={640} height={240} className="w-full h-auto object-contain absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                        </span>
+                      </a>
+                    ) : (
+                      <span className="relative block group">
+                        <Image src={defaultSrc} alt={b.name} width={640} height={240} className="w-full h-auto object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                        <Image src={hoverSrc} alt={b.name} width={640} height={240} className="w-full h-auto object-contain absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       </div>
     </main>

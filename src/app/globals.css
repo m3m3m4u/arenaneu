@@ -45,3 +45,43 @@ body {
   pointer-events: none;
   background: linear-gradient(to left, rgba(0,0,0,0.08), rgba(0,0,0,0));
 }
+
+/* Navigation-Buttons (Bildwechsel up/down) */
+.navigation { width: 420px; }
+.left { float: left; }
+.right { float: right; }
+
+/* Gemeinsame Basis für Button-Klassen */
+.kurse, .arena, .admin, .uebungen, .autor, .gast {
+  width: 210px;
+  line-height: 48px;
+  display: block;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  color: transparent; /* Text ausblenden */
+}
+
+/* Kurse */
+.kurse { background-image: url('/media/buttons/kurseup.png'); }
+.kurse:hover { background-image: url('/media/buttons/kursedown.png'); }
+
+/* Arena */
+.arena { background-image: url('/media/buttons/arenaup.png'); }
+.arena:hover { background-image: url('/media/buttons/arenadown.png'); }
+
+/* Admin */
+.admin { background-image: url('/media/buttons/adminup.png'); }
+.admin:hover { background-image: url('/media/buttons/admindown.png'); }
+
+/* Übungen (Dateien verwenden Umlaut im Namen) */
+.uebungen { background-image: url('/media/buttons/übungenup.png'); }
+.uebungen:hover { background-image: url('/media/buttons/übungendown.png'); }
+
+/* Autor */
+.autor { background-image: url('/media/buttons/autorup.png'); }
+.autor:hover { background-image: url('/media/buttons/autordown.png'); }
+
+/* Gast */
+.gast { background-image: url('/media/buttons/gastup.png'); }
+.gast:hover { background-image: url('/media/buttons/gastdown.png'); }

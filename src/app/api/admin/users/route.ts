@@ -26,15 +26,13 @@ export async function GET(request: Request){
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
     const pageSize = Math.min(200, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20', 10)));
 
-    // Kopernikus wird im JWT zu admin eskaliert; falls DB noch 'author', korrigieren wir das einmalig
-    // Korrektur ggf. einmalig durchfuehren (idempotent)
-    await User.updateOne({ username: 'Kopernikus', role: { $ne: 'admin' } }, { $set: { role: 'admin' } });
+  // Keine automatische Eskalation mehr – Rolle muss explizit in der DB gesetzt sein.
 
     // Wenn keine Suche: Paginierung und Total direkt in der DB (performanter)
     if(!q){
       const total = await User.countDocuments({});
       const pagedRaw = await User
-        .find({}, 'username name role email ownerTeacher class createdAt updatedAt')
+        .find({}, 'username name role email ownerTeacher class createdAt updatedAt lastOnline')
         .populate('ownerTeacher', 'username name')
         .populate('class', 'name')
         .sort({ createdAt:-1 })
@@ -44,9 +42,10 @@ export async function GET(request: Request){
       const users = pagedRaw.map((u:any)=>({
         username: u.username,
         name: u.name,
-        role: u.username === 'Kopernikus' ? 'admin' : u.role,
+  role: u.role,
         email: u.email,
         createdAt: u.createdAt,
+        lastOnline: u.lastOnline || u.updatedAt || u.createdAt,
         ownerTeacherUsername: (u as any).ownerTeacher?.username,
         ownerTeacherName: (u as any).ownerTeacher?.name,
         className: (u as any).class?.name,
@@ -56,7 +55,7 @@ export async function GET(request: Request){
 
     // Mit Suche: aktuelles Verhalten beibehalten (Filter auch ueber populate-Felder)
     const usersRaw = await User
-      .find({}, 'username name role email ownerTeacher class createdAt updatedAt')
+      .find({}, 'username name role email ownerTeacher class createdAt updatedAt lastOnline')
       .populate('ownerTeacher', 'username name')
       .populate('class', 'name')
       .sort({ createdAt:-1 })
@@ -73,9 +72,10 @@ export async function GET(request: Request){
     const users = paged.map((u:any)=>({
       username: u.username,
       name: u.name,
-      role: u.username === 'Kopernikus' ? 'admin' : u.role,
+  role: u.role,
       email: u.email,
       createdAt: u.createdAt,
+      lastOnline: u.lastOnline || u.updatedAt || u.createdAt,
       ownerTeacherUsername: (u as any).ownerTeacher?.username,
       ownerTeacherName: (u as any).ownerTeacher?.name,
       className: (u as any).class?.name,

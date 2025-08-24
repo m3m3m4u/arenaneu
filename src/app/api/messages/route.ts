@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import dbConnect from '@/lib/db';
@@ -8,7 +8,7 @@ import Message from '@/models/Message';
 import mongoose, { isValidObjectId } from 'mongoose';
 
 // GET: Eigene Nachrichten (für Learner: von Owner-Teacher und an mich; für Teacher: an/ von eigenen Lernenden/ Klassen)
-export async function GET(req: NextRequest){
+export async function GET(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:'DB '+(e?.message||e) }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const meRole = (session?.user as any)?.role;
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest){
 
 // POST: Nachricht senden
 // Learner -> Teacher (subject, body) | Teacher -> User (recipientUser) oder -> Class (recipientClass)
-export async function POST(req: NextRequest){
+export async function POST(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:'DB '+(e?.message||e) }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role;
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest){
 }
 
 // PATCH: Nachricht als gelesen/ungelesen markieren
-export async function PATCH(req: NextRequest){
+export async function PATCH(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:'DB '+(e?.message||e) }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const meId = (session?.user as any)?.id;
@@ -201,7 +201,7 @@ export async function PATCH(req: NextRequest){
 }
 
 // DELETE: Nachricht verstecken (soft delete für den aktuellen Nutzer)
-export async function DELETE(req: NextRequest){
+export async function DELETE(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:'DB '+(e?.message||e) }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const meId = (session?.user as any)?.id;
@@ -219,7 +219,7 @@ export async function DELETE(req: NextRequest){
 }
 
 // RESTORE: Nachricht aus dem Papierkorb wiederherstellen
-export async function PUT(req: NextRequest){
+export async function PUT(req: Request){
   try{ await dbConnect(); } catch(e:any){ return NextResponse.json({ success:false, error:'DB '+(e?.message||e) }, { status:500 }); }
   const session = await getServerSession(authOptions);
   const meId = (session?.user as any)?.id;

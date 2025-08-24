@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import dbConnect from '@/lib/db';
@@ -24,7 +24,7 @@ function normalizeCompleted(raw: unknown): string[] {
   return Array.from(out);
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
     await dbConnect();
   } catch (e: any) {

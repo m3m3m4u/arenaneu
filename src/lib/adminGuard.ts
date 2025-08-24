@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
+import { getToken } from 'next-auth/jwt';
 
 type RateBucket = {
   tokens: number;
@@ -26,14 +25,14 @@ export async function isAdminRequest(request: Request): Promise<boolean> {
     const headerKey = request.headers.get('x-api-key')?.trim();
     if (headerKey && headerKey === apiKey) return true;
   }
-  // Session prüfen
+  // Direkt JWT token auswerten
   try {
-  const session = await getServerSession(authOptions);
-  const role = session?.user?.role;
-    return role === 'admin';
-  } catch {
+    const token = await getToken({ req: request as any });
+    if (!token || typeof token !== 'object') return false;
+    const role = (token as any).role as string | undefined;
+    if (role === 'admin') return true;
     return false;
-  }
+  } catch { return false; }
 }
 
 export function rateLimit(request: Request, key: string): boolean {

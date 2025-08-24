@@ -50,10 +50,10 @@ function extractYouTubeIdClient(input: string): string | null {
 function NeueLektionPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const typeRaw = searchParams.get("type") || "text";
+  const typeRaw = (searchParams && (searchParams as any).get ? (searchParams as any).get('type') : undefined) || 'text';
   // Legacy-Alias: snake => minigame (UI konsolidieren)
   const type = typeRaw === 'snake' ? 'minigame' : typeRaw;
-  const courseId = searchParams.get("courseId");
+  const courseId = (searchParams && (searchParams as any).get ? (searchParams as any).get('courseId') : undefined);
   const pathname = usePathname();
   const inTeacher = pathname?.startsWith('/teacher/');
   
@@ -550,7 +550,7 @@ function SingleChoiceForm({ lessonData: _lessonData, setLessonData: _setLessonDa
 }) {
   // Direkt weiterleiten zum spezialisierten Editor
   const sp = useSearchParams();
-  const cid = sp.get("courseId");
+  const cid = (sp && typeof (sp as any).get === 'function' ? (sp as any).get('courseId') : undefined);
   const pathname = usePathname();
   const inTeacher = pathname?.startsWith('/teacher/');
   const router = useRouter();

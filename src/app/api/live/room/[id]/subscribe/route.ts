@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+// NextRequest Typ entfernt
 import { subscribe, getRoom } from '../../../store';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }): Promise<Response> {
+export async function GET(req: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await context.params;
   if(!id){
     return new Response('Not found', { status: 404 });

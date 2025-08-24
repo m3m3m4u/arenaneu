@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Lesson from "@/models/Lesson";
 import Course from "@/models/Course";
@@ -10,7 +10,7 @@ import { parseLueckentext } from '@/lib/lueckentext';
 import AuditLog from '@/models/AuditLog';
 
 export async function GET(
-  _request: NextRequest,
+  _request: Request,
   context: { params: Promise<{ courseId: string; lessonId: string }> }
 ) {
   try {
@@ -40,7 +40,7 @@ export async function GET(
 }
 
 export async function PUT(
-  request: NextRequest,
+  request: Request,
   context: { params: Promise<{ courseId: string; lessonId: string }> }
 ) {
   try {
@@ -407,7 +407,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  _request: Request,
   context: { params: Promise<{ courseId: string; lessonId: string }> }
 ) {
   try {

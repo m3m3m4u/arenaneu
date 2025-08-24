@@ -6,6 +6,9 @@ import { compare } from "bcryptjs";
 import { getServerSession } from 'next-auth/next';
 
 export const authOptions: NextAuthOptions = {
+  // Wichtig: Secret explizit setzen, sonst kann getToken() in Produktions-Umgebungen (Edge/Route) den JWT nicht verifizieren
+  // und liefert null. In Produktion MUSS NEXTAUTH_SECRET gesetzt sein.
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -67,11 +70,7 @@ export const authOptions: NextAuthOptions = {
         if (u.name) token.name = u.name;
         if (u.role) (token as Record<string, unknown>).role = u.role;
       }
-      // Dev-Fallback: spezieller fester Autor (nur außerhalb Produktion)
-      const tokAny = token as Record<string, unknown>;
-      if (process.env.NODE_ENV !== 'production' && tokAny.username === 'Kopernikus' && tokAny.role !== 'admin') {
-        tokAny.role = 'admin';
-      }
+  // Keine Username-Eskalation mehr: Admin-Rechte kommen ausschließlich aus der Datenbank (role Feld)
       return token;
     },
     async session({ session, token }) {

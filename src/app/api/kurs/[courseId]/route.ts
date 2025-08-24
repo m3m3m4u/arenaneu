@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import dbConnect from "@/lib/db";
@@ -9,13 +9,46 @@ import User from "@/models/User";
 import ClassCourseAccess from "@/models/ClassCourseAccess";
 import { CATEGORIES as ALLOWED_CATEGORIES, isAllowedCategory, normalizeCategory } from '@/lib/categories';
 
+// In-Memory Cache für Kurs-Details (inkl. Lektionen)
+interface CourseDetailCacheEntry { etag: string; body: any; expires: number; }
+const COURSE_DETAIL_CACHE_MS = Number(process.env.COURSE_DETAIL_CACHE_MS || 15000); // 15s Default
+const courseDetailCache = new Map<string, CourseDetailCacheEntry>();
+
+function buildEtag(courseId: string, updatedAt: Date, lessonCount: number) {
+  return `W/"course-${courseId}-${updatedAt.getTime()}-${lessonCount}"`;
+}
+
+function cacheKey(courseId: string, role?: string) {
+  return `${role==='learner'?'learner':'priv'}:${courseId}`;
+}
+
 export async function GET(
-  request: NextRequest,
+  request: Request,
   context: { params: Promise<{ courseId: string }> }
 ) {
   try {
     await dbConnect();
     const { courseId } = await context.params;
+    const ifNoneMatch = request.headers.get('if-none-match');
+
+    const session = await getServerSession(authOptions);
+    const role = (session?.user as any)?.role as string | undefined;
+    const username = (session?.user as any)?.username as string | undefined;
+
+    // Cache-Hit (nur wenn nicht expired)
+    const key = cacheKey(courseId, role);
+    const now = Date.now();
+    const cached = courseDetailCache.get(key);
+    if (cached && cached.expires > now) {
+      if (ifNoneMatch && ifNoneMatch === cached.etag) {
+        return new NextResponse(null, { status: 304, headers: { 'ETag': cached.etag, 'Cache-Control': 'private, max-age=5' } });
+      }
+      const r = NextResponse.json(cached.body);
+      r.headers.set('ETag', cached.etag);
+      r.headers.set('Cache-Control', 'private, max-age=5');
+      r.headers.set('X-Cache','HIT');
+      return r;
+    }
 
   const course = await Course.findById(courseId);
     if (!course) {
@@ -24,11 +57,7 @@ export async function GET(
         { status: 404 }
       );
     }
-
-  // Zugriffseinschränkung
-  const session = await getServerSession(authOptions);
-  const role = (session?.user as any)?.role as string | undefined;
-  const username = (session?.user as any)?.username as string | undefined;
+  // Zugriffseinschränkung (session/role/username bereits vorhanden)
     if (role === 'learner' && username) {
       const me = await User.findOne({ username }, '_id class').lean();
       const classId = me?.class ? String(me.class) : null;
@@ -60,14 +89,26 @@ export async function GET(
 
     // Lade auch die Lektionen des Kurses
     const lessons = await Lesson.find({ courseId }).sort({ order: 1 });
-    return NextResponse.json({
+    const body = {
       success: true,
       course: {
         ...course.toObject(),
         lessonCount: lessons.length
       },
       lessons
-    });
+    };
+    const etag = buildEtag(courseId, course.updatedAt || course.createdAt, lessons.length);
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return new NextResponse(null, { status: 304, headers: { 'ETag': etag, 'Cache-Control': 'private, max-age=5' } });
+    }
+    if (course.isPublished || (role && role !== 'learner')) {
+      courseDetailCache.set(key, { etag, body, expires: now + COURSE_DETAIL_CACHE_MS });
+    }
+    const res = NextResponse.json(body);
+    res.headers.set('ETag', etag);
+    res.headers.set('Cache-Control', 'private, max-age=5');
+    res.headers.set('X-Cache','MISS');
+    return res;
   } catch (error) {
     console.error("Fehler beim Laden des Kurses:", error);
     return NextResponse.json(
@@ -78,7 +119,7 @@ export async function GET(
 }
 
 export async function PUT(
-  request: NextRequest,
+  request: Request,
   context: { params: Promise<{ courseId: string }> }
 ) {
   try {
@@ -94,22 +135,29 @@ export async function PUT(
   const { courseId } = await context.params;
     const body = await request.json();
 
-    // Falls nur veröffentlicht werden soll, ohne andere Felder
-    if (body.publish === true || body.isPublic === true || body.isPublished === true) {
-      // Nur Autor:in des Kurses oder Admin darf veröffentlichen
+    // Neue Logik: Teacher kann Kurs zur Prüfung einreichen -> reviewStatus=pending (statt direkt veröffentlichen)
+    if (body.publish === true || body.isPublic === true || body.isPublished === true || body.submitForReview === true) {
       const role = (session.user as any).role;
+      if (role === 'teacher') {
+        const pending = await Course.findByIdAndUpdate(
+          courseId,
+          { reviewStatus: 'pending', updatedAt: new Date() },
+          { new: true }
+        );
+        if (!pending) return NextResponse.json({ success:false, error:'Kurs nicht gefunden' }, { status:404 });
+        return NextResponse.json({ success:true, message:'Kurs zur Prüfung eingereicht', course: pending });
+      }
+      // Autoren/Admin behalten direktes Veröffentlichen
       if (role !== 'admin' && role !== 'author') {
         return NextResponse.json({ success: false, error: 'Keine Berechtigung' }, { status: 403 });
       }
       const published = await Course.findByIdAndUpdate(
         courseId,
-        { isPublished: true, updatedAt: new Date() },
+        { isPublished: true, reviewStatus: 'approved', updatedAt: new Date() },
         { new: true }
       );
-      if (!published) {
-        return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
-      }
-      return NextResponse.json({ success: true, message: 'Kurs veröffentlicht', course: published });
+      if (!published) return NextResponse.json({ success:false, error:'Kurs nicht gefunden' }, { status:404 });
+      return NextResponse.json({ success:true, message:'Kurs veröffentlicht', course: published });
     }
 
     // Normales Update (komplette Daten)
@@ -142,7 +190,8 @@ export async function PUT(
         title: nameOrTitle,
         description: body.description,
   category: normalizeCategory(body.category) || 'sonstiges',
-        isPublished: body.isPublic ?? body.isPublished ?? false,
+  // Normales Update verändert Veröffentlichung nicht mehr direkt
+  isPublished: body.isPublic ?? body.isPublished ?? false,
         updatedAt: new Date()
       },
       { new: true }
@@ -155,7 +204,12 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json({
+  // Cache invalidieren
+  courseDetailCache.delete(cacheKey(courseId,'learner'));
+  courseDetailCache.delete(cacheKey(courseId,'author'));
+  courseDetailCache.delete(cacheKey(courseId,'admin'));
+  courseDetailCache.delete(cacheKey(courseId,'teacher'));
+  return NextResponse.json({
       success: true,
       message: "Kurs erfolgreich aktualisiert",
       course: updatedCourse
@@ -171,7 +225,7 @@ export async function PUT(
 }
 
 export async function PATCH(
-  request: NextRequest,
+  request: Request,
   context: { params: Promise<{ courseId: string }> }
 ) {
   try {
@@ -179,10 +233,28 @@ export async function PATCH(
     const { courseId } = await context.params;
     const body = await request.json();
 
-    if (body.publish === true) {
-      const updated = await Course.findByIdAndUpdate(courseId, { isPublished: true, updatedAt: new Date() }, { new: true });
-      if (!updated) return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
-      return NextResponse.json({ success: true, course: updated });
+    if (body.publish === true || body.submitForReview === true) {
+      const session = await getServerSession(authOptions);
+      const role = (session?.user as any)?.role;
+      if (role === 'teacher') {
+        const pending = await Course.findByIdAndUpdate(courseId, { reviewStatus:'pending', updatedAt: new Date() }, { new:true });
+        if(!pending) return NextResponse.json({ success:false, error:'Kurs nicht gefunden' }, { status:404 });
+        courseDetailCache.delete(cacheKey(courseId,'learner'));
+        courseDetailCache.delete(cacheKey(courseId,'author'));
+        courseDetailCache.delete(cacheKey(courseId,'admin'));
+        courseDetailCache.delete(cacheKey(courseId,'teacher'));
+        return NextResponse.json({ success:true, course: pending, message:'Kurs zur Prüfung eingereicht' });
+      }
+      if (role==='admin' || role==='author') {
+        const updated = await Course.findByIdAndUpdate(courseId, { isPublished:true, reviewStatus:'approved', updatedAt: new Date() }, { new: true });
+        if (!updated) return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
+        courseDetailCache.delete(cacheKey(courseId,'learner'));
+        courseDetailCache.delete(cacheKey(courseId,'author'));
+        courseDetailCache.delete(cacheKey(courseId,'admin'));
+        courseDetailCache.delete(cacheKey(courseId,'teacher'));
+        return NextResponse.json({ success: true, course: updated, message:'Kurs veröffentlicht' });
+      }
+      return NextResponse.json({ success:false, error:'Keine Berechtigung' }, { status:403 });
     }
 
     return NextResponse.json({ success: false, error: 'Keine gültige Aktion' }, { status: 400 });
@@ -193,7 +265,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  request: Request,
   context: { params: Promise<{ courseId: string }> }
 ) {
   try {
@@ -207,9 +279,13 @@ export async function DELETE(
 
   await dbConnect();
   const { courseId } = await context.params;
-  // Schutz: Nur Kurs-Autor:in oder Admin darf löschen
+  // Kurs laden um Eigentümer zu prüfen (Teacher darf eigenen Kurs löschen)
   const role = (session.user as any).role;
-  if (role !== 'admin' && role !== 'author') {
+  const username = (session.user as any).username;
+  const courseDoc = await Course.findById(courseId).lean();
+  if(!courseDoc) return NextResponse.json({ success:false, error:'Kurs nicht gefunden' }, { status:404 });
+  const isOwnerTeacher = role==='teacher' && (courseDoc as any).author === username;
+  if (role !== 'admin' && role !== 'author' && !isOwnerTeacher) {
     return NextResponse.json({ success: false, error: 'Keine Berechtigung' }, { status: 403 });
   }
     
@@ -222,12 +298,8 @@ export async function DELETE(
 
   // Kurs löschen
     const deletedCourse = await Course.findByIdAndDelete(courseId);
-
     if (!deletedCourse) {
-      return NextResponse.json(
-        { success: false, error: "Kurs nicht gefunden" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
     }
 
     // Fortschritt bereinigen: sowohl reine lessonId als auch courseId-lessonId Einträge entfernen
@@ -247,6 +319,10 @@ export async function DELETE(
     }
 
   try { await AuditLog.create({ action: 'course.delete', targetType: 'course', targetId: String(courseId), meta: { lessonCount: lessonIdStrings.length } }); } catch (e) { console.warn('AuditLog course.delete fehlgeschlagen', e); }
+  courseDetailCache.delete(cacheKey(courseId,'learner'));
+  courseDetailCache.delete(cacheKey(courseId,'author'));
+  courseDetailCache.delete(cacheKey(courseId,'admin'));
+  courseDetailCache.delete(cacheKey(courseId,'teacher'));
   return NextResponse.json({ success: true, message: "Kurs, Lektionen & Fortschrittseinträge gelöscht" });
 
   } catch (error) {

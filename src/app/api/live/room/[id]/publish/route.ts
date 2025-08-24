@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getRoom, publish } from '../../../store';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }): Promise<Response> {
+export async function POST(req: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
   try{
   const { id } = await context.params;
   if(!id){ const r = NextResponse.json({ success:false, error:'Room not found' }, { status:404 }); r.headers.set('Cache-Control','no-store'); return r; }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/shared/ToastProvider';
 
 interface TeacherClass { _id:string; name:string; courseAccess?: 'class'|'all'; }
-interface Learner { username:string; name?:string; email?:string; class?:string; }
+interface Learner { username:string; name?:string; email?:string; class?:string; lastOnline?:string; }
 
 export default function TeacherPanel(){
   return (
@@ -250,6 +250,7 @@ function TeacherPanelContent(){
                 <th className="py-1 px-2">Name</th>
                 <th className="py-1 px-2">E-Mail</th>
                 <th className="py-1 px-2">Klasse</th>
+                <th className="py-1 px-2 hidden sm:table-cell">Zuletzt online</th>
                 <th className="py-1 px-2">Aktion</th>
               </tr>
             </thead>
@@ -265,12 +266,13 @@ function TeacherPanelContent(){
                       {classes.map(c=> <option key={c._id} value={c._id}>{c.name}</option>)}
                     </select>
                   </td>
+                  <td className="py-1 px-2 hidden sm:table-cell whitespace-nowrap">{l.lastOnline ? new Date(l.lastOnline).toLocaleString('de-DE',{ dateStyle:'short', timeStyle:'short'}) : '—'}</td>
                   <td className="py-1 px-2">
                     <button onClick={()=>deleteLearner(l.username)} className="text-red-600 hover:underline">Löschen</button>
                   </td>
                 </tr>
               ))}
-              {learners.length===0 && <tr><td colSpan={5} className="py-2 text-gray-500">Keine Lernenden</td></tr>}
+              {learners.length===0 && <tr><td colSpan={6} className="py-2 text-gray-500">Keine Lernenden</td></tr>}
             </tbody>
           </table>
         </div>
