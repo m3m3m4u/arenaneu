@@ -2,9 +2,6 @@ import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { recordRequest } from '@/lib/requestMetrics';
 
-// Geschützte Admin-Routen Prefix
-const ADMIN_PREFIX = '/api/admin';
-
 // In-Memory Rate Limiter (pro Lambda-Instance / nicht global konsistent)
 // Konfiguration per ENV: ADMIN_RATE_LIMIT_POINTS (Standard 60), ADMIN_RATE_LIMIT_WINDOW_MS (Standard 60000)
 interface Bucket { tokens: number; updated: number; }
@@ -63,24 +60,7 @@ export async function middleware(req: any) {
       }
     } catch { /* ignore tracking errors */ }
   }
-  if (pathname.startsWith(ADMIN_PREFIX)) {
-  const key = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const rl = rateLimit(key);
-    if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Rate limit', retryAfter: rl.retryAfter }, { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } });
-    }
-    // API Key Shortcut (Server-zu-Server)
-    const apiKey = req.headers.get('x-api-key');
-    if (apiKey && process.env.ADMIN_API_KEY && apiKey === process.env.ADMIN_API_KEY) {
-      return NextResponse.next();
-    }
-    // JWT Token (next-auth)
-    const token = await getToken({ req });
-    const role = token && typeof token === 'object' ? (token as any).role as string | undefined : undefined;
-  const allow = role === 'admin';
-    if (allow) return NextResponse.next();
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-  }
+  // Admin-Auth nicht mehr in Middleware (Edge) – stattdessen nur im Route-Handler (Node) prüfen.
   return NextResponse.next();
 }
 
