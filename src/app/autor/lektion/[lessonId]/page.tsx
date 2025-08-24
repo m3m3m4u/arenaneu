@@ -143,7 +143,7 @@ export default function EditLessonPage() {
 
   // Lückentext
   const [ltMarkdown, setLtMarkdown] = useState('');
-  const [ltMode, setLtMode] = useState<'input'|'drag'>('input');
+  const [ltMode, setLtMode] = useState<'input'|'drag'>('drag'); // Drag jetzt Standard
   const [ltPreview, setLtPreview] = useState<{ masked: string; answers: string[] }>({ masked: '', answers: [] });
   // Ordering
   const [orderingItems, setOrderingItems] = useState<string[]>([]);
@@ -318,16 +318,28 @@ export default function EditLessonPage() {
       setMarkdownText(md);
       setShowPreview(true);
     } else if (normalized.type === 'matching') {
-      const qs = normalized.questions || [];
-      const blocks = qs.map(q => {
-        const pairs = Array.isArray(q.correctAnswers) ? q.correctAnswers.map(k => {
-          const [l, r] = String(k).split('=>');
-          return { left: (l||'').trim(), right: (r||'').trim() };
-        }).filter(p => p.left && p.right) : [];
-        return pairs.map(p => `${p.left}|${p.right}`).join('\n');
-      }).filter(Boolean);
-      setMatchingText(blocks.join('\n\n'));
-      setMatchingBlocksPreview(blocks.map(block => block.split(/\n+/).filter(Boolean).map(line => { const [l,r] = line.split('|'); return { left: (l||'').trim(), right: (r||'').trim() }; })));
+      const cAny = (normalized.content || {}) as any;
+      let previewBlocks: Array<Array<{ left:string; right:string }>> = [];
+      if (Array.isArray(cAny.pairBlocks) && cAny.pairBlocks.length) {
+        previewBlocks = cAny.pairBlocks.map((block: any[]) => block.map(p => ({ left:String(p.left), right:String(p.right) }))); // Direkt übernehmen
+      } else if (Array.isArray(cAny.pairs)) {
+        const importedPairs = cAny.pairs.filter((p: any) => p && typeof p.left === 'string' && typeof p.right === 'string');
+        if (importedPairs.length) previewBlocks = [importedPairs.map((p:any)=>({ left:String(p.left), right:String(p.right) }))];
+      }
+      if (!previewBlocks.length && Array.isArray(normalized.questions)) {
+        // Legacy Fallback
+        const qs = normalized.questions || [];
+        previewBlocks = qs.map(q => {
+          const pairs = Array.isArray((q as any).correctAnswers) ? (q as any).correctAnswers.map((k: any) => {
+            const [l, r] = String(k).split('=>');
+            return { left: (l||'').trim(), right: (r||'').trim() };
+          }).filter((p: any) => p.left && p.right) : [];
+          return pairs;
+        }).filter(arr=>arr.length);
+      }
+      const textBlocks = previewBlocks.map(block => block.map(p => `${p.left}|${p.right}`).join('\n'));
+      setMatchingText(textBlocks.join('\n\n'));
+      setMatchingBlocksPreview(previewBlocks);
       setShowPreview(true);
   } else if (normalized.type === 'video') {
       const c = (normalized.content || {}) as Record<string, unknown>;
@@ -344,10 +356,26 @@ export default function EditLessonPage() {
       setShowPreview(true);
     } else if (normalized.type === 'lueckentext') {
       const c = (normalized.content || {}) as any;
-  setLtMarkdown(String(c.markdownOriginal || c.markdown || ''));
-      setLtMode((c.mode === 'drag') ? 'drag' : 'input');
-  const answers = Array.isArray(c.gaps) ? c.gaps.map((g: any) => g.answer) : [];
-  setLtPreview({ masked: String(c.markdownMasked || ''), answers });
+      // Import liefert { text, gaps } wobei gaps string[] sind.
+      const rawSource = String(c.markdownOriginal || c.markdown || c.text || '');
+      setLtMarkdown(rawSource);
+      // Standard jetzt drag, außer explizit input gesetzt
+      setLtMode(c.mode === 'input' ? 'input' : 'drag');
+      // Antworten ermitteln: gaps kann string[] oder Array<{answer:string}>
+      let answers: string[] = [];
+      if (Array.isArray(c.gaps)) {
+        answers = c.gaps.map((g: any) => typeof g === 'string' ? g : (g && typeof g.answer === 'string' ? g.answer : '')).filter(Boolean);
+      } else if (Array.isArray(c.answers)) {
+        answers = c.answers.filter((a: any) => typeof a === 'string');
+      }
+      // Masked erzeugen falls nicht vorhanden
+      let masked = String(c.markdownMasked || '');
+      if (!masked && rawSource) {
+        let idx = 0;
+        masked = rawSource.replace(/\*(.+?)\*/g, (_m) => {
+          const n = ++idx; return `___${n}___`; });
+      }
+      setLtPreview({ masked, answers });
       setShowPreview(true);
     } else if (normalized.type === 'ordering') {
       const c = (normalized.content || {}) as any;
@@ -369,7 +397,7 @@ export default function EditLessonPage() {
       }
       setLesson(prev => prev ? { ...prev, content: c } : prev);
       setShowPreview(true);
-  } else if (normalized.type === 'snake' || normalized.type === 'minigame') {
+    } else if (normalized.type === 'snake' || normalized.type === 'minigame') {
       const c = (normalized.content || {}) as any;
       if (Array.isArray(c.blocks)) {
         const text = c.blocks.map((b: any) => {
@@ -377,6 +405,21 @@ export default function EditLessonPage() {
           return lines.join('\n');
         }).join('\n\n');
         setQuestionsText(text);
+      } else if (normalized.type === 'minigame' && Array.isArray((c as any).questions)) {
+        // Import-Fallback: content.questions ist Array von Frage-Blöcken (Array<string>)
+        const qBlocks = (c as any).questions as any[];
+        const blocksText: string[] = [];
+        for (const block of qBlocks) {
+          if (!Array.isArray(block)) continue;
+            const arr = block.map((v: any) => String(v||'').trim()).filter(Boolean);
+          if (arr.length < 2) continue;
+          // Markiere erste Antwort als korrekt
+          const q = arr[0];
+          const answers = arr.slice(1);
+          const lines = [q, ...answers.map((a, i) => i === 0 ? `*${a}` : a)];
+          blocksText.push(lines.join('\n'));
+        }
+        if (blocksText.length) setQuestionsText(blocksText.join('\n\n'));
       }
       if (typeof c.targetScore === 'number') setSnakeTargetScore(c.targetScore);
     if (typeof c.difficulty === 'string') {

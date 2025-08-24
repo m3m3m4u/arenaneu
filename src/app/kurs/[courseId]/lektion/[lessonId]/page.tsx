@@ -34,6 +34,7 @@ export default function LessonPage() {
   const [allLessons, setAllLessons] = useState<Lesson[]>([]); // für Footer-Navigation
   const [progressionMode, setProgressionMode] = useState<'linear'|'free'>('free');
   const [completedLessons, setCompletedLessons] = useState<string[]>([]); // erledigte Lektionen
+  const [lockedRedirecting, setLockedRedirecting] = useState(false);
   // Wohin zurück? Kurs oder Übungsmenü
   const [backHref, setBackHref] = useState<string>(`/kurs/${courseId}`);
   // (Lückentext lokaler Player rendert vollständig in eigener Komponente)
@@ -132,6 +133,28 @@ export default function LessonPage() {
   useEffect(() => {
     loadLesson();
   }, [loadLesson]);
+
+  // Fallback: Matching-Lektionen ohne questions -> aus content.pairBlocks oder content.pairs generieren
+  useEffect(()=>{
+    if(!lesson || lesson.type!=='matching') return;
+    if(Array.isArray((lesson as any).questions) && (lesson as any).questions.length>0) return;
+    const contentPairs = (lesson.content && (lesson.content as any).pairs) || [];
+    const pairBlocks = (lesson.content && (lesson.content as any).pairBlocks) || [];
+    const blocks = Array.isArray(pairBlocks) && pairBlocks.length ? pairBlocks : (contentPairs.length ? [contentPairs] : []);
+    if(!blocks.length) return;
+    const shuffle = <T,>(arr:T[])=> arr.map(v=>[Math.random(),v] as const).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
+    const synthesized = blocks.map((block:any[])=>{
+      const lefts = block.map(p=>p.left);
+      const rights = block.map(p=>p.right);
+      return {
+        question: 'Finde die passenden Paare',
+        correctAnswers: block.map(p=> `${p.left}=>${p.right}`),
+        wrongAnswers: [],
+        allAnswers: shuffle([...lefts, ...rights])
+      };
+    });
+    setLesson(prev => prev ? ({ ...prev, questions: synthesized } as any): prev);
+  },[lesson]);
 
   // Zuletzt weitergemacht (für Dashboard): beim Öffnen merken
   useEffect(() => {
@@ -445,6 +468,30 @@ export default function LessonPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson, questionQueue, answerOrderMap]);
 
+  // ACHTUNG: Keine early returns VOR diesem Punkt (alle Hooks bereits deklariert).
+
+  // (Lesson-abhängige Berechnungen werden NACH den early returns weiter unten durchgeführt.)
+
+  // Lock-Redirect bei linearer Progression jetzt in Effekt, nicht während Render
+  useEffect(() => {
+    if (!lesson || progressionMode !== 'linear') { setLockedRedirecting(false); return; }
+    const index = allLessons.findIndex(l => (l as any)._id === lesson._id || (l as any).id === lesson._id);
+    if (index > 0) {
+      const prev = allLessons[index - 1];
+      const prevId = (prev as any)._id || (prev as any).id;
+      const locked = !!(prevId && !completedLessons.includes(prevId));
+      if (locked) {
+        setLockedRedirecting(true);
+        if (typeof window !== 'undefined') {
+          router.replace(`/kurs/${courseId}`);
+        }
+        return;
+      }
+    }
+    setLockedRedirecting(false);
+  }, [lesson, progressionMode, allLessons, completedLessons, courseId, router]);
+
+  // Early returns NACH allen Hooks:
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto mt-10 p-6">
@@ -452,6 +499,16 @@ export default function LessonPage() {
           <div className="animate-spin inline-block w-8 h-8 border-4 border-current border-t-transparent text-blue-600 rounded-full"></div>
           <p className="mt-2 text-gray-600">Lektion wird geladen...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (lockedRedirecting) {
+    return (
+      <div className="max-w-4xl mx-auto mt-16 p-6 text-center text-sm text-gray-600">
+        <div className="mb-4 animate-pulse">⏳ Weiterleitung…</div>
+        <p>Diese Lektion ist in der linearen Reihenfolge noch gesperrt, weil die vorherige noch nicht abgeschlossen ist.</p>
+        <p className="mt-2">Du wirst zur Kursübersicht zurückgeleitet.</p>
       </div>
     );
   }
@@ -466,37 +523,18 @@ export default function LessonPage() {
     );
   }
 
+  // Jetzt ist lesson garantiert vorhanden
   const totalQuestions = lesson.questions?.length || 0;
   const progress = totalQuestions > 0 ? (mastered.size / totalQuestions) * 100 : 0;
   const currentQuestion = lesson.questions && questionQueue.length > 0 ? lesson.questions[questionQueue[0]] : undefined;
   const currentQuestionIndex = questionQueue.length ? questionQueue[0] : -1;
   const currentMedia = currentQuestion?.mediaLink ? resolveMediaPath(String(currentQuestion.mediaLink)) : '';
-  // Vorberechnete korrekte Antworten (normalisiert) für Anzeige/Checks
   const correctListNormalized = (currentQuestion && (Array.isArray(currentQuestion.correctAnswers) && currentQuestion.correctAnswers.length
     ? currentQuestion.correctAnswers
     : (currentQuestion?.correctAnswer ? [currentQuestion.correctAnswer] : [])).map(norm)) || [];
-
-  // (Shuffle-Effekt nach oben verschoben – siehe Kommentar oben)
-
   const answersForRender: string[] = (currentQuestion && currentQuestionIndex >=0)
     ? (answerOrderMap[currentQuestionIndex] || (currentQuestion as any).allAnswers || [])
     : [];
-
-  // Snake frühe Rückgabe
-  // Lock-Redirect bei linearer Progression: wenn vorherige Lektion nicht abgeschlossen
-  if (lesson && progressionMode === 'linear') {
-    const index = allLessons.findIndex(l => (l as any)._id === lesson._id || (l as any).id === lesson._id);
-    if (index > 0) {
-      const prev = allLessons[index - 1];
-      const prevId = (prev as any)._id || (prev as any).id;
-      if (prevId && !completedLessons.includes(prevId)) {
-        // redirect zurück auf Kursseite
-        if (typeof window !== 'undefined') {
-          router.replace(`/kurs/${courseId}`);
-        }
-      }
-    }
-  }
 
   if (lesson && isSnake) {
   return (
@@ -523,9 +561,7 @@ export default function LessonPage() {
 
   const isMultiple = lesson.type === 'multiple-choice';
   const isMatching = lesson.type === 'matching';
-  const hasMemoryPairs = !!(lesson.content && (lesson.content as any).pairs && Array.isArray((lesson.content as any).pairs));
-  const effectiveType = lesson.type === 'memory' || (lesson.type === 'matching' && hasMemoryPairs) ? 'memory' : lesson.type;
-  const isMemory = effectiveType === 'memory';
+  const isMemory = lesson.type === 'memory';
 
   return (
   <div className="max-w-6xl mx-auto mt-10 p-6">
@@ -546,7 +582,7 @@ export default function LessonPage() {
           <YouTubeLesson lesson={lesson} onCompleted={markVideoCompleted} />
         ) : isLueckentext ? (
           <LueckentextPlayer lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} sessionUsername={session?.user?.username} allLessons={allLessons} progressionMode={progressionMode} backHref={backHref} />
-        ) : effectiveType === 'memory' ? (
+        ) : isMemory ? (
           <MemoryGame lesson={{ ...lesson, type: 'memory' }} onCompleted={() => { setIsCorrect(true); setShowResult(true); setCompleted(true); }} completedLessons={completedLessons} />
         ) : currentQuestion ? (
           <>

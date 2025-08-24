@@ -38,8 +38,8 @@ export async function GET(req: any) {
       return normalizeCategory(v);
     })();
 
-    // Grundfilter (Autoren/Admin: optional unveröffentlichte)
-    const baseFilter: Record<string, unknown> = {};
+  // Grundfilter (Autoren/Admin/Teacher: optional unveröffentlichte)
+  const baseFilter: Record<string, unknown> = {};
     if (!showAll) baseFilter.isPublished = true;
     if (normalizedCat) baseFilter.category = normalizedCat;
     if (statusFilter === 'pub') baseFilter.isPublished = true;
@@ -63,6 +63,20 @@ export async function GET(req: any) {
       const hit = COURSE_CACHE.get(cacheKey);
       if (hit && hit.expires > Date.now()) {
         return NextResponse.json({ ...hit.json, cached: true });
+      }
+    }
+
+    if (role === 'teacher' && username) {
+      // Lehrer sehen keine Kurse, die von anderen Lehrern erstellt wurden (teacher-exklusive Kurse nur für Ersteller sichtbar)
+      try {
+        const otherTeachers = await User.find({ role: 'teacher', username: { $ne: username } }).select('username').lean();
+        const otherNames = otherTeachers.map(t => String((t as any).username)).filter(Boolean);
+        if (otherNames.length) {
+          // Schließe diese Autoren explizit aus
+          (baseFilter.author as any) = { $nin: otherNames };
+        }
+      } catch (e) {
+        console.warn('Teacher-Filter Fehler', e);
       }
     }
 
@@ -164,8 +178,9 @@ export async function POST(req: any) {
   try {
     await dbConnect();
     const session = await getServerSession(authOptions);
-    const role = (session?.user as any)?.role as string | undefined;
-    if (!session?.user || (role !== 'author' && role !== 'admin')) {
+  const role = (session?.user as any)?.role as string | undefined;
+  // Lehrer dürfen jetzt ebenfalls Kurse erstellen. Autor-Feld wird ignoriert und aus Session gesetzt.
+  if (!session?.user || (role !== 'author' && role !== 'admin' && role !== 'teacher')) {
       return NextResponse.json({ success: false, error: 'Keine Berechtigung' }, { status: 403 });
     }
     const raw = await req.json();

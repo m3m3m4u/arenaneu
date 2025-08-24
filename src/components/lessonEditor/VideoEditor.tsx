@@ -21,8 +21,7 @@ export default function VideoEditor({ lesson, title, setTitle, category, setCate
   const [pickerOpen, setPickerOpen] = useState(false);
   const trimmed = videoUrl.trim();
   const vid = extractYouTubeId(trimmed);
-  const rawContent = lesson.content ? JSON.stringify(lesson.content, null, 2) : '{}';
-  const legacyNote = !videoUrl ? ' (leer – vermutlich alte Lektion ohne gespeicherten youtubeUrl)' : '';
+  // Debug-Content Anzeige entfernt
   return (
     <main className="max-w-6xl mx-auto mt-10 p-6">
       <BackLink lesson={lesson} returnToExercises={returnToExercises} />
@@ -65,10 +64,7 @@ export default function VideoEditor({ lesson, title, setTitle, category, setCate
             </div>
           )}
           {videoText.trim() ? <div className="prose max-w-none border rounded p-3 bg-gray-50 max-h-80 overflow-auto"><MarkdownPreview markdown={videoText} /></div> : <div className="text-gray-400 text-sm">Kein Begleittext.</div>}
-          <details className="mt-6 text-xs text-gray-500">
-            <summary className="cursor-pointer select-none">Debug: Content JSON{legacyNote}</summary>
-            <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-40 whitespace-pre-wrap break-all">{rawContent}</pre>
-          </details>
+          {/* Debug-Section entfernt */}
         </div>
       </div>
       {pickerOpen && (

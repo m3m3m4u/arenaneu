@@ -8,6 +8,8 @@ export interface ICourse extends Document {
   author: string;
   lessons: string[];
   isPublished: boolean;
+  reviewStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  originalCourseId?: string; // Wenn dies eine Review-Kopie eines Teacher-Kurses ist
   progressionMode: 'linear' | 'free'; // linear = Lektion für Lektion, free = beliebige Reihenfolge
   createdAt: Date;
   updatedAt: Date;
@@ -44,6 +46,16 @@ const CourseSchema: Schema = new Schema({
     type: Boolean,
     default: false
   },
+  reviewStatus: {
+    type: String,
+    enum: ['none','pending','approved','rejected'],
+    default: 'none',
+    index: true
+  },
+  originalCourseId: {
+    type: String,
+    index: true
+  },
   progressionMode: {
     type: String,
     enum: ['linear', 'free'],
@@ -64,6 +76,7 @@ const CourseSchema: Schema = new Schema({
 CourseSchema.index({ isPublished: 1, createdAt: -1 });
 CourseSchema.index({ category: 1 });
 CourseSchema.index({ author: 1 });
+CourseSchema.index({ originalCourseId: 1, reviewStatus: 1 });
 
 // Update updatedAt before saving
 CourseSchema.pre("save", function(next) {

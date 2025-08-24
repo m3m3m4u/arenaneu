@@ -45,6 +45,7 @@ function TeacherCoursesContent(){
   const [newDesc,setNewDesc] = useState('');
   const [newCategory,setNewCategory] = useState('');
   const [creating,setCreating] = useState(false);
+  const [createAssignClassId,setCreateAssignClassId] = useState('');
 
   // Edit inline
   const [editId,setEditId] = useState<string|null>(null);
@@ -117,13 +118,30 @@ function TeacherCoursesContent(){
   async function createCourse(e: React.FormEvent){
     e.preventDefault(); if(!newTitle || !newDesc || !newCategory) return; setCreating(true);
     try{
-  const res = await fetch('/api/kurse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title:newTitle, description:newDesc, category:newCategory, author: username }) });
+      const res = await fetch('/api/kurse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title:newTitle, description:newDesc, category:newCategory }) });
       const d = await res.json();
       if(!res.ok || !d?.success){ toast({ kind:'error', title:'Erstellen fehlgeschlagen', message: d?.error||'Bitte Eingaben prüfen.' }); return; }
-      toast({ kind:'success', title:'Kurs erstellt', message: 'Der Kurs wurde angelegt.' });
-  setNewTitle(''); setNewDesc(''); setNewCategory('');
-  changeTab('eigene');
+      const newCourseId = d.courseId as string|undefined;
+      let msg = 'Der Kurs wurde angelegt.';
+      // Falls Klasse gewählt: direkt als Link zuordnen
+      if(newCourseId && createAssignClassId){
+        const assignRes = await fetch('/api/teacher/courses/manage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'enable', classId:createAssignClassId, courseId:newCourseId, mode:'link' }) });
+        if(assignRes.ok){
+          msg += ' Kurs wurde direkt der Klasse zugeordnet.';
+        } else {
+          try { const ad = await assignRes.json(); toast({ kind:'error', title:'Zuordnung fehlgeschlagen', message: ad?.error||'Kurs erstellt, aber Zuordnung fehlgeschlagen.' }); } catch{}
+        }
+      }
+      toast({ kind:'success', title:'Kurs erstellt', message: msg + ' Du kannst jetzt Lektionen hinzufügen.' });
+      const createdId = newCourseId;
+      setNewTitle(''); setNewDesc(''); setNewCategory(''); setCreateAssignClassId('');
       await load();
+      if(createdId){
+        // Direkt in den Kurs-Editor wechseln, damit sofort Lektionen erstellt werden können
+        window.location.href = `/teacher/kurs/${createdId}`;
+        return;
+      }
+      changeTab('eigene');
     } finally { setCreating(false); }
   }
 
@@ -188,6 +206,44 @@ function TeacherCoursesContent(){
             <h2 className="text-xl font-bold">{tab==='eigene' ? 'Eigene Kurse' : 'Übernommene Kurse'}</h2>
             <button onClick={load} disabled={loading} className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 disabled:opacity-50">{loading?'⏳':'⟲'}</button>
           </div>
+          {tab==='eigene' && (
+            <form onSubmit={createCourse} className="mb-8 bg-white border rounded p-4 space-y-4">
+              <h3 className="font-semibold text-sm">Neuen Kurs anlegen</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium">Titel</label>
+                  <input value={newTitle} onChange={e=>setNewTitle(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium">Kategorie</label>
+                  <CategorySelect
+                    value={newCategory}
+                    onChange={setNewCategory}
+                    label=""
+                    includeEmpty
+                    emptyLabel="Kategorie wählen"
+                    labelClassName="sr-only"
+                    selectClassName="border rounded px-2 py-2 text-sm w-full"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="block text-xs font-medium">Beschreibung</label>
+                  <textarea value={newDesc} onChange={e=>setNewDesc(e.target.value)} className="w-full border rounded px-3 py-2 text-sm h-24" required />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="block text-xs font-medium">Optional direkt einer Klasse zuordnen</label>
+                  <select value={createAssignClassId} onChange={e=>setCreateAssignClassId(e.target.value)} className="border rounded px-2 py-2 text-sm w-full">
+                    <option value="">(Keine automatische Zuordnung)</option>
+                    {classes.map(c=> <option key={c._id} value={c._id}>{c.name}</option>)}
+                  </select>
+                  <p className="text-[11px] text-gray-500">Wenn gewählt, wird der neue Kurs als Link direkt dieser Klasse hinzugefügt. Später kannst du ihn in eine Klassenkopie umwandeln.</p>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button type="submit" disabled={creating} className="bg-green-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50">{creating?'Erstelle…':'Kurs erstellen'}</button>
+              </div>
+            </form>
+          )}
           {loading && <div className="text-sm text-gray-500 py-8">Lade Kurse…</div>}
           {!loading && courses.length===0 && <div className="text-sm text-gray-500 py-6">Keine Kurse gefunden.</div>}
           <div className="grid gap-4">
@@ -196,7 +252,7 @@ function TeacherCoursesContent(){
               .map(c=> {
                 const own = !!isOwn(c);
                 return (
-                  <div key={c._id} className="bg-white border rounded p-4">
+                  <div key={c._id} className="bg-white border rounded-lg p-5 shadow-sm hover:shadow-md transition">
                     {editId===c._id && own ? (
                       <div className="space-y-3">
                         <div>
@@ -225,15 +281,28 @@ function TeacherCoursesContent(){
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h3 className="font-semibold">{c.title}</h3>
-                          <p className="text-xs text-gray-600">{lessonCounts[c._id]||0} Lektionen • {c.isPublished? 'Veröffentlicht':'Entwurf'}</p>
-                          {c.description && <p className="text-xs text-gray-500 mt-1">{c.description}</p>}
-                          {c.category && <span className="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">{c.category}</span>}
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug break-words">{c.title}</h3>
+                          <p className="text-[11px] text-gray-500 mt-0.5">{lessonCounts[c._id]||0} Lektionen • {c.isPublished? 'Veröffentlicht':'Entwurf'}</p>
+                          {c.description && <p className="text-xs text-gray-600 mt-2 leading-snug line-clamp-3">{c.description}</p>}
+                          {c.category && <span className="inline-block mt-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-[11px] font-medium rounded-full">{c.category}</span>}
                         </div>
-                        <div className="flex flex-col gap-2 text-sm min-w-[13rem] items-stretch">
-                          <div className="border-t pt-2 text-[11px] text-gray-600">Einer Klasse zuordnen</div>
+                        <div className="flex flex-col gap-3 text-sm md:w-64 lg:w-72">
+                          {own && (
+                            <>
+                              <a
+                                href={`/teacher/kurs/${c._id}`}
+                                className="bg-blue-600 text-white px-3 py-1 rounded text-center hover:bg-blue-700"
+                              >Bearbeiten</a>
+                              <button
+                                type="button"
+                                onClick={()=>deleteCourse(c)}
+                                className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                              >Löschen</button>
+                            </>
+                          )}
+                          <div className="pt-1 border-t text-[11px] font-medium tracking-wide text-gray-600 uppercase">Klasse zuordnen</div>
                           <AssignRow classes={classes} onAssign={(clsId,mode,copyTitle)=>assignToClass(c._id, clsId, mode, copyTitle)} />
                         </div>
                       </div>
@@ -312,16 +381,16 @@ function AssignRow({ classes, onAssign }:{ classes: TeacherClass[]; onAssign:(cl
   const [cls,setCls] = useState('');
   const [title,setTitle] = useState('');
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex gap-2 items-center text-sm">
-        <select value={cls} onChange={e=>setCls(e.target.value)} className="border rounded px-2 py-1">
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select aria-label="Klasse wählen" value={cls} onChange={e=>setCls(e.target.value)} className="border rounded px-2 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">(Klasse wählen)</option>
           {classes.map(c=> <option key={c._id} value={c._id}>{c.name}</option>)}
         </select>
-        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Titel der Kopie (optional – für spätere Anpassung)" className="border rounded px-2 py-1 flex-1 text-sm" />
+        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Titel für Kopie (optional)" className="border rounded px-2 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
-      <div>
-        <button onClick={()=>onAssign(cls, 'link', undefined)} disabled={!cls} className="bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50">Als Link zuordnen</button>
+      <div className="flex justify-end">
+        <button onClick={()=>onAssign(cls, 'link', undefined)} disabled={!cls} className="bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto">Als Link zuordnen</button>
       </div>
     </div>
   );

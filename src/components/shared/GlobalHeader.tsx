@@ -47,11 +47,22 @@ export default function GlobalHeader(){
             ...(role==='teacher' ? teacherExtras: []),
             ...(role==='author' || role==='admin' ? authorExtras: []),
             ...(role==='admin' ? adminExtras: []),
-          ].map(l=> (
-            <Link key={l.href} href={l.href} className={`px-2 py-1 rounded hover:bg-gray-100 ${pathname && (pathname===l.href || pathname.startsWith(l.href + '/'))? 'font-semibold text-blue-700':''}`}>
-              {l.label}
-            </Link>
-          ))}
+          ].map(l=> {
+            const isRootGroup = l.href === '/teacher';
+            const active = (()=>{
+              if(!pathname) return false;
+              if(isRootGroup){
+                // Nur exakt /teacher als aktiv markieren
+                return pathname === '/teacher';
+              }
+              return pathname === l.href || pathname.startsWith(l.href + '/');
+            })();
+            return (
+              <Link key={l.href} href={l.href} className={`px-2 py-1 rounded hover:bg-gray-100 ${active? 'font-semibold text-blue-700':''}`}>
+                {l.label}
+              </Link>
+            );
+          })}
         </nav>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-gray-600">Eingeloggt als</span>

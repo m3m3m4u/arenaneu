@@ -32,8 +32,8 @@ function getLessonCounter(lesson: LessonListItem): string | null {
     return `❓ ${n} Fragen`;
   }
   if (t === 'minigame') {
-    // Minigame: Anzahl Blöcke = Fragenanzahl (Fallback: questions)
-    const n = len(c?.blocks) || len(lesson.questions);
+  // Minigame: Anzahl Blöcke = Fragenanzahl. Import kann content.blocks (Editor) ODER content.questions (Import-Parsen) liefern.
+  const n = len(c?.blocks) || (Array.isArray(c?.questions) ? c.questions.length : 0) || len(lesson.questions);
     return `❓ ${n} Fragen`;
   }
   if (t === 'matching') {

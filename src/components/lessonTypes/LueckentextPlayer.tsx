@@ -59,11 +59,24 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
   const renderPart=(part:string,idx:number)=>{
     const m= part.match(/^___(\d+)___$/);
     if(!m){
-      // Führende Spaces nach Zeilenumbrüchen entfernen -> sonst "Freiraum" am Zeilenanfang
-      const cleaned = part.replace(/(^|\n)[ \t]+/g, '$1');
-  if(!InlineMD) return <span key={idx} className="whitespace-pre-wrap leading-relaxed mr-1">{cleaned}</span>;
-  const Comp=InlineMD;
-  return <span key={idx} className="inline whitespace-pre-wrap leading-relaxed mr-1"><Comp remarkPlugins={gfm? [gfm]: []} components={{ p: ({children}:{children:any})=> <span className="inline">{children}</span> }}>{cleaned}</Comp></span>;
+      // Doppelte (oder mehr) Newlines als Absatztrenner -> zwei <br />
+      const cleaned = part.replace(/\r/g,'');
+      const segments = cleaned.split(/\n{2,}/);
+      const nodes: React.ReactNode[] = [];
+      segments.forEach((seg,si)=>{
+        const segTrim = seg.replace(/^[ \t]+/,'');
+        if(InlineMD){
+          const Comp=InlineMD as any;
+          nodes.push(<span key={`seg-${si}`} className="inline"> <Comp remarkPlugins={gfm? [gfm]: []} components={{ p: ({children}:{children:any})=> <span className="inline">{children}</span> }}>{segTrim}</Comp></span>);
+        } else {
+          nodes.push(<span key={`seg-${si}`}>{segTrim}</span>);
+        }
+        if(si < segments.length-1){
+          nodes.push(<br key={`br-a-${si}`} />);
+          nodes.push(<br key={`br-b-${si}`} />);
+        }
+      });
+      return <span key={idx} className="mr-1">{nodes}</span>;
     }
     const id= Number(m[1]);
     const status= answerStatus(id);
@@ -100,7 +113,7 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
   };
 
   return <div className="bg-white rounded shadow p-6">
-    <div className="text-base leading-8 flex flex-wrap">{parts.map(renderPart)}</div>
+  <div className="text-base leading-8 whitespace-pre-wrap">{parts.map(renderPart)}</div>
     {mode==='drag' && <div className="mt-6">
       <h3 className="font-semibold mb-2 text-base">Antworten</h3>
       <div className="flex flex-wrap gap-2">

@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import CustomSessionProvider from "./SessionProvider";
 import { ToastProvider } from "@/components/shared/ToastProvider";
-import GlobalHeader from "@/components/shared/GlobalHeader";
+import HeaderGate from "@/components/shared/HeaderGate";
 import GlobalFooter from "../components/shared/GlobalFooter";
 
 const geistSans = Geist({
@@ -35,7 +35,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans min-h-screen flex flex-col`}>        
         <CustomSessionProvider>
           <ToastProvider>
-            <GlobalHeader />
+            <HeaderGate />
             <main className="flex-1 w-full">{children}</main>
             <GlobalFooter />
           </ToastProvider>

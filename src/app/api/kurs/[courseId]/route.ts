@@ -135,22 +135,29 @@ export async function PUT(
   const { courseId } = await context.params;
     const body = await request.json();
 
-    // Falls nur veröffentlicht werden soll, ohne andere Felder
-    if (body.publish === true || body.isPublic === true || body.isPublished === true) {
-      // Nur Autor:in des Kurses oder Admin darf veröffentlichen
+    // Neue Logik: Teacher kann Kurs zur Prüfung einreichen -> reviewStatus=pending (statt direkt veröffentlichen)
+    if (body.publish === true || body.isPublic === true || body.isPublished === true || body.submitForReview === true) {
       const role = (session.user as any).role;
+      if (role === 'teacher') {
+        const pending = await Course.findByIdAndUpdate(
+          courseId,
+          { reviewStatus: 'pending', updatedAt: new Date() },
+          { new: true }
+        );
+        if (!pending) return NextResponse.json({ success:false, error:'Kurs nicht gefunden' }, { status:404 });
+        return NextResponse.json({ success:true, message:'Kurs zur Prüfung eingereicht', course: pending });
+      }
+      // Autoren/Admin behalten direktes Veröffentlichen
       if (role !== 'admin' && role !== 'author') {
         return NextResponse.json({ success: false, error: 'Keine Berechtigung' }, { status: 403 });
       }
       const published = await Course.findByIdAndUpdate(
         courseId,
-        { isPublished: true, updatedAt: new Date() },
+        { isPublished: true, reviewStatus: 'approved', updatedAt: new Date() },
         { new: true }
       );
-      if (!published) {
-        return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
-      }
-      return NextResponse.json({ success: true, message: 'Kurs veröffentlicht', course: published });
+      if (!published) return NextResponse.json({ success:false, error:'Kurs nicht gefunden' }, { status:404 });
+      return NextResponse.json({ success:true, message:'Kurs veröffentlicht', course: published });
     }
 
     // Normales Update (komplette Daten)
@@ -183,7 +190,8 @@ export async function PUT(
         title: nameOrTitle,
         description: body.description,
   category: normalizeCategory(body.category) || 'sonstiges',
-        isPublished: body.isPublic ?? body.isPublished ?? false,
+  // Normales Update verändert Veröffentlichung nicht mehr direkt
+  isPublished: body.isPublic ?? body.isPublished ?? false,
         updatedAt: new Date()
       },
       { new: true }
@@ -225,14 +233,28 @@ export async function PATCH(
     const { courseId } = await context.params;
     const body = await request.json();
 
-    if (body.publish === true) {
-  const updated = await Course.findByIdAndUpdate(courseId, { isPublished: true, updatedAt: new Date() }, { new: true });
-  if (!updated) return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
-  courseDetailCache.delete(cacheKey(courseId,'learner'));
-  courseDetailCache.delete(cacheKey(courseId,'author'));
-  courseDetailCache.delete(cacheKey(courseId,'admin'));
-  courseDetailCache.delete(cacheKey(courseId,'teacher'));
-  return NextResponse.json({ success: true, course: updated });
+    if (body.publish === true || body.submitForReview === true) {
+      const session = await getServerSession(authOptions);
+      const role = (session?.user as any)?.role;
+      if (role === 'teacher') {
+        const pending = await Course.findByIdAndUpdate(courseId, { reviewStatus:'pending', updatedAt: new Date() }, { new:true });
+        if(!pending) return NextResponse.json({ success:false, error:'Kurs nicht gefunden' }, { status:404 });
+        courseDetailCache.delete(cacheKey(courseId,'learner'));
+        courseDetailCache.delete(cacheKey(courseId,'author'));
+        courseDetailCache.delete(cacheKey(courseId,'admin'));
+        courseDetailCache.delete(cacheKey(courseId,'teacher'));
+        return NextResponse.json({ success:true, course: pending, message:'Kurs zur Prüfung eingereicht' });
+      }
+      if (role==='admin' || role==='author') {
+        const updated = await Course.findByIdAndUpdate(courseId, { isPublished:true, reviewStatus:'approved', updatedAt: new Date() }, { new: true });
+        if (!updated) return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
+        courseDetailCache.delete(cacheKey(courseId,'learner'));
+        courseDetailCache.delete(cacheKey(courseId,'author'));
+        courseDetailCache.delete(cacheKey(courseId,'admin'));
+        courseDetailCache.delete(cacheKey(courseId,'teacher'));
+        return NextResponse.json({ success: true, course: updated, message:'Kurs veröffentlicht' });
+      }
+      return NextResponse.json({ success:false, error:'Keine Berechtigung' }, { status:403 });
     }
 
     return NextResponse.json({ success: false, error: 'Keine gültige Aktion' }, { status: 400 });
@@ -257,9 +279,13 @@ export async function DELETE(
 
   await dbConnect();
   const { courseId } = await context.params;
-  // Schutz: Nur Kurs-Autor:in oder Admin darf löschen
+  // Kurs laden um Eigentümer zu prüfen (Teacher darf eigenen Kurs löschen)
   const role = (session.user as any).role;
-  if (role !== 'admin' && role !== 'author') {
+  const username = (session.user as any).username;
+  const courseDoc = await Course.findById(courseId).lean();
+  if(!courseDoc) return NextResponse.json({ success:false, error:'Kurs nicht gefunden' }, { status:404 });
+  const isOwnerTeacher = role==='teacher' && (courseDoc as any).author === username;
+  if (role !== 'admin' && role !== 'author' && !isOwnerTeacher) {
     return NextResponse.json({ success: false, error: 'Keine Berechtigung' }, { status: 403 });
   }
     
@@ -272,12 +298,8 @@ export async function DELETE(
 
   // Kurs löschen
     const deletedCourse = await Course.findByIdAndDelete(courseId);
-
     if (!deletedCourse) {
-      return NextResponse.json(
-        { success: false, error: "Kurs nicht gefunden" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'Kurs nicht gefunden' }, { status: 404 });
     }
 
     // Fortschritt bereinigen: sowohl reine lessonId als auch courseId-lessonId Einträge entfernen
