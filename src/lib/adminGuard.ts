@@ -31,12 +31,6 @@ export async function isAdminRequest(request: Request): Promise<boolean> {
     if (!token || typeof token !== 'object') return false;
     const role = (token as any).role as string | undefined;
     if (role === 'admin') return true;
-    const uname = String((token as any).username || '').toLowerCase();
-    if (uname) {
-      const list = (process.env.ADMIN_USERNAMES || '')
-        .split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
-      if (list.includes(uname)) return true;
-    }
     return false;
   } catch { return false; }
 }
