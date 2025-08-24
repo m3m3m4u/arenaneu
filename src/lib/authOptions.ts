@@ -6,6 +6,9 @@ import { compare } from "bcryptjs";
 import { getServerSession } from 'next-auth/next';
 
 export const authOptions: NextAuthOptions = {
+  // Wichtig: Secret explizit setzen, sonst kann getToken() in Produktions-Umgebungen (Edge/Route) den JWT nicht verifizieren
+  // und liefert null. In Produktion MUSS NEXTAUTH_SECRET gesetzt sein.
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "Credentials",
