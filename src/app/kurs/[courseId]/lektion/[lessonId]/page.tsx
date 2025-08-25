@@ -562,6 +562,10 @@ export default function LessonPage() {
   const isMultiple = lesson.type === 'multiple-choice';
   const isMatching = lesson.type === 'matching';
   const isMemory = lesson.type === 'memory';
+  const isSingleChoice = lesson.type === 'single-choice';
+  const hasMedia = !!currentMedia;
+  // Side-by-side jetzt für Single & Multiple Choice mit Media
+  const sideBySideChoice = (isSingleChoice || isMultiple) && hasMedia;
 
   return (
   <div className="max-w-6xl mx-auto mt-10 p-6">
@@ -586,39 +590,7 @@ export default function LessonPage() {
           <MemoryGame lesson={{ ...lesson, type: 'memory' }} onCompleted={() => { setIsCorrect(true); setShowResult(true); setCompleted(true); }} completedLessons={completedLessons} />
         ) : currentQuestion ? (
           <>
-            <h2 className="text-xl font-semibold mb-6">{currentQuestion.question}</h2>
-            {/* Media */}
-            {!isMatching && currentMedia && (
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                {isImagePath(currentMedia) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img 
-                    src={currentMedia} 
-                    alt="Frage Bild" 
-                    className="max-w-full max-h-64 object-contain mx-auto border rounded"
-                    onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }}
-                  />
-                ) : isAudioPath(currentMedia) ? (
-                  <audio controls className="w-full max-w-md mx-auto">
-                    {(()=>{ const name=(currentMedia.split('/').pop()||''); return name? <source src={`/medien/uploads/${name}`}/> : null; })()}
-                    <source src={currentMedia} />
-                    <source src={currentMedia.replace('/uploads/','/media/')}/>
-                    <p className="text-red-600 text-sm">Audio wird vom Browser nicht unterstützt</p>
-                  </audio>
-                ) : (
-                  <a 
-                    href={currentMedia} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline break-all"
-                  >
-                    📎 {currentMedia}
-                  </a>
-                )}
-              </div>
-            )}
-
-            {/* Matching UI */}
+            {/* Matching UI separat */}
             {isMatching ? (
               <>
                 <MatchingUI
@@ -636,52 +608,115 @@ export default function LessonPage() {
                 )}
               </>
             ) : (
-              <div className="space-y-3 mb-6">
-                {isMultiple ? (
-                  answersForRender.map((answer, index) => {
-                    const isSelected = selectedAnswers.includes(answer);
-                    const isCorrectAns = correctListNormalized.includes(norm(answer));
-                    let buttonClass = "w-full p-4 text-left border-2 rounded-lg transition-all ";
-                    if (showResult) {
-                      if (isCorrectAns) {
-                        buttonClass += "border-green-500 bg-green-50 text-green-800";
-                      } else if (isSelected && !isCorrectAns) {
-                        buttonClass += "border-red-500 bg-red-50 text-red-800";
-                      } else {
-                        buttonClass += "border-gray-200 bg-gray-50 text-gray-600";
-                      }
-                    } else {
-                      if (isSelected) {
-                        buttonClass += "border-blue-500 bg-blue-50 text-blue-800";
-                      } else {
-                        buttonClass += "border-gray-200 hover:border-gray-300 hover:bg-gray-50";
-                      }
-                    }
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => handleAnswerSelect(answer)}
-                        disabled={showResult}
-                        className={buttonClass}
+              <div className={sideBySideChoice? 'mb-6 flex flex-col md:flex-row gap-6 items-start':'space-y-3 mb-6'}>
+                {sideBySideChoice && (
+                  <div className="md:basis-2/5 w-full md:max-w-[40%] rounded-lg p-3 flex items-center justify-center max-h-80 overflow-hidden">
+                    {isImagePath(currentMedia) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={currentMedia}
+                        alt="Frage Bild"
+                        className="w-full h-full object-contain rounded"
+                        onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }}
+                      />
+                    ) : isAudioPath(currentMedia) ? (
+                      <audio controls className="w-full">
+                        {(()=>{ const name=(currentMedia.split('/').pop()||''); return name? <source src={`/medien/uploads/${name}`}/> : null; })()}
+                        <source src={currentMedia} />
+                        <source src={currentMedia.replace('/uploads/','/media/')}/>
+                        <p className="text-red-600 text-sm">Audio wird vom Browser nicht unterstützt</p>
+                      </audio>
+                    ) : (
+                      <a
+                        href={currentMedia}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline break-all text-sm"
                       >
-                        {String.fromCharCode(65 + index)}) {answer}
-                      </button>
-                    );
-                  })
-                ) : (
-                  answersForRender.map((answer, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleAnswerSelect(answer)}
-                      disabled={showResult}
-                      className={`w-full p-4 text-left border-2 rounded-lg transition-all ${
-                        selectedAnswer === answer ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {String.fromCharCode(65 + index)}) {answer}
-                    </button>
-                  ))
+                        📎 {currentMedia}
+                      </a>
+                    )}
+                  </div>
                 )}
+                <div className={sideBySideChoice? 'md:basis-3/5 grow w-full space-y-3':'space-y-3 w-full'}>
+                  <h2 className="text-xl font-semibold mb-2">{currentQuestion.question}</h2>
+                  {!sideBySideChoice && hasMedia && (
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      {isImagePath(currentMedia) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={currentMedia}
+                          alt="Frage Bild"
+                          className="max-w-full max-h-64 object-contain mx-auto border rounded"
+                          onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }}
+                        />
+                      ) : isAudioPath(currentMedia) ? (
+                        <audio controls className="w-full max-w-md mx-auto">
+                          {(()=>{ const name=(currentMedia.split('/').pop()||''); return name? <source src={`/medien/uploads/${name}`}/> : null; })()}
+                          <source src={currentMedia} />
+                          <source src={currentMedia.replace('/uploads/','/media/')}/>
+                          <p className="text-red-600 text-sm">Audio wird vom Browser nicht unterstützt</p>
+                        </audio>
+                      ) : (
+                        <a
+                          href={currentMedia}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline break-all"
+                        >
+                          📎 {currentMedia}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-3">
+                    {isMultiple ? (
+                      answersForRender.map((answer, index) => {
+                        const isSelected = selectedAnswers.includes(answer);
+                        const isCorrectAns = correctListNormalized.includes(norm(answer));
+                        let buttonClass = "w-full p-4 text-left border-2 rounded-lg transition-all ";
+                        if (showResult) {
+                          if (isCorrectAns) {
+                            buttonClass += "border-green-500 bg-green-50 text-green-800";
+                          } else if (isSelected && !isCorrectAns) {
+                            buttonClass += "border-red-500 bg-red-50 text-red-800";
+                          } else {
+                            buttonClass += "border-gray-200 bg-gray-50 text-gray-600";
+                          }
+                        } else {
+                          if (isSelected) {
+                            buttonClass += "border-blue-500 bg-blue-50 text-blue-800";
+                          } else {
+                            buttonClass += "border-gray-200 hover:border-gray-300 hover:bg-gray-50";
+                          }
+                        }
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => handleAnswerSelect(answer)}
+                            disabled={showResult}
+                            className={buttonClass}
+                          >
+                            {String.fromCharCode(65 + index)}) {answer}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      answersForRender.map((answer, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleAnswerSelect(answer)}
+                          disabled={showResult}
+                          className={`w-full p-4 text-left border-2 rounded-lg transition-all ${
+                            selectedAnswer === answer ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {String.fromCharCode(65 + index)}) {answer}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

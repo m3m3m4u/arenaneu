@@ -21,14 +21,16 @@ export default function MessagesPage(){
   const [recipientUser,setRecipientUser]=useState('');
   const [recipientClass,setRecipientClass]=useState('');
   const [learners,setLearners]=useState<Option[]>([]);
+  const [teachers,setTeachers]=useState<Option[]>([]);
   const [classes,setClasses]=useState<Option[]>([]);
+  const [targetRole,setTargetRole]=useState<'learner'|'teacher'>('learner');
   const [folder,setFolder]=useState<'inbox'|'outbox'|'trash'>('inbox');
 
   useEffect(()=>{
     if(status==='unauthenticated') { router.push('/login'); return; }
-    // Nur Teacher und Learner dürfen Nachrichten nutzen (Autoren/Admins raus)
+    // Nachrichten jetzt für teacher, learner UND admin sichtbar. Andere Rollen (autor, guest, etc.) leiten um.
     const r = (session?.user as any)?.role;
-    if(status==='authenticated' && r && r!=='teacher' && r!=='learner'){
+    if(status==='authenticated' && r && r!=='teacher' && r!=='learner' && r!=='admin'){
       router.push('/dashboard');
     }
   },[status,router,(session?.user as any)?.role]);
@@ -49,11 +51,18 @@ export default function MessagesPage(){
   // Für Teacher: verfügbare Klassen/Lernende holen (nutzt vorhandenes Manage-API)
   useEffect(()=>{
     async function loadContext(){
-      if(role==='teacher' || role==='admin'){
+      if(role==='teacher'){
         try{ const res = await fetch('/api/teacher/manage'); const d=await res.json(); if(res.ok && d.success){
           setClasses((d.classes||[]).map((c:any)=>({ value:c._id, label:c.name })));
           setLearners((d.learners||[]).map((l:any)=>({ value:l._id||l.username, label:`${l.name||l.username}` })));
         }} catch {}
+      } else if(role==='admin'){
+        // Admin lädt alle Teacher & Learner (kompakt, nur IDs/Namen) -> neue API
+        try{ const res = await fetch('/api/messages/context'); const d=await res.json(); if(res.ok && d.success){
+          setLearners((d.learners||[]).map((l:any)=>({ value:l._id, label:l.name||l.username })));
+          setTeachers((d.teachers||[]).map((t:any)=>({ value:t._id, label:t.name||t.username })));
+          setClasses((d.classes||[]).map((c:any)=>({ value:c._id, label:c.name })));
+        }} catch{}
       }
     }
     loadContext();
@@ -127,14 +136,23 @@ export default function MessagesPage(){
         <h2 className="font-semibold">Neue Nachricht</h2>
         <form onSubmit={send} className="grid gap-2 text-sm">
           {(role==='teacher' || role==='admin') && (
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center text-xs">
+              {role==='admin' && (
+                <div className="flex items-center gap-1 border rounded px-2 py-1 bg-gray-50">
+                  <span>Ziel:</span>
+                  <select value={targetRole} onChange={e=>{ setTargetRole(e.target.value as any); setRecipientUser(''); }} className="bg-transparent">
+                    <option value="learner">Lernende</option>
+                    <option value="teacher">Lehrer</option>
+                  </select>
+                </div>
+              )}
               <select value={recipientClass} onChange={e=>{ setRecipientClass(e.target.value); if(e.target.value) setRecipientUser(''); }} className="border rounded px-2 py-1">
                 <option value="">An Klasse…</option>
                 {classes.map(c=> <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
               <select value={recipientUser} onChange={e=>{ setRecipientUser(e.target.value); if(e.target.value) setRecipientClass(''); }} className="border rounded px-2 py-1">
-                <option value="">An Lernenden…</option>
-                {learners.map(l=> <option key={l.value} value={l.value}>{l.label}</option>)}
+                <option value="">An {targetRole==='learner'? 'Lernenden':'Lehrer'}…</option>
+                {(role==='admin' && targetRole==='teacher'? teachers : learners).map(l=> <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
           )}
@@ -220,13 +238,13 @@ function ReplyForm({ role, message, onSent }:{ role:string; message:Msg; onSent:
     try{
       const payload:any = { subject, body, parentMessage: message._id };
       if(role==='teacher' || role==='admin'){
-        // Wenn ursprüngliche Nachricht an eine Klasse ging, antworte an dieselbe Klasse.
-        const clsId = (message.recipientClass as any)?._id || (typeof (message.recipientClass as any) === 'string' ? message.recipientClass : null);
+        // Wenn ursprüngliche Nachricht an eine Klasse ging -> an Klasse antworten
+        const clsId = (message.recipientClass as any)?._id || (typeof (message.recipientClass as any)==='string'? message.recipientClass : null);
         if(clsId){
           payload.recipientClass = clsId;
         } else {
-          // sonst an den ursprünglichen Sender (Lernenden)
-          const senderId = (message.sender as any)?._id || (typeof (message.sender as any) === 'string' ? message.sender : null);
+          // Sonst an den ursprünglichen Sender antworten
+          const senderId = (message.sender as any)?._id || (typeof (message.sender as any)==='string'? message.sender : null);
           if(senderId){ payload.recipientUser = senderId; }
         }
       }

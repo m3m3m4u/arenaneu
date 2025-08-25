@@ -72,17 +72,24 @@ export async function GET(req: Request){
     }
   }
   if(meRole==='teacher' || meRole==='admin'){
-    // Teacher sieht Nachrichten an/ von seinen Lernenden oder an seine Klassen
-    const classIds = await TeacherClass.find({ teacher: meId }, '_id').lean();
-    const classSet = classIds.map((c:any)=>String(c._id));
-    const learnerIds = await User.find({ ownerTeacher: meId }, '_id').lean();
-    const lSet = learnerIds.map((u:any)=>String(u._id));
-  const base = { $and:[ (inTrash? { hiddenFor: meObjId } : notHidden), { $or:[
-      { sender: meObjId },
-      { recipientClass: { $in: classSet.map(id=>new mongoose.Types.ObjectId(id)) } },
-      { recipientUser: { $in: lSet.map(id=>new mongoose.Types.ObjectId(id)) } },
-      { sender: { $in: lSet.map(id=>new mongoose.Types.ObjectId(id)) } }
-    ] } ]} as any;
+    // Unterschiedliche Sicht für Teacher vs. Admin
+    let base: any;
+    if(meRole==='admin'){
+      // Admin sieht alle Threads, an denen er beteiligt ist (Sender oder direkter Empfänger)
+      base = { $and:[ (inTrash? { hiddenFor: meObjId } : notHidden), { $or:[ { sender: meObjId }, { recipientUser: meObjId } ] } ] } as any;
+    } else {
+      // Teacher: Nachrichten an / von eigenen Lernenden oder an eigene Klassen
+      const classIds = await TeacherClass.find({ teacher: meId }, '_id').lean();
+      const classSet = classIds.map((c:any)=>String(c._id));
+      const learnerIds = await User.find({ ownerTeacher: meId }, '_id').lean();
+      const lSet = learnerIds.map((u:any)=>String(u._id));
+      base = { $and:[ (inTrash? { hiddenFor: meObjId } : notHidden), { $or:[
+        { sender: meObjId },
+        { recipientClass: { $in: classSet.map(id=>new mongoose.Types.ObjectId(id)) } },
+        { recipientUser: { $in: lSet.map(id=>new mongoose.Types.ObjectId(id)) } },
+        { sender: { $in: lSet.map(id=>new mongoose.Types.ObjectId(id)) } }
+      ] } ]} as any;
+    }
     if(view==='threads'){
       const match = base;
       const commonStages: any[] = [
@@ -156,24 +163,58 @@ export async function POST(req: Request){
     if(parent){ threadId = parent.threadId || parent._id; }
   }
   if(role==='learner'){
-    const me = await User.findById(meId, 'ownerTeacher');
-    if(!me?.ownerTeacher) return NextResponse.json({ success:false, error:'Kein zugewiesener Teacher' }, { status:400 });
-  const msg = await Message.create({ sender: meId, recipientUser: me.ownerTeacher, subject, body: text, parentMessage: parentMessage||undefined, threadId });
+    // Lernender sendet in der Regel an Owner-Teacher. Antwortet er aber auf eine Nachricht eines Admin/Teachers, soll an diesen gesendet werden.
+    let targetUser: any = null;
+    if(parentMessage){
+      const parent = await Message.findById(parentMessage, 'sender recipientUser recipientClass');
+      if(parent){
+        // Sender der Eltern-Nachricht ist Ziel, sofern nicht der Lernende selbst
+        if(String(parent.sender) !== String(meId)) targetUser = parent.sender;
+      }
+    }
+    if(!targetUser){
+      const me = await User.findById(meId, 'ownerTeacher');
+      if(!me?.ownerTeacher) return NextResponse.json({ success:false, error:'Kein zugewiesener Teacher' }, { status:400 });
+      targetUser = me.ownerTeacher;
+    }
+    const msg = await Message.create({ sender: meId, recipientUser: targetUser, subject, body: text, parentMessage: parentMessage||undefined, threadId });
     return NextResponse.json({ success:true, messageId: String(msg._id) });
   }
   if(role==='teacher' || role==='admin'){
+    // Admin darf jede Klasse / jeden Nutzer adressieren. Teacher nur eigene Klassen / Lernende (oder Admin bei Reply).
     if(recipientClass){
       if(!isValidObjectId(recipientClass)) return NextResponse.json({ success:false, error:'Ungültige Klassen-ID' }, { status:400 });
-      const cls = await TeacherClass.findOne({ _id: recipientClass, teacher: meId }, '_id');
+      let cls: any = null;
+      if(role==='admin'){
+        cls = await TeacherClass.findById(recipientClass, '_id');
+      } else {
+        cls = await TeacherClass.findOne({ _id: recipientClass, teacher: meId }, '_id');
+      }
       if(!cls) return NextResponse.json({ success:false, error:'Klasse nicht gefunden' }, { status:404 });
-  const msg = await Message.create({ sender: meId, recipientClass: cls._id, subject, body: text, parentMessage: parentMessage||undefined, threadId });
+      const msg = await Message.create({ sender: meId, recipientClass: cls._id, subject, body: text, parentMessage: parentMessage||undefined, threadId });
       return NextResponse.json({ success:true, messageId: String(msg._id) });
     }
     if(recipientUser){
       if(!isValidObjectId(recipientUser)) return NextResponse.json({ success:false, error:'Ungültige User-ID' }, { status:400 });
-      const learner = await User.findOne({ _id: recipientUser, ownerTeacher: meId }, '_id');
-      if(!learner) return NextResponse.json({ success:false, error:'Lernender nicht gefunden' }, { status:404 });
-  const msg = await Message.create({ sender: meId, recipientUser: learner._id, subject, body: text, parentMessage: parentMessage||undefined, threadId });
+      let allowed = false; let target: any = null;
+      const user = await User.findById(recipientUser, 'role ownerTeacher');
+      if(user){
+        if(role==='admin'){
+          // Admin darf alle Teacher & Learner ansprechen
+            if(user.role==='learner' || user.role==='teacher') allowed = true;
+        } else {
+          // Teacher darf eigenen Lernenden ansprechen oder Admin als Reply (s.u.)
+          if(String(user.ownerTeacher) === String(meId)) allowed = true;
+          if(user.role==='admin' && parentMessage){
+            // Reply an Admin erlaubt wenn ursprüngliche Nachricht von Admin
+            const parent = await Message.findById(parentMessage, 'sender');
+            if(parent && String(parent.sender) === String(user._id)) allowed = true;
+          }
+        }
+        if(allowed) target = user._id;
+      }
+      if(!allowed) return NextResponse.json({ success:false, error: role==='admin'? 'Zielrolle nicht erlaubt (nur Lehrer/Lernende)': 'Empfänger nicht gefunden / nicht zugeordnet' }, { status:404 });
+      const msg = await Message.create({ sender: meId, recipientUser: target, subject, body: text, parentMessage: parentMessage||undefined, threadId });
       return NextResponse.json({ success:true, messageId: String(msg._id) });
     }
     return NextResponse.json({ success:false, error:'recipientUser oder recipientClass erforderlich' }, { status:400 });

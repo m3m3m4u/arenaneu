@@ -58,8 +58,66 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
   ];
   const leftColor = (l:string)=>{ const r= matched[l]; if(!r) return null; const idx = pairIndex(l,r); return idx>=0? colorClasses[idx % colorClasses.length]: null; };
   const rightColor = (r:string)=>{ const entry = Object.entries(matched).find(([l,rr])=> rr===r); if(!entry) return null; const [l,rr]=entry; const idx = pairIndex(l,rr); return idx>=0? colorClasses[idx % colorClasses.length]: null; };
-  return <div className="grid grid-cols-2 gap-6">
-    <div className="space-y-2">{leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50 bg-white`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}>{renderOption(l)}</button>; })}</div>
-    <div className="space-y-2">{rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}>{renderOption(r)}</button>; })}</div>
-  </div>;
+  const [fullscreen,setFullscreen] = useState(false);
+  const [vertical,setVertical] = useState(false); // Layout-Umschaltung
+
+  // Layout Präferenz laden (und auf kleinen Screens initial vertikal)
+  useEffect(()=>{
+    try {
+      const saved = localStorage.getItem('matchingLayout');
+      if(saved === 'vertical') setVertical(true);
+      else if(saved === 'horizontal') setVertical(false);
+      else {
+        if(typeof window !== 'undefined' && window.innerWidth < 640){ setVertical(true); }
+      }
+    } catch {}
+  }, []);
+  const toggleLayout=()=> setVertical(v=>{ const next=!v; try{ localStorage.setItem('matchingLayout', next? 'vertical':'horizontal'); }catch{} return next; });
+  const Wrapper: React.FC<{children:React.ReactNode}> = ({children}) => fullscreen ? (
+    <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm overflow-auto p-4 md:p-8"><div className="max-w-6xl mx-auto">{children}</div></div>
+  ) : <>{children}</>;
+  const adaptiveText=(val:string)=>{
+    const len = val.length;
+    if(isImagePath(val) || isAudioPath(val)) return '';
+  if(len <= 20) return 'text-lg md:text-xl';
+  if(len <= 60) return 'text-base';
+  return 'text-sm';
+  };
+  return <Wrapper>
+    <div className="flex items-start justify-between mb-3 gap-4 flex-wrap">
+      <div className="space-y-1">
+  <h3 className="font-semibold text-base text-gray-700 md:text-lg">Zuordnung</h3>
+  <p className="text-xs md:text-sm text-gray-500 leading-snug max-w-xl">Verbinde linke und rechte Elemente, die zusammengehören. Gefundene Paare erhalten dieselbe Farbe. Du kannst das Layout umschalten (nebeneinander oder oben/unten).</p>
+      </div>
+      <div>
+        <div className="flex gap-2">
+          <button onClick={toggleLayout} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50" title="Layout umschalten">
+            {vertical? 'Layout: Vertikal' : 'Layout: Horizontal'}
+          </button>
+          <button onClick={()=>setFullscreen(f=>!f)} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">{fullscreen? 'Schließen':'Vollbild'}</button>
+        </div>
+      </div>
+    </div>
+    {vertical ? (
+      <div className="flex flex-col gap-10">
+        <div>
+          <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Links</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const base='w-full aspect-square flex items-center justify-center border rounded transition-colors p-2 md:p-4'; const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full text-center break-words ${adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
+          </div>
+        </div>
+        <div>
+          <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Rechts</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const base='w-full aspect-square flex items-center justify-center border rounded transition-colors p-2 md:p-4'; const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full text-center break-words ${adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
+          </div>
+        </div>
+      </div>
+    ) : (
+      <div className="grid grid-cols-2 gap-6">
+        <div className="space-y-2">{leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50 bg-white`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full text-center break-words ${adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}</div>
+        <div className="space-y-2">{rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full text-center break-words ${adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}</div>
+      </div>
+    )}
+  </Wrapper>;
 }

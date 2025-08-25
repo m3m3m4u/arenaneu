@@ -7,7 +7,7 @@ export default function GlobalFooter(){
   const { data: session } = useSession();
   const role = (session?.user as any)?.role;
   const [unread,setUnread]= useState<number>(0);
-  const canUseMessages = role==='teacher' || role==='learner';
+  const canUseMessages = !!role && role !== 'guest';
   useEffect(()=>{
     let timer: any;
     async function load(){
@@ -47,11 +47,12 @@ export default function GlobalFooter(){
           <Link href="/impressum" className="hover:text-gray-900">Impressum</Link>
           <Link href="/datenschutz" className="hover:text-gray-900">Datenschutz</Link>
           <Link href="/about" className="hover:text-gray-900">Über LernArena</Link>
-          {canUseMessages && <Link href="/messages" className="relative hover:text-gray-900">
-            Nachrichten
-            {unread>0 && <span className="ml-1 inline-flex items-center justify-center text-[10px] px-1.5 py-0.5 rounded-full bg-red-600 text-white font-medium">{unread>99? '99+': unread}</span>}
+          {canUseMessages && <Link href="/messages" className="relative hover:text-gray-900 inline-flex items-center gap-1">
+            <span>Nachrichten</span>
+            <span className={`inline-flex items-center justify-center text-[10px] px-1.5 py-0.5 rounded-full font-medium ${unread>0? 'bg-red-600 text-white':'bg-gray-300 text-gray-700'}`}>{unread>99? '99+': unread}</span>
           </Link>}
           <button type="button" onClick={()=>setShowSupport(s=>!s)} className="hover:text-gray-900">Support</button>
+          {role==='admin' && <Link href="/admin/db" className="hover:text-gray-900">DB Monitor</Link>}
           <button
             type="button"
             onClick={() => {

@@ -139,8 +139,10 @@ function CoursesTab() {
   async function load() {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
+  const params = new URLSearchParams();
       params.set('showAll','1');
+  // Kennzeichnet Abruf aus Autorentool, damit API Teacher-Kurse ausblendet
+  params.set('context','autor');
       params.set('page', String(page));
       params.set('limit', String(pageSize));
       if (q) params.set('q', q);

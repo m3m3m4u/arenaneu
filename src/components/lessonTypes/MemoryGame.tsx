@@ -16,6 +16,7 @@ export default function MemoryGame({ lesson, onCompleted, completedLessons, setC
   const { handleFlip, restart } = useMemoryGame({ cards, setCards, flippedIndices, setFlippedIndices, moves, setMoves, finished, setFinished, lock, setLock });
   const [marking, setMarking] = useState(false);
   const isAlreadyDone = completedLessons.includes(lesson._id);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(()=>{ if(finished && !isAlreadyDone){ (async()=>{ try{ const username=session?.user?.username; setMarking(true); await finalizeLesson({ username, lessonId: lesson._id, courseId: lesson.courseId, type: lesson.type, earnedStar: lesson.type !== 'markdown' }); if(setCompletedLessons){ setCompletedLessons(prev=> prev.includes(lesson._id)? prev : [...prev, lesson._id]); } } finally { setMarking(false); onCompleted(); } })(); } },[finished, isAlreadyDone, lesson._id, lesson.courseId, lesson.type, onCompleted, session?.user?.username, setCompletedLessons]);
 
@@ -60,6 +61,11 @@ export default function MemoryGame({ lesson, onCompleted, completedLessons, setC
         <source src={p}/>
       </audio>
     ); 
+    if(!isMediaCandidate){
+      const len = canonical.length;
+      const sizeCls = len <= 20 ? 'text-base md:text-lg' : len <= 60 ? 'text-sm' : 'text-xs';
+      return <span className={`${sizeCls} p-1 break-words leading-tight text-center block`}>{canonical}</span>;
+    }
     return <span className="text-xs p-1 break-words leading-tight text-center block">{canonical}</span>; 
   };
 
@@ -75,7 +81,26 @@ export default function MemoryGame({ lesson, onCompleted, completedLessons, setC
     { border:'border-cyan-500', bg:'bg-cyan-50', text:'text-cyan-800' },
   ];
 
-  return <div>
+  const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => fullscreen ? (
+    <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm overflow-auto p-4 md:p-8">
+      <div className="max-w-5xl mx-auto">
+        {children}
+      </div>
+    </div>
+  ) : <>{children}</>;
+
+  return <Wrapper>
+    <div className="flex items-start justify-between mb-3 gap-4">
+      <div className="space-y-1">
+        <h3 className="font-semibold text-sm text-gray-700">Memory</h3>
+        <p className="text-[11px] text-gray-500 leading-snug max-w-xl">Finde alle passenden Paare. Klicke eine Karte, dann ihr Gegenstück. Paare erhalten eine farbige Markierung.</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={()=>setFullscreen(f=>!f)} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">
+          {fullscreen? 'Schließen' : 'Vollbild'}
+        </button>
+      </div>
+    </div>
     {initialPairs.length===0 && <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">Keine Memory-Paare vorhanden.</div>}
     <div className="grid gap-4" style={{gridTemplateColumns:`repeat(${Math.min(4, Math.ceil(Math.sqrt(cards.length||1)))}, minmax(0,1fr))`}}>
       {cards.map((card,idx)=>{ 
@@ -98,5 +123,5 @@ export default function MemoryGame({ lesson, onCompleted, completedLessons, setC
       <button onClick={restart} className="text-xs px-3 py-1 border rounded hover:bg-gray-50">Neu mischen</button>
       {marking && <span className="text-sm text-gray-500">Speichere Abschluss…</span>}
     </div>
-  </div>;
+  </Wrapper>;
 }

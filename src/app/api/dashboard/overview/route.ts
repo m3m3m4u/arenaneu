@@ -41,7 +41,14 @@ export async function GET(request: any){
     let unreadCount = 0;
     const role = (session.user as any).role;
     if (role === 'teacher' || role === 'learner') {
-      unreadCount = await Message.countDocuments({ receiver: username, read: { $ne: true } });
+      // Nachrichtenmodell: recipientUser (ObjectId), recipientClass, readBy:[]
+      const meId = (session.user as any).id;
+      if(meId){
+        const mongoose = (await import('mongoose')).default;
+        const meObjId = new mongoose.Types.ObjectId(meId);
+        const base: any = { recipientUser: meObjId, sender: { $ne: meObjId }, readBy: { $ne: meObjId }, purgedFor: { $ne: meObjId }, hiddenFor: { $ne: meObjId } };
+        unreadCount = await Message.countDocuments(base);
+      }
     }
     const updatedAt = (userDoc as any).updatedAt ? new Date((userDoc as any).updatedAt).getTime() : Date.now();
     const etag = 'W/"ov:'+username+':'+updatedAt+':'+unreadCount+'"';

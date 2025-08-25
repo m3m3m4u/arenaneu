@@ -15,6 +15,7 @@ export default function TeacherPanel(){
   );
 }
 
+
 function TeacherPanelContent(){
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -28,12 +29,10 @@ function TeacherPanelContent(){
   const [newClass,setNewClass]=useState("");
   const [newLearner,setNewLearner]=useState({ username:"", name:"", password:"", email:"", classId:"" });
   const [busy,setBusy]=useState(false);
-  
   const [filterClass,setFilterClass]=useState('');
   const [bulkOpen,setBulkOpen]=useState(false);
   const [bulkText,setBulkText]=useState('');
   const [bulkResult,setBulkResult]=useState<{createdCount:number; skippedCount:number; created:any[]; skipped:any[]}|null>(null);
-  // Admin-Kontext ist nicht mehr erlaubt
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [coursesBusy, setCoursesBusy] = useState(false);
@@ -41,38 +40,33 @@ function TeacherPanelContent(){
   useEffect(()=>{
     if(status==='loading') return;
     const role = (session?.user as any)?.role;
-  if(status==='unauthenticated') router.push('/login');
-  else if(role!=='teacher') router.push('/dashboard');
+    if(status==='unauthenticated') router.push('/login');
+    else if(role!=='teacher') router.push('/dashboard');
   },[status,(session?.user as any)?.role,router]);
 
   async function load(){
     setLoading(true); setError(null);
-      try{
-        // Parallel: Stammdaten + Kurs-Freischaltungen + Kursliste
-        const [res, resCoursesManage, resAllCourses] = await Promise.all([
-          fetch('/api/teacher/manage'),
-          fetch('/api/teacher/courses/manage'),
-          fetch('/api/kurse?showAll=1')
-        ]);
-        let data:any=null, dataManage:any=null, dataAll:any=null;
-        try { data = await res.json(); } catch {}
-        try { dataManage = await resCoursesManage.json(); } catch {}
-        try { dataAll = await resAllCourses.json(); } catch {}
-  if(res.ok && data?.success){ setClasses(data.classes); setLearners(data.learners); }
-        else setError((data && (data.error||data.message)) || `Fehler (${res.status})`);
-        if(resCoursesManage.ok && dataManage?.success){ setClassCourseState(dataManage.classes||[]); }
-        if(resAllCourses.ok && (dataAll?.success || Array.isArray(dataAll?.courses))){
-          setAllCourses((dataAll.courses||[]).map((c:any)=>({ _id:String(c._id), title:String(c.title||'') })));
-        }
-      }catch{ setError('Netzwerkfehler'); }
+    try{
+      const [res, resCoursesManage, resAllCourses] = await Promise.all([
+        fetch('/api/teacher/manage'),
+        fetch('/api/teacher/courses/manage'),
+        fetch('/api/kurse?showAll=1')
+      ]);
+      let data:any=null, dataManage:any=null, dataAll:any=null;
+      try { data = await res.json(); } catch {}
+      try { dataManage = await resCoursesManage.json(); } catch {}
+      try { dataAll = await resAllCourses.json(); } catch {}
+      if(res.ok && data?.success){ setClasses(data.classes); setLearners(data.learners); }
+      else setError((data && (data.error||data.message)) || `Fehler (${res.status})`);
+      if(resCoursesManage.ok && dataManage?.success){ setClassCourseState(dataManage.classes||[]); }
+      if(resAllCourses.ok && (dataAll?.success || Array.isArray(dataAll?.courses))){
+        setAllCourses((dataAll.courses||[]).map((c:any)=>({ _id:String(c._id), title:String(c.title||'') })));
+      }
+    }catch{ setError('Netzwerkfehler'); }
     setLoading(false);
   }
   useEffect(()=>{ if((session?.user as any)?.role==='teacher') load(); },[(session?.user as any)?.role]);
-  // Filter zurücksetzen, wenn sich Klassen ändern
-  // Wenn der aktuelle Filter nicht mehr existiert (z. B. anderer Teacher), Filter leeren
-  useEffect(()=>{
-    if(filterClass && !classes.some(c=>c._id===filterClass)) setFilterClass('');
-  }, [classes, filterClass]);
+  useEffect(()=>{ if(filterClass && !classes.some(c=>c._id===filterClass)) setFilterClass(''); }, [classes, filterClass]);
 
   async function createClass(e:React.FormEvent){
     e.preventDefault(); if(!newClass) return; setBusy(true);
@@ -80,8 +74,9 @@ function TeacherPanelContent(){
       const body:any = { action:'createClass', name:newClass };
       const res=await fetch('/api/teacher/manage',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
       const d=await res.json();
-  if(res.ok&&d.success){ setClasses(c=>[...c,{ _id:d.class.id, name:d.class.name }]); setNewClass(''); toast({ kind:'success', title:'Klasse erstellt', message:`"${d.class.name}" wurde angelegt.`}); }
-    } finally { setBusy(false); }
+      if(res.ok&&d.success){ setClasses(c=>[...c,{ _id:d.class.id, name:d.class.name }]); setNewClass(''); toast({ kind:'success', title:'Klasse erstellt', message:`"${d.class.name}" wurde angelegt.`}); }
+  } catch { setError('Netzwerkfehler'); }
+  finally { setBusy(false); }
   }
   async function createLearner(e:React.FormEvent){
     e.preventDefault(); if(!newLearner.username||!newLearner.name||!newLearner.password) return; setBusy(true);
@@ -89,8 +84,8 @@ function TeacherPanelContent(){
       const body:any = { action:'createLearner', ...newLearner };
       const res=await fetch('/api/teacher/manage',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
       const d=await res.json();
-  if(res.ok&&d.success){ setLearners(l=>[...l,{ username:d.learner.username, name:d.learner.name, class:newLearner.classId||undefined }]); setNewLearner({ username:'', name:'', password:'', email:'', classId:'' }); toast({ kind:'success', title:'Lernender erstellt', message: d.learner.username }); }
-  else { setError(d.error||`Fehler (${res.status})`); toast({ kind:'error', title:'Erstellen fehlgeschlagen', message:d.error||'Bitte prüfen.'}); }
+      if(res.ok&&d.success){ setLearners(l=>[...l,{ username:d.learner.username, name:d.learner.name, class:newLearner.classId||undefined }]); setNewLearner({ username:'', name:'', password:'', email:'', classId:'' }); toast({ kind:'success', title:'Lernender erstellt', message: d.learner.username }); }
+      else { setError(d.error||`Fehler (${res.status})`); toast({ kind:'error', title:'Erstellen fehlgeschlagen', message:d.error||'Bitte prüfen.'}); }
     } catch { setError('Netzwerkfehler'); } finally { setBusy(false); }
   }
   async function moveLearner(username:string,classId:string){
@@ -98,7 +93,7 @@ function TeacherPanelContent(){
     try{
       const body:any = { action:'moveLearner', learnerUsername:username, toClassId: classId||null };
       const res=await fetch('/api/teacher/manage',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if(res.ok){ setLearners(ls=>ls.map(l=>l.username===username?{...l,class:classId||undefined}:l)); toast({ kind:'success', title:'Verschoben', message:`${username} wurde zugeordnet.`}); }
+      if(res.ok){ setLearners(ls=>ls.map(l=>l.username===username?{...l,class:classId||undefined}:l)); toast({ kind:'success', title:'Verschoben', message:`${username} wurde zugeordnet.`}); }
     } finally { setBusy(false); }
   }
   async function deleteLearner(username:string){
@@ -106,10 +101,9 @@ function TeacherPanelContent(){
     try{
       const body:any = { action:'deleteLearner', learnerUsername:username };
       const res=await fetch('/api/teacher/manage',{ method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if(res.ok){ setLearners(ls=>ls.filter(l=>l.username!==username)); toast({ kind:'success', title:'Gelöscht', message:`${username} wurde entfernt.`}); }
+      if(res.ok){ setLearners(ls=>ls.filter(l=>l.username!==username)); toast({ kind:'success', title:'Gelöscht', message:`${username} wurde entfernt.`}); }
     } finally { setBusy(false); }
   }
-
   async function enableCourseForClass(){
     if(!selectedClassId || !selectedCourseId) return;
     setCoursesBusy(true);
@@ -118,25 +112,20 @@ function TeacherPanelContent(){
       const res = await fetch('/api/teacher/courses/manage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const d = await res.json().catch(()=>({}));
       if(res.ok && d?.success){
-        // Reload course-state
         const r = await fetch('/api/teacher/courses/manage');
         const dm = await r.json().catch(()=>({}));
         if(r.ok && dm?.success){ setClassCourseState(dm.classes||[]); }
       }
     } finally { setCoursesBusy(false); }
   }
-
   async function disableCourseForClass(classId:string, courseId:string){
     setCoursesBusy(true);
     try{
       const body:any = { action:'disable', classId, courseId };
       const res = await fetch('/api/teacher/courses/manage', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-      if(res.ok){
-        setClassCourseState(prev => prev.map(cls => cls._id===classId ? { ...cls, courses: cls.courses.filter(c=>c.course._id!==courseId) } : cls));
-      }
+      if(res.ok){ setClassCourseState(prev => prev.map(cls => cls._id===classId ? { ...cls, courses: cls.courses.filter(c=>c.course._id!==courseId) } : cls)); }
     } finally { setCoursesBusy(false); }
   }
-
   if(status==='loading' || loading) return <div className="p-6">Lade…</div>;
 
   return (
@@ -150,19 +139,16 @@ function TeacherPanelContent(){
 
   {/* Admin-Modus entfernt: Admins haben keine Lehrer-Funktionen */}
 
-      {/* Hilfe: Wie funktioniert das? */}
       <details className="bg-blue-50 border border-blue-200 text-blue-900 rounded p-4 text-sm">
-        <summary className="font-semibold cursor-pointer">Wie funktioniert das? (Hilfe)</summary>
+        <summary className="font-semibold cursor-pointer">Hilfe zu diesem Bereich</summary>
         <ul className="list-disc pl-5 mt-2 space-y-1">
-          <li>Lege zuerst Klassen an. Du kannst Lernende einzeln oder per Mehrfach-Import hinzufügen.</li>
-          <li>Unter „Zugriff“ stellst du ein, ob Lernende nur klassenbezogene Kurse sehen (Nur Klassenkurse) oder alle veröffentlichten Kurse (Alle Kurse).</li>
-          <li>Kurse erstellst und ordnest du im Bereich „Kurse erstellen/zuordnen“ deiner Klasse zu. Entweder als Link (Original bleibt erhalten) oder als anpassbare Klassenkopie.</li>
-          <li>Entwürfe sind für Lernende unsichtbar. Sichtbar werden Kurse erst nach Veröffentlichung oder wenn sie als Klassenkopie zugeordnet und freigegeben sind – je nach Zugriffseinstellung.</li>
-          <li>Statistiken zu Fortschritt und Sternen findest du im Bereich „Statistik“.</li>
+          <li><strong>Was hier geht:</strong> Klassen anlegen, Lernende verwalten, Bulk-Import.</li>
+          <li><strong>Kurse zuordnen:</strong> Das machst du im Menü „Kurse“ (oben). Dort kannst du Kurse erstellen und einer Klasse als Link oder Kopie geben.</li>
+          <li><strong>Zugriff umstellen:</strong> Pro Klasse später unter „Kurs Klassen zuordnen“ (Link/Kopie & Sichtbarkeit).</li>
+          <li><strong>Import</strong>: Im Dialog werden fehlende Klassen automatisch angelegt.</li>
+          <li><strong>Fortschritt</strong>: Übersicht/Statistik separat (wenn freigeschaltet).</li>
         </ul>
-        <div className="mt-2 text-xs text-blue-800">
-          Tipp: Lektionstypen (z. B. Multiple Choice, Lückentext, Minigame) bearbeitest du im Kurs-Editor. Bei „Minigame“ wählen die Lernenden die Spielform: Snake, Autospiel, Flugzeugspiel, PacMan oder Space Impact.
-        </div>
+        <div className="mt-2 text-xs text-blue-800">Tipp: Erst Klasse & Lernende anlegen, dann direkt ersten Kurs erstellen und zuordnen.</div>
       </details>
 
       <section className="bg-white border rounded p-4 space-y-4">

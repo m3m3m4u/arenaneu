@@ -1,20 +1,26 @@
 // Einfache In-Memory Request Metriken (pro Runtime / Lambda Instance)
 // Nicht persistent – nur für Diagnose von Lastspitzen.
 export interface RequestMetricEntry { count: number; last: number; }
-interface Hit { t: number; key: string; }
-interface MetricsStore { byKey: Map<string, RequestMetricEntry>; started: number; total: number; hits: Hit[]; spikeLogMinute?: number; }
+interface Hit { t: number; key: string; user?: string; }
+interface UserEntry { total: number; last: number; }
+interface MetricsStore { byKey: Map<string, RequestMetricEntry>; byUser: Map<string, UserEntry>; started: number; total: number; hits: Hit[]; spikeLogMinute?: number; }
 const g: any = global;
-if(!g.__REQUEST_METRICS__) g.__REQUEST_METRICS__ = { byKey: new Map(), started: Date.now(), total: 0, hits: [] } as MetricsStore;
+if(!g.__REQUEST_METRICS__) g.__REQUEST_METRICS__ = { byKey: new Map(), byUser: new Map(), started: Date.now(), total: 0, hits: [] } as MetricsStore;
 const STORE: MetricsStore = g.__REQUEST_METRICS__;
 
-export function recordRequest(path: string, method: string){
+export function recordRequest(path: string, method: string, user?: string){
   try {
     const key = method.toUpperCase()+" "+path.replace(/\d{24}/g,'{id}'); // maskiere ObjectIds
     let e = STORE.byKey.get(key);
     if(!e){ e = { count:0, last:0 }; STORE.byKey.set(key, e); }
     e.count++; e.last = Date.now(); STORE.total++;
     // Hit in Sliding-Window aufnehmen
-    STORE.hits.push({ t: e.last, key });
+    STORE.hits.push({ t: e.last, key, user });
+    if(user){
+      let ue = STORE.byUser.get(user);
+      if(!ue){ ue = { total:0, last:0 }; STORE.byUser.set(user, ue); }
+      ue.total++; ue.last = e.last;
+    }
     // Grobe Begrenzung der Array-Länge, alte Einträge periodisch entfernen
     if (STORE.hits.length > 5000) {
       const cutoff = Date.now() - 10*60*1000; // 10 Minuten
@@ -71,4 +77,16 @@ export function exportRequestMetrics(){
       top5m
     }
   };
+}
+
+export function exportUserActivity(windowMinutes = 5){
+  const now = Date.now();
+  const windowMs = windowMinutes * 60_000;
+  const cutoff = now - windowMs;
+  const counts: Record<string, number> = {};
+  for(const h of STORE.hits){
+    if(h.user && h.t >= cutoff){ counts[h.user] = (counts[h.user]||0)+1; }
+  }
+  const arr = Object.entries(counts).map(([user, count])=>({ user, count })).sort((a,b)=> b.count - a.count);
+  return { windowMinutes, users: arr };
 }

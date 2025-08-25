@@ -182,9 +182,9 @@ export default function DashboardPage() {
               {(!(session?.user as any)?.role || (session?.user as any)?.role==='learner') && (
                 <AutorWerden />
               )}
-              {/* Nachrichten Link */}
-              {(['teacher','learner'].includes((session?.user as any)?.role)) && (
-                <MessagesLink />
+              {/* Nachrichten Link mit Unread-Badge */}
+              {((session?.user as any)?.role && (session?.user as any)?.role!=='guest') && (
+                <MessagesLink unread={typeof unread==='number'? unread: 0} />
               )}
             </div>
           ) : (
@@ -262,13 +262,10 @@ function AutorWerden(){
   return <button disabled={busy} onClick={request} className="mt-3 text-xs px-3 py-1 border rounded bg-white hover:bg-gray-50 disabled:opacity-50">Autor werden (Anfrage)</button>;
 }
 
-function MessagesLink(){
-  const [unread,setUnread]=useState<number>(0);
-  useEffect(()=>{ let t:any; async function load(){ try{ const r=await fetch('/api/messages/unread'); const d=await r.json(); if(r.ok&&d.success) setUnread(d.count||0); else setUnread(0);} catch{} }
-    load(); t=setInterval(load, 120000); return ()=>{ if(t) clearInterval(t); };
-  },[]);
+function MessagesLink({ unread }: { unread:number }){
+  const badge = <span className={`inline-flex items-center justify-center text-[10px] leading-none px-1.5 py-0.5 rounded-full font-medium ${unread>0? 'bg-red-600 text-white':'bg-gray-200 text-gray-600'}`}>{unread>99?'99+':unread}</span>;
   return <a href="/messages" className="inline-flex items-center gap-1 text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">
     <span>Nachrichten</span>
-    {unread>0 && <span className="inline-flex items-center justify-center text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-red-600 text-white font-medium">{unread>99?'99+':unread}</span>}
+    {badge}
   </a>;
 }

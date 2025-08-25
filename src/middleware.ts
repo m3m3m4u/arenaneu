@@ -44,11 +44,14 @@ export async function middleware(req: any) {
   const { pathname } = req.nextUrl;
   if (pathname.startsWith('/api/')) {
     // Globale API Request Metrik (leichtgewichtig)
-    recordRequest(pathname, req.method || 'GET');
-    // Last-Online Tracking (throttled) – auf separate Node-Route ausgelagert (kein mongoose im Edge Middleware Bundle)
+    let username: string | undefined;
     try {
       const token = await getToken({ req });
-      const username = token && typeof token === 'object' ? (token as any).username : undefined;
+      username = token && typeof token === 'object' ? (token as any).username : undefined;
+    } catch {/* ignore token errors for metrics */}
+    recordRequest(pathname, req.method || 'GET', username);
+    // Last-Online Tracking (throttled) – auf separate Node-Route ausgelagert (kein mongoose im Edge Middleware Bundle)
+  try {
       if (username) {
         const g: any = globalThis as any;
         if (!g.__lastOnlineCache) g.__lastOnlineCache = new Map<string, number>();

@@ -23,7 +23,8 @@ export async function GET(req: any) {
     await dbConnect();
     const session = await getServerSession(authOptions);
     const url = new URL(req.url);
-    const showAll = url.searchParams.get('showAll') === '1';
+  const showAll = url.searchParams.get('showAll') === '1';
+  const context = url.searchParams.get('context') || '';
     const requestedMode = (url.searchParams.get('mode') || '').toLowerCase() === 'all' ? 'all' : 'class';
     const rawCat = url.searchParams.get('cat');
     const searchQ = (url.searchParams.get('q') || '').trim().toLowerCase();
@@ -58,7 +59,7 @@ export async function GET(req: any) {
     // Cache nur für nicht-learner anwenden (Autoren/Admin/Teacher), da Lernende ggf. individuelle Sicht haben
     const cacheTtlMs = parseInt(process.env.COURSE_LIST_CACHE_MS || '30000', 10);
     const allowCache = role !== 'learner' && cacheTtlMs > 0 && !url.searchParams.get('nocache');
-    const cacheKey = allowCache ? JSON.stringify({ baseFilter, page, limit, searchQ, statusFilter, normalizedCat }) : '';
+  const cacheKey = allowCache ? JSON.stringify({ baseFilter, page, limit, searchQ, statusFilter, normalizedCat, context }) : '';
     if (allowCache) {
       const hit = COURSE_CACHE.get(cacheKey);
       if (hit && hit.expires > Date.now()) {
@@ -66,7 +67,7 @@ export async function GET(req: any) {
       }
     }
 
-    if (role === 'teacher' && username) {
+  if (role === 'teacher' && username) {
       // Lehrer sehen keine Kurse, die von anderen Lehrern erstellt wurden (teacher-exklusive Kurse nur für Ersteller sichtbar)
       try {
         const otherTeachers = await User.find({ role: 'teacher', username: { $ne: username } }).select('username').lean();
@@ -77,6 +78,29 @@ export async function GET(req: any) {
         }
       } catch (e) {
         console.warn('Teacher-Filter Fehler', e);
+      }
+    }
+
+    // Autor-/Admin-Kontext (Autorentool): Teacher-Kurse NICHT in allgemeiner Kursliste anzeigen.
+    // Diese sollen nur im Review-Endpoint erscheinen, sobald eingereicht.
+    if ((role === 'author' || role === 'admin') && context === 'autor') {
+      try {
+        const teacherUsers = await User.find({ role: 'teacher' }).select('username').lean();
+        const teacherNames = teacherUsers.map(t=> String((t as any).username)).filter(Boolean);
+        if (teacherNames.length) {
+          // Falls bereits ein Author-Filter existiert (z.B. aus Teacher-Filter oben), kombiniere via $and
+          if (baseFilter.author) {
+            (baseFilter as any).$and = [
+              { author: (baseFilter as any).author },
+              { author: { $nin: teacherNames } }
+            ];
+            delete (baseFilter as any).author;
+          } else {
+            (baseFilter as any).author = { $nin: teacherNames };
+          }
+        }
+      } catch (e) {
+        console.warn('Autor-Kontext Filter (Teacher-Kurse ausblenden) Fehler', e);
       }
     }
 
