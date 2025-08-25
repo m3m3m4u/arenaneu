@@ -109,19 +109,46 @@ export async function GET(req: Request) {
       if (!completedSet || !completedSet.size) continue;
       for (const cid of courseIds) {
         const lessonIds = lessonsByCourse[cid] || [];
-        if (lessonIds.some(id => completedSet.has(id))) {
-          keepCourseIds.add(cid);
-        }
+        if (lessonIds.some(id => completedSet.has(id))) keepCourseIds.add(cid);
       }
     }
     courses = courses.filter(c => keepCourseIds.has(String((c as any)._id)));
   }
 
+  // Sicherstellen, dass courseIds der tatsächlich angezeigten Kursliste entsprechen
+  courseIds = courses.map(c => String((c as any)._id));
+
+  // Menge aller angezeigten Lessons (Scope) für Aggregationen
+  const displayedLessonIdSet = new Set<string>();
+  for (const cid of courseIds) {
+    for (const lid of (lessonsByCourse[cid] || [])) displayedLessonIdSet.add(lid);
+  }
+
+  // ResultLearners an Scope anpassen (completedTotal und firstTry filtern)
+  const learnersScoped = resultLearners.map(l => {
+    // completed nur innerhalb des Scopes zählen
+    const completedAll = normalizeCompleted((learners.find(u=> (u as any).username===l.username) as any)?.completedLessons);
+    const completedInScope = completedAll.filter(id => displayedLessonIdSet.has(id));
+    // firstTry aggregiert neu aus lessonStats falls vorhanden
+    const userRaw = learners.find(u=> (u as any).username === l.username) as any;
+    let ftFirst = 0, ftTotal = 0;
+    if (userRaw && Array.isArray(userRaw.lessonStats)) {
+      for (const s of userRaw.lessonStats) {
+        if (!s || typeof s !== 'object') continue;
+        if (!displayedLessonIdSet.has(String((s as any).lessonId))) continue;
+        const f = Number((s as any).firstTryCorrect||0); const t = Number((s as any).total||0);
+        if (t>0 && f>=0) { ftFirst += f; ftTotal += t; }
+      }
+    }
+    const ftPercent = ftTotal>0 ? Math.round((ftFirst/ftTotal)*100) : 0;
+    return { ...l, completedTotal: completedInScope.length, firstTry: { first: ftFirst, total: ftTotal, percent: ftPercent } };
+  });
+
   return NextResponse.json({
     success: true,
     class: { _id: String((cls as any)._id), name: (cls as any).name },
     courses: courses.map(c => ({ _id: String((c as any)._id), title: (c as any).title, totalLessons: (lessonsByCourse[String((c as any)._id)] || []).length })),
-    learners: resultLearners,
+    learners: learnersScoped,
     mode
   });
 }
