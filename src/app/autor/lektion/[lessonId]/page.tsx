@@ -178,10 +178,18 @@ export default function EditLessonPage() {
         const wrong = allUnique.filter(a => !corrects.includes(a));
         qs.push({ question: qText, mediaLink: media || undefined, correctAnswer: corrects[0], correctAnswers: corrects, wrongAnswers: wrong, allAnswers: allUnique });
       } else if (lesson?.type === 'single-choice') {
-        const correct = answersRaw[0]?.trim();
-        const wrong = answersRaw.slice(1).map(a => a.trim()).filter(Boolean);
-        if (!correct) continue;
-        qs.push({ question: qText, mediaLink: media || undefined, correctAnswer: correct, wrongAnswers: wrong, allAnswers: [correct, ...wrong].sort(() => Math.random()-0.5) });
+        // Single-Choice: Wenn * verwendet wird -> erste * markierte ist korrekt, rest falsch.
+        // Falls keine * -> erste Antwort gilt als korrekt. Reihenfolge der Anzeige = Originaleingabe.
+        const parsed = answersRaw
+          .map(l => ({ raw: l, isStar: /^\*/.test(l), text: l.replace(/^\*+\s*/, '').trim() }))
+          .filter(a => a.text.length > 0);
+        if (!parsed.length) continue;
+        const starred = parsed.filter(p => p.isStar);
+        const correctText = starred.length ? starred[0].text : parsed[0].text;
+        const allOrdered = parsed.map(p => p.text);
+        const wrong = allOrdered.filter(a => a !== correctText);
+        // allAnswers NICHT mischen im Editor – Lernende sehen später gemischt.
+        qs.push({ question: qText, mediaLink: media || undefined, correctAnswer: correctText, wrongAnswers: wrong, allAnswers: allOrdered });
   } else if (lesson?.type === 'snake' || lesson?.type === 'minigame') {
         const cleaned = answersRaw.map(l=>l.replace(/^\*/, '').trim()).filter(a=>a);
         if (cleaned.length < 2) continue;
