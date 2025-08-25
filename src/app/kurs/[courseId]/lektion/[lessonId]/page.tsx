@@ -470,7 +470,7 @@ export default function LessonPage() {
     if(currentQuestionIndex < 0) return;
     if(answerOrderMap[currentQuestionIndex]) return; // schon vorhanden
     // Autoren/Admins: beim Bearbeiten Reihenfolge nicht mischen (Original-Reihenfolge behalten)
-    const writerRoles = ['author','admin'];
+  const writerRoles = ['author','admin','teacher'];
     const userRole = (session?.user as any)?.role;
     if(writerRoles.includes(userRole)) {
       setAnswerOrderMap(prev=> ({ ...prev, [currentQuestionIndex]: (currentQuestion as any).allAnswers || [] }));
