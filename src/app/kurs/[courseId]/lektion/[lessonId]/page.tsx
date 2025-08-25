@@ -566,6 +566,10 @@ export default function LessonPage() {
   const hasMedia = !!currentMedia;
   // Side-by-side jetzt für Single & Multiple Choice mit Media
   const sideBySideChoice = (isSingleChoice || isMultiple) && hasMedia;
+  const [zoomSrc, setZoomSrc] = useState<string|null>(null);
+  useEffect(()=>{
+    if(!zoomSrc) return; const h=(e:KeyboardEvent)=>{ if(e.key==='Escape') setZoomSrc(null); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h);
+  },[zoomSrc]);
 
   return (
   <div className="max-w-6xl mx-auto mt-10 p-6">
@@ -616,8 +620,9 @@ export default function LessonPage() {
                       <img
                         src={currentMedia}
                         alt="Frage Bild"
-                        className="w-full h-full object-contain rounded select-none pointer-events-none"
+                        className="w-full h-full object-contain rounded select-none cursor-zoom-in"
                         draggable={false}
+                        onClick={(e)=>{ e.stopPropagation(); setZoomSrc((e.currentTarget as HTMLImageElement).currentSrc||currentMedia); }}
                         onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
                         onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }}
                       />
@@ -649,8 +654,9 @@ export default function LessonPage() {
                         <img
                           src={currentMedia}
                           alt="Frage Bild"
-                          className="max-w-full max-h-64 object-contain mx-auto border rounded select-none pointer-events-none"
+                          className="max-w-full max-h-64 object-contain mx-auto border rounded select-none cursor-zoom-in"
                           draggable={false}
+                          onClick={(e)=>{ e.stopPropagation(); setZoomSrc((e.currentTarget as HTMLImageElement).currentSrc||currentMedia); }}
                           onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
                           onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }}
                         />
@@ -752,6 +758,28 @@ export default function LessonPage() {
         <LessonFooterNavigation allLessons={allLessons} currentLessonId={lessonId} courseId={courseId} completedLessons={completedLessons} progressionMode={progressionMode} backHref={backHref} />
       )}
       {isMemory && completed && <div className="mt-6 text-green-700 font-medium">✔️ Memory abgeschlossen!</div>}
+      {zoomSrc && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={()=>setZoomSrc(null)}
+          onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={zoomSrc}
+            alt="Zoom"
+            className="max-w-full max-h-full object-contain rounded shadow-2xl select-none"
+            draggable={false}
+            onClick={(e)=>{ e.stopPropagation(); /* kein close bei Klick aufs Bild selbst */ }}
+            onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+          />
+          <button
+            type="button"
+            onClick={()=>setZoomSrc(null)}
+            className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded px-3 py-1 text-sm"
+          >Schließen (Esc)</button>
+        </div>
+      )}
     </div>
   );
 }
