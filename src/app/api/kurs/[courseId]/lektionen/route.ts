@@ -200,6 +200,7 @@ export async function POST(
         const answerLines = lines.slice(1);
         const corrects: string[] = [];
         const wrongs: string[] = [];
+        const starredSingle: string[] = [];
         for (const aRaw of answerLines) {
           const trimmed = aRaw.trim();
           const isMarked = trimmed.startsWith('*');
@@ -212,8 +213,31 @@ export async function POST(
               wrongs.push(base);
             }
           } else {
-            // single-choice: erste Antwort (oder erste mit Stern) gilt als korrekt, Sterne werden nur als Marker interpretiert und entfernt
-            if (corrects.length === 0) corrects.push(base); else wrongs.push(base);
+            // single-choice: Falls irgendeine Zeile mit * markiert ist, nimmt NUR die erste markierte den korrekten Platz ein.
+            if (isMarked) {
+              if (starredSingle.length === 0) starredSingle.push(base); else wrongs.push(base); // weitere * ignorieren -> als wrong
+            } else {
+              wrongs.push(base); // vorerst als wrong sammeln; wir entscheiden nach der Schleife welche korrekt ist
+            }
+          }
+        }
+        if (kind === 'single-choice') {
+          if (starredSingle.length > 0) {
+            corrects.push(starredSingle[0]);
+            // Falls die als korrekt gewählte Antwort zuvor in wrongs gelandet ist, dort entfernen
+            const idx = wrongs.indexOf(starredSingle[0]);
+            if (idx >= 0) wrongs.splice(idx,1);
+          } else if (wrongs.length > 0) {
+            // Kein Stern verwendet -> erste Antwort (ursprünglich erste Zeile nach Frage) soll korrekt sein.
+            // Da wir oben alle unmarkierten erstmal als wrong gesammelt haben, rekonstruieren wir hier die ursprüngliche Reihenfolge.
+            // Die ursprüngliche Reihenfolge entspricht answerLines; wir nehmen die erste unmarkierte aus answerLines als correct.
+            const firstUnmarkedRaw = answerLines.find(l => !l.trim().startsWith('*')) || '';
+            const firstUnmarked = firstUnmarkedRaw.replace(/^\*+\s*/, '').trim();
+            if (firstUnmarked) {
+              corrects.push(firstUnmarked);
+              const idx2 = wrongs.indexOf(firstUnmarked);
+              if (idx2 >= 0) wrongs.splice(idx2,1);
+            }
           }
         }
         const all = [...corrects, ...wrongs].filter(Boolean);

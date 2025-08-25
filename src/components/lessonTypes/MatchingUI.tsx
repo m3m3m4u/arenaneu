@@ -9,24 +9,27 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
   const [matched, setMatched] = useState<Record<string,string>>({});
   const [errorPair, setErrorPair] = useState<{ left: string; right: string } | null>(null);
+  // Zoom State (ESC schließt)
+  const [zoomSrc, setZoomSrc] = useState<string|null>(null);
+  useEffect(()=>{ if(!zoomSrc) return; const h=(e:KeyboardEvent)=>{ if(e.key==='Escape') setZoomSrc(null); }; window.addEventListener('keydown',h); return ()=> window.removeEventListener('keydown',h); },[zoomSrc]);
   const renderOption = (value:string)=>{ 
     const p = resolveMediaPath(value);
-    if(isImagePath(p)) return <div className="w-full flex items-center justify-center">
-      <img 
-        src={p} 
-        alt="" 
-        className="max-h-36 w-auto object-contain border rounded bg-white"
-        onError={(e)=>{ 
-          const el=e.currentTarget as HTMLImageElement; 
-          const name=(p.split('/').pop()||''); 
-          if(name){
-            const fallbacks = buildMediaFallbacks(name);
-            let idx = Number(el.dataset.fidx||'0');
-            if(idx < fallbacks.length){ el.dataset.fidx=String(idx+1); el.src = fallbacks[idx]; return; }
-          }
-          el.replaceWith(Object.assign(document.createElement('div'), { className:'text-[10px] text-red-600 text-center break-words p-1', innerText: name?`Fehlt: ${name}`:'Bild fehlt' }));
-        }}
+    if(isImagePath(p)) return <div className="relative group w-full flex items-center justify-center">
+      <img
+        src={p}
+        alt="Bild"
+        className="max-h-36 w-auto object-contain border rounded bg-white select-none pointer-events-none"
+        draggable={false}
+        onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+        onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(p.split('/').pop()||''); if(name){ const fallbacks = buildMediaFallbacks(name); let idx = Number(el.dataset.fidx||'0'); if(idx < fallbacks.length){ el.dataset.fidx=String(idx+1); el.src = fallbacks[idx]; return; } } el.replaceWith(Object.assign(document.createElement('div'), { className:'text-[10px] text-red-600 text-center break-words p-1', innerText: name?`Fehlt: ${name}`:'Bild fehlt' })); }}
       />
+      <button
+        type="button"
+        aria-label="Bild vergrößern"
+        onClick={(e)=>{ e.stopPropagation(); setZoomSrc(p); }}
+        onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+        className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded p-1 opacity-80 group-hover:opacity-100 transition-opacity"
+      >🔍</button>
     </div>;
     if(isAudioPath(p)) return <div className="w-full flex items-center justify-center">
       <audio controls className="w-full max-w-xs border rounded bg-white p-1">
@@ -117,6 +120,27 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-2">{leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50 bg-white`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full text-center break-words ${adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}</div>
         <div className="space-y-2">{rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full text-center break-words ${adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}</div>
+      </div>
+    )}
+    {zoomSrc && (
+      <div
+        className="fixed inset-0 z-[999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+        onClick={()=>setZoomSrc(null)}
+        onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+      >
+        <img
+          src={zoomSrc}
+          alt="Zoom"
+          className="max-w-full max-h-full object-contain rounded shadow-2xl select-none"
+          draggable={false}
+          onClick={(e)=>{ e.stopPropagation(); }}
+          onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+        />
+        <button
+          type="button"
+          onClick={()=>setZoomSrc(null)}
+          className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded px-3 py-1 text-sm"
+        >Schließen (Esc)</button>
       </div>
     )}
   </Wrapper>;
