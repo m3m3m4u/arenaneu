@@ -2,7 +2,7 @@
 import BackLink from '@/components/shared/BackLink';
 import TitleCategoryBar from '@/components/shared/TitleCategoryBar';
 import { Lesson } from './types';
-import { resolveMediaPath } from '@/lib/media';
+import { resolveMediaPath, canonicalizeMediaPath, buildMediaFallbacks } from '@/lib/media';
 
 interface MemoryPair { a: { kind: string; value: string }; b: { kind: string; value: string }; }
 
@@ -19,10 +19,17 @@ export interface MemoryEditorProps {
 }
 
 function MemoryCardSide({ side }: { side: { kind: string; value: string } }) {
-  const p = resolveMediaPath(side.value);
-  if (side.kind === 'image') return <img src={p} alt="" className="w-full h-16 object-contain bg-white rounded" />;
-  if (side.kind === 'audio') return <audio controls className="w-full"><source src={p} /></audio>;
-  return <div className="h-16 flex items-center justify-center text-center p-1 break-words">{side.value}</div>;
+  const mediaExt = /\.(png|jpe?g|gif|webp|svg|mp3|wav|ogg|m4a)(\?|$)/i;
+  const looksLikeUploads = /(\/)?(medien\/uploads|uploads)\//i.test(side.value);
+  const isMediaCandidate = mediaExt.test(side.value) || looksLikeUploads;
+  const canonical = isMediaCandidate ? (side.value.includes('/medien/uploads/') ? side.value : (canonicalizeMediaPath(side.value) || side.value)) : side.value;
+  const p = isMediaCandidate ? resolveMediaPath(canonical) : canonical;
+  const looksLikeImage = /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(canonical);
+  const looksLikeAudio = /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(canonical);
+  if (isMediaCandidate && looksLikeImage) return <div className="h-16 flex items-center justify-center bg-white rounded p-1"><img src={p} alt="" className="max-h-full max-w-full object-contain" onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(canonical.split('/').pop()||''); if(name){ const fallbacks = buildMediaFallbacks(name); let idx = Number(el.dataset.fidx||'0'); if(idx < fallbacks.length){ el.dataset.fidx=String(idx+1); el.src = fallbacks[idx]; return; } } el.replaceWith(Object.assign(document.createElement('div'), { className:'text-[10px] text-red-600 text-center break-words', innerText: name?`Fehlt: ${name}`:'Bild fehlt' })); }} /></div>;
+  if (isMediaCandidate && looksLikeAudio) return <div className="h-16 flex items-center justify-center bg-white rounded p-1 w-full"><audio controls className="w-full"><source src={p} /></audio></div>;
+  // Reiner Text bleibt exakt wie eingegeben
+  return <div className="h-16 flex items-center justify-center text-center p-1 break-words">{canonical}</div>;
 }
 
 export default function MemoryEditor({ lesson, title, setTitle, category, setCategory, memoryRaw, setMemoryRaw, memoryPairs, memoryWarnings, memoryErrors, parseMemoryClient, handleSave, saving, returnToExercises }: MemoryEditorProps) {

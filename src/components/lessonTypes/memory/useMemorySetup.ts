@@ -1,32 +1,40 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { MemoryPair, MemoryCard } from './types';
 import type { Lesson } from '../types';
+import { canonicalizeMediaPath } from '@/lib/media';
+import { parseMemory } from '@/lib/memory';
 
 interface Params { content: any; lessonId: string; }
 
 export function useMemorySetup({ content, lessonId }: Params){
   const initialPairs = useMemo(()=>{ 
-    let pairs: MemoryPair[] = Array.isArray(content.pairs)? content.pairs: []; 
-    // Sicherheits-Filter: entferne defekte Einträge
+    const mediaRegex = /\.(png|jpe?g|gif|webp|svg|mp3|wav|ogg|m4a)(\?|$)/i;
+    const uploadsRegex = /(\/)?(medien\/uploads|uploads)\//i;
+    const classify = (v:string): 'text'|'image'|'audio' => /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(v)?'audio':(/\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(v)?'image':'text');
+    let pairs: MemoryPair[] = Array.isArray(content.pairs)? content.pairs: [];
     pairs = pairs.filter(p=> p && p.a && p.b && typeof p.a.value==='string' && typeof p.b.value==='string');
-    if((!pairs||pairs.length===0) && typeof content.raw==='string'){
-      const lines= content.raw.split(/\n+/).map((l:string)=>l.trim()).filter(Boolean); 
-      const seen=new Set<string>(); 
-      const detect=(v:string)=>(/\.(png|jpe?g|gif|webp|svg)$/i.test(v)?'image':(/\.(mp3|wav|ogg|m4a)$/i.test(v)?'audio':'text')); 
-      const acc: MemoryPair[]=[]; 
-      for(const line of lines){ 
-        const [l,r]= line.split('|'); 
-        if(!l||!r) continue; 
-        const L=l.trim(); const R=r.trim(); 
-        const key=(L+':::'+R).toLowerCase(); 
-        if(seen.has(key) || L.toLowerCase()===R.toLowerCase()) continue; 
-        seen.add(key); 
-        acc.push({ a:{kind:detect(L), value:L}, b:{kind:detect(R), value:R} }); 
-        if(acc.length===8) break; 
-      } 
-      pairs=acc; 
-    } 
-    return pairs.slice(0,8); 
+
+    // Falls keine oder zu wenige Paare: raw neu parsen (Server hat evtl. nicht gespeichert oder fehlerhafte Struktur)
+    if((!pairs.length || pairs.length < 4) && typeof content.raw==='string' && content.raw.trim()) {
+      const parsed = parseMemory(content.raw);
+      if(parsed.pairs.length) {
+        pairs = parsed.pairs;
+      }
+    }
+
+    // Transformiere Paare: nur Medien kanonisieren
+    pairs = pairs.map(p=>{ 
+      const aRaw=p.a.value; const bRaw=p.b.value;
+      const aMedia = mediaRegex.test(aRaw) || uploadsRegex.test(aRaw);
+      const bMedia = mediaRegex.test(bRaw) || uploadsRegex.test(bRaw);
+      // Explizite Proxy-Pfade /medien/uploads/ NICHT umschreiben, sonst verlieren wir funktionierende Quelle
+      const aVal = aMedia? (aRaw.includes('/medien/uploads/')? aRaw : (canonicalizeMediaPath(aRaw)||aRaw)): aRaw;
+      const bVal = bMedia? (bRaw.includes('/medien/uploads/')? bRaw : (canonicalizeMediaPath(bRaw)||bRaw)): bRaw;
+      return { a:{ ...p.a, kind: aMedia? classify(aVal): classify(aVal), value:aVal}, b:{ ...p.b, kind: bMedia? classify(bVal): classify(bVal), value:bVal} };
+    });
+
+    if(!pairs.length){ if(typeof window!=='undefined'){ console.warn('Memory: keine Paare gefunden. content:', content); } }
+    return pairs.slice(0,8);
   },[content.pairs, content.raw]);
   const pairsKey = useMemo(()=> initialPairs.map(p=>`${p.a.value}|${p.b.value}`).join(';'),[initialPairs]);
   const [cards, setCards]= useState<MemoryCard[]>([]);

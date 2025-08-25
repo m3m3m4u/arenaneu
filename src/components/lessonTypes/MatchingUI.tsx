@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { resolveMediaPath, isImagePath, isAudioPath } from '../../lib/media';
+import { resolveMediaPath, isImagePath, isAudioPath, buildMediaFallbacks } from '../../lib/media';
 
 interface MatchingProps { question: { allAnswers: string[]; correctAnswers?: string[] }; onSolved: () => void; }
 export default function MatchingUI({ question, onSolved }: MatchingProps){
@@ -19,9 +19,12 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
         onError={(e)=>{ 
           const el=e.currentTarget as HTMLImageElement; 
           const name=(p.split('/').pop()||''); 
-          if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; }
-          else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; }
-          else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; }
+          if(name){
+            const fallbacks = buildMediaFallbacks(name);
+            let idx = Number(el.dataset.fidx||'0');
+            if(idx < fallbacks.length){ el.dataset.fidx=String(idx+1); el.src = fallbacks[idx]; return; }
+          }
+          el.replaceWith(Object.assign(document.createElement('div'), { className:'text-[10px] text-red-600 text-center break-words p-1', innerText: name?`Fehlt: ${name}`:'Bild fehlt' }));
         }}
       />
     </div>;

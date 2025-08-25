@@ -31,9 +31,13 @@ export function resolveMediaPath(input: string): string {
   // Umgebung erkennen: auf Vercel bevorzugen wir den Medien-Proxy
   const isBrowser = typeof window !== 'undefined';
   const isVercelHost = isBrowser ? /vercel\.app$/i.test(window.location.hostname) : !!(process as any)?.env?.VERCEL;
-  // Falls ein bereits proxied Pfad (/medien/uploads/...) vorliegt aber wir NICHT auf Vercel sind -> zurück auf /uploads/
-  if (/^\/medien\/uploads\//i.test(cleaned) && !isVercelHost) {
-    cleaned = cleaned.replace(/^\/medien\/uploads\//i, '/uploads/');
+  // Lokale Entwicklung: Nur auf reinem localhost umbiegen, sonst Proxy-Pfad beibehalten (z.B. Hetzner Store)
+  if (/^\/medien\/uploads\//i.test(cleaned)) {
+    const keepProxy = (typeof process !== 'undefined' && (process as any)?.env?.NEXT_PUBLIC_MEDIA_KEEP_PROXY) === '1';
+    const isLocalHost = isBrowser ? /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname) : process.env.NODE_ENV !== 'production';
+    if (!keepProxy && isLocalHost && !isVercelHost) {
+      cleaned = cleaned.replace(/^\/medien\/uploads\//i, '/uploads/');
+    }
   }
   // Wenn bereits ein Pfad mit Slash: ggf. auf Proxy umbiegen
   if (HAS_SLASH.test(cleaned)) {
@@ -78,3 +82,30 @@ export function canonicalizeMediaPath(input: string | undefined | null): string 
 
 export function isImagePath(p: string) { return IMG_EXT.test(p); }
 export function isAudioPath(p: string) { return AUDIO_EXT.test(p); }
+
+// Liefert eine Liste alternativer Pfade (Prio-Reihenfolge) für eine Mediendatei (Dateiname oder bereits ein Pfad)
+export function buildMediaFallbacks(original: string): string[] {
+  if(!original) return [];
+  const name = original.split('/').pop() || original;
+  const set = new LinkedHashSet<string>();
+  const add=(v:string)=>{ if(v && !set.has(v)) set.add(v); };
+  const isAbs = /^(https?:\/\/|data:|blob:)/i.test(original);
+  if(isAbs){ return [original]; }
+  const baseResolved = resolveMediaPath(original);
+  add(baseResolved);
+  // Wenn baseResolved bereits /uploads/name liefert, ergänze Proxy Variante
+  if(/^\/uploads\//i.test(baseResolved)){ add(baseResolved.replace(/^\/uploads\//i,'/medien/uploads/')); }
+  // Wenn baseResolved /medien/uploads -> lokale Variante
+  if(/^\/medien\/uploads\//i.test(baseResolved)){ add(baseResolved.replace(/^\/medien\/uploads\//i,'/uploads/')); }
+  // Direkte Varianten nur mit Namen
+  add(`/uploads/${name}`);
+  add(`/medien/uploads/${name}`);
+  add(`/media/${name}`);
+  add(`/${name}`);
+  return Array.from(set.values());
+}
+
+// Kleines LinkedHashSet für deterministische Reihenfolge
+class LinkedHashSet<T> extends Set<T>{
+  values(){ return super.values(); }
+}

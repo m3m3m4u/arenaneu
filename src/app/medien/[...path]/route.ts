@@ -24,9 +24,18 @@ function conf(){
 }
 
 export async function GET(req: Request, ctx: { params: Promise<{ path: string[] }> }){
-  const c = conf(); if(!c) return new NextResponse('WebDAV nicht konfiguriert', { status: 500 });
   const { path: pathParts = [] } = await ctx.params.catch?.(()=>({ path: [] as string[] })) ?? (ctx as any).params;
   const key = pathParts.join('/');
+  const c = conf();
+  if(!c){
+    // Fallback: Wenn /medien/uploads/... angefragt wird aber kein WebDAV aktiv, auf lokale /uploads/ Datei umleiten
+    if(/^uploads\//i.test(key)){
+      const url = new URL(req.url);
+      url.pathname = '/' + key.replace(/\\/g,'/');
+      return NextResponse.redirect(url, 307);
+    }
+    return new NextResponse('WebDAV nicht konfiguriert', { status: 503 });
+  }
   const url = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
   const upstream = await fetch(url, { headers: { Authorization: c.auth } });
   if(!upstream.ok){
@@ -42,9 +51,13 @@ export async function GET(req: Request, ctx: { params: Promise<{ path: string[] 
 }
 
 export async function HEAD(req: Request, ctx: { params: Promise<{ path: string[] }> }){
-  const c = conf(); if(!c) return new NextResponse(null, { status: 500 });
   const { path: pathParts = [] } = await ctx.params.catch?.(()=>({ path: [] as string[] })) ?? (ctx as any).params;
   const key = pathParts.join('/');
+  const c = conf();
+  if(!c){
+    if(/^uploads\//i.test(key)) return new NextResponse(null, { status: 200 });
+    return new NextResponse(null, { status: 503 });
+  }
   const url = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
   const upstream = await fetch(url, { method: 'HEAD', headers: { Authorization: c.auth } });
   const headers = new Headers();

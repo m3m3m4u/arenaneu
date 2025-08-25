@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { useMemorySetup } from './memory/useMemorySetup';
 import { useMemoryGame } from './memory/useMemoryGame';
 import type { MemoryCard } from './memory/types';
-import { resolveMediaPath } from '../../lib/media';
+import { resolveMediaPath, canonicalizeMediaPath, buildMediaFallbacks } from '../../lib/media';
 
 interface Props { lesson: Lesson; onCompleted: () => void; completedLessons: string[]; setCompletedLessons?: (v: string[] | ((p:string[])=>string[]))=>void }
 export default function MemoryGame({ lesson, onCompleted, completedLessons, setCompletedLessons }: Props){
@@ -20,29 +20,47 @@ export default function MemoryGame({ lesson, onCompleted, completedLessons, setC
   useEffect(()=>{ if(finished && !isAlreadyDone){ (async()=>{ try{ const username=session?.user?.username; setMarking(true); await finalizeLesson({ username, lessonId: lesson._id, courseId: lesson.courseId, type: lesson.type, earnedStar: lesson.type !== 'markdown' }); if(setCompletedLessons){ setCompletedLessons(prev=> prev.includes(lesson._id)? prev : [...prev, lesson._id]); } } finally { setMarking(false); onCompleted(); } })(); } },[finished, isAlreadyDone, lesson._id, lesson.courseId, lesson.type, onCompleted, session?.user?.username, setCompletedLessons]);
 
   const renderCardFace=(card:MemoryCard)=>{ 
-    const p = resolveMediaPath(card.value);
-    if(card.kind==='image') return (
-      <img 
-        src={p} 
-        alt="" 
-        className="w-full h-full object-contain" 
-        onError={(e)=>{ 
-          const el=e.currentTarget as HTMLImageElement; 
-          const name=(p.split('/').pop()||''); 
-          if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src = `/medien/uploads/${name}`; }
-          else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src = `/uploads/${name}`; }
-          else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src = `/media/${name}`; }
-        }} 
-      />
+    const mediaExt = /\.(png|jpe?g|gif|webp|svg|mp3|wav|ogg|m4a)(\?|$)/i;
+    const looksLikeUploads = /(\/)?(medien\/uploads|uploads)\//i.test(card.value);
+    const isMediaCandidate = mediaExt.test(card.value) || looksLikeUploads;
+  const canonical = isMediaCandidate ? (card.value.includes('/medien/uploads/') ? card.value : (canonicalizeMediaPath(card.value) || card.value)) : card.value;
+  const p = isMediaCandidate ? resolveMediaPath(canonical) : canonical;
+    const looksLikeImage = /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(canonical);
+    if(isMediaCandidate && looksLikeImage) return (
+      <div className="w-full h-full flex flex-col items-center justify-center">
+        <img 
+          src={p} 
+          alt="" 
+          className="max-w-full max-h-full object-contain" 
+          onError={(e)=>{ 
+            const el=e.currentTarget as HTMLImageElement; 
+            const name=(canonical.split('/').pop()||'');
+            if(name){
+              const fallbacks = buildMediaFallbacks(canonical);
+              let idx = Number(el.dataset.fidx||'0');
+              // Überspringe identischen aktuellen Pfad
+              while(idx < fallbacks.length && fallbacks[idx] === el.src){ idx++; }
+              if(idx < fallbacks.length){
+                el.dataset.fidx = String(idx+1);
+                el.src = fallbacks[idx];
+                return;
+              }
+            }
+            else {
+              el.replaceWith(Object.assign(document.createElement('div'), { className: 'text-[10px] text-red-600 text-center px-1', innerText: name? `Fehlt: ${name}`: 'Bild fehlt' }));
+            }
+          }} 
+        />
+      </div>
     ); 
-    if(card.kind==='audio') return (
+    const looksLikeAudio = /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(canonical);
+    if(isMediaCandidate && looksLikeAudio) return (
       <audio controls className="w-full h-full">
-        {/* bevorzugt über Proxy */}
-        {(()=>{ const name=(p.split('/').pop()||''); return name? <source src={`/medien/uploads/${name}`}/> : null; })()}
+        {(()=>{ const name=(canonical.split('/').pop()||''); return name? <source src={resolveMediaPath(name)}/> : null; })()}
         <source src={p}/>
       </audio>
     ); 
-    return <span className="text-xs p-1 break-words leading-tight text-center block">{card.value}</span>; 
+    return <span className="text-xs p-1 break-words leading-tight text-center block">{canonical}</span>; 
   };
 
   return <div>

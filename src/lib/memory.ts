@@ -3,13 +3,14 @@ export interface MemorySide { kind: MemoryCardKind; value: string; }
 export interface MemoryPair { a: MemorySide; b: MemorySide; }
 export interface ParseMemoryResult { pairs: MemoryPair[]; errors: string[]; warnings: string[]; }
 
-const IMAGE_REGEX = /\.(png|jpe?g|gif|webp)$/i;
+// SVG fehlte hier (wurde bereits in anderen Komponenten unterstützt) – hinzugefügt, damit Memory auch SVG-Bilder zeigt
+const IMAGE_REGEX = /\.(png|jpe?g|gif|webp|svg)$/i;
 const AUDIO_REGEX = /\.(mp3|wav|ogg|m4a)$/i;
 const URL_REGEX = /^https?:\/\//i;
 
 function detectKind(v: string): MemoryCardKind {
   const value = v.trim();
-  if (IMAGE_REGEX.test(value) || (URL_REGEX.test(value) && /(png|jpe?g|gif|webp)(\?|$)/i.test(value))) return 'image';
+  if (IMAGE_REGEX.test(value) || (URL_REGEX.test(value) && /(png|jpe?g|gif|webp|svg)(\?|$)/i.test(value))) return 'image';
   if (AUDIO_REGEX.test(value) || (URL_REGEX.test(value) && /(mp3|wav|ogg|m4a)(\?|$)/i.test(value))) return 'audio';
   return 'text';
 }
