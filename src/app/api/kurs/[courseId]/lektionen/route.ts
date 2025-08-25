@@ -201,16 +201,19 @@ export async function POST(
         const corrects: string[] = [];
         const wrongs: string[] = [];
         for (const aRaw of answerLines) {
-          const a = aRaw.trim();
+          const trimmed = aRaw.trim();
+          const isMarked = trimmed.startsWith('*');
+          const base = trimmed.replace(/^\*+\s*/, '').trim();
+          if (!base) continue; // leere Zeile nach Entfernen von Sternen überspringen
           if (kind === 'multiple-choice') {
-            if (a.startsWith('*')) {
-              corrects.push(a.replace(/^\*+/, '').trim());
+            if (isMarked) {
+              corrects.push(base);
             } else {
-              wrongs.push(a);
+              wrongs.push(base);
             }
           } else {
-            // single-choice
-            if (corrects.length === 0) corrects.push(a); else wrongs.push(a);
+            // single-choice: erste Antwort (oder erste mit Stern) gilt als korrekt, Sterne werden nur als Marker interpretiert und entfernt
+            if (corrects.length === 0) corrects.push(base); else wrongs.push(base);
           }
         }
         const all = [...corrects, ...wrongs].filter(Boolean);
@@ -263,8 +266,10 @@ export async function POST(
           ? (q.wrongAnswers as unknown[]).map(toText)
           : (all ? all.filter(a => !(corrects || []).includes(a)) : []);
         const dedupe = (arr: unknown[]) => Array.from(new Set((arr || []).map((x) => (typeof x === 'string' ? x.trim() : String(x))))).filter(Boolean) as string[];
-        const finalAll = dedupe(all);
-        const finalCorrects = dedupe(corrects || []);
+  // Sternchen, die evtl. aus alten Formaten stammen, entfernen
+  const stripStars = (s: string) => s.replace(/^\*+\s*/, '').trim();
+  const finalAll = dedupe(all.map(stripStars));
+  const finalCorrects = dedupe((corrects || []).map(stripStars));
         const finalWrong = dedupe((wrong as string[]).filter((w: string) => !finalCorrects.includes(w)));
 
         return {
