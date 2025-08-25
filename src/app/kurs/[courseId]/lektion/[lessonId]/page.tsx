@@ -616,7 +616,9 @@ export default function LessonPage() {
                       <img
                         src={currentMedia}
                         alt="Frage Bild"
-                        className="w-full h-full object-contain rounded"
+                        className="w-full h-full object-contain rounded select-none pointer-events-none"
+                        draggable={false}
+                        onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
                         onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }}
                       />
                     ) : isAudioPath(currentMedia) ? (
@@ -647,7 +649,9 @@ export default function LessonPage() {
                         <img
                           src={currentMedia}
                           alt="Frage Bild"
-                          className="max-w-full max-h-64 object-contain mx-auto border rounded"
+                          className="max-w-full max-h-64 object-contain mx-auto border rounded select-none pointer-events-none"
+                          draggable={false}
+                          onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
                           onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(currentMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }}
                         />
                       ) : isAudioPath(currentMedia) ? (
