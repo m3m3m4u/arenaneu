@@ -1,9 +1,16 @@
-export interface CompletionParams { username?: string; lessonId: string; courseId: string; type: string; earnedStar: boolean; }
+export interface CompletionParams {
+  username?: string;
+  lessonId: string;
+  courseId: string;
+  type: string;
+  earnedStar: boolean;
+  questionStats?: Array<{ firstTryCorrect: number; total: number }>; // optional Erfassungsdaten
+}
 
 export async function completeLessonOnServer(p: CompletionParams) {
   try {
     if (p.username) {
-      await fetch('/api/lesson/complete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p)});
+  await fetch('/api/lesson/complete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p)});
     }
   } catch {}
   try {

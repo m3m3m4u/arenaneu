@@ -31,6 +31,9 @@ export default function LessonPage() {
   const [isCorrect, setIsCorrect] = useState(false);
   const [score, setScore] = useState(0);
   const [completed, setCompleted] = useState(false);
+  // First-Try Tracking
+  const [questionAttempts, setQuestionAttempts] = useState<Record<number, number>>({}); // questionIndex -> attempts
+  const [firstTryCorrect, setFirstTryCorrect] = useState<Record<number, boolean>>({}); // questionIndex -> correct on first
   const [allLessons, setAllLessons] = useState<Lesson[]>([]); // für Footer-Navigation
   const [progressionMode, setProgressionMode] = useState<'linear'|'free'>('free');
   const [completedLessons, setCompletedLessons] = useState<string[]>([]); // erledigte Lektionen
@@ -185,11 +188,19 @@ export default function LessonPage() {
     setSelectedAnswer(answer);
     if (!lesson || !lesson.questions || questionQueue.length === 0) return;
     const currentQuestion = lesson.questions[questionQueue[0]];
+    const qIdx = questionQueue[0];
+    setQuestionAttempts(prev=> ({ ...prev, [qIdx]: (prev[qIdx]||0)+1 }));
     const correct = norm(answer) === norm(currentQuestion.correctAnswer);
     setIsCorrect(correct);
     setShowResult(true);
     if (correct && !mastered.has(questionQueue[0])) {
       setScore(prev => prev + 1);
+    }
+    // First try correct markieren
+    if(correct && !(qIdx in firstTryCorrect) && (questionAttempts[qIdx]||0)===0){
+      setFirstTryCorrect(prev=> ({ ...prev, [qIdx]: true }));
+    } else if(!(qIdx in firstTryCorrect) && !correct && (questionAttempts[qIdx]||0)===0){
+      setFirstTryCorrect(prev=> ({ ...prev, [qIdx]: false }));
     }
   };
 
@@ -203,8 +214,15 @@ export default function LessonPage() {
     const isSetEqual = selNorm.length === correctList.length && correctList.every(a => selNorm.includes(a));
     setIsCorrect(isSetEqual);
     setShowResult(true);
+    const qIdx = questionQueue[0];
+    setQuestionAttempts(prev=> ({ ...prev, [qIdx]: (prev[qIdx]||0)+1 }));
     if (isSetEqual && !mastered.has(questionQueue[0])) {
       setScore(prev => prev + 1);
+    }
+    if(isSetEqual && !(qIdx in firstTryCorrect) && (questionAttempts[qIdx]||0)===0){
+      setFirstTryCorrect(prev=> ({ ...prev, [qIdx]: true }));
+    } else if(!(qIdx in firstTryCorrect) && !isSetEqual && (questionAttempts[qIdx]||0)===0){
+      setFirstTryCorrect(prev=> ({ ...prev, [qIdx]: false }));
     }
   };
 
@@ -366,12 +384,17 @@ export default function LessonPage() {
         try {
           const username = session?.user?.username;
           setMarking(true);
+          // questionStats zusammenstellen
+          const totalQ = (lesson.questions||[]).length;
+          const ftc = Object.entries(firstTryCorrect).filter(([,v])=>v===true).length;
+          const questionStats = totalQ ? [{ firstTryCorrect: ftc, total: totalQ }] : [];
           await finalizeLesson({
             username, // optional für Gäste
             lessonId: lesson._id,
             courseId: lesson.courseId,
             type: lesson.type,
-            earnedStar: lesson.type !== 'markdown' && !completedLessons.includes(lesson._id)
+            earnedStar: lesson.type !== 'markdown' && !completedLessons.includes(lesson._id),
+            questionStats
           });
           setCompletedLessons(prev => prev.includes(lesson._id) ? prev : [...prev, lesson._id]);
         } catch (e) {
@@ -392,6 +415,8 @@ export default function LessonPage() {
     setScore(0);
     setCompleted(false);
     setSelectedAnswers([]);
+  setQuestionAttempts({});
+  setFirstTryCorrect({});
   setAnswerOrderMap({}); // neu mischen beim Neustart
   };
 
