@@ -469,6 +469,13 @@ export default function LessonPage() {
     if(!currentQuestion) return;
     if(currentQuestionIndex < 0) return;
     if(answerOrderMap[currentQuestionIndex]) return; // schon vorhanden
+    // Autoren/Admins: beim Bearbeiten Reihenfolge nicht mischen (Original-Reihenfolge behalten)
+    const writerRoles = ['author','admin'];
+    const userRole = (session?.user as any)?.role;
+    if(writerRoles.includes(userRole)) {
+      setAnswerOrderMap(prev=> ({ ...prev, [currentQuestionIndex]: (currentQuestion as any).allAnswers || [] }));
+      return;
+    }
     if(!Array.isArray((currentQuestion as any).allAnswers)) return;
     const shuffle = <T,>(arr: T[]) => arr.map(v=>[Math.random(),v] as const).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
     const mixed = shuffle([...(currentQuestion as any).allAnswers]);
