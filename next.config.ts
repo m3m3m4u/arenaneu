@@ -7,37 +7,43 @@ try {
   if (webdavBase) webdavHost = new URL(webdavBase).hostname;
 } catch {}
 
-const securityHeaders = [
-  { key: 'X-DNS-Prefetch-Control', value: 'on' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-  { key: 'X-XSS-Protection', value: '1; mode=block' },
-  { key: 'Content-Security-Policy', value: (()=>{
-      const imgSrc = ["img-src 'self'", 'data:', 'blob:', 'https://blob.vercel-storage.com'];
-      const mediaSrc = ["media-src 'self'", 'blob:', 'https://blob.vercel-storage.com'];
-      if (webdavHost) {
-        imgSrc.push(`https://${webdavHost}`);
-        mediaSrc.push(`https://${webdavHost}`);
-      }
-      return [
-        "default-src 'self'",
-        // Next.js dev benötigt teils eval; in Prod ggf. strenger machen
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        imgSrc.join(' '),
-        "font-src 'self' https://fonts.gstatic.com",
-        // YouTube Embeds
-        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtu.be",
-        // Für Media Blob/WebDAV URLs
-        mediaSrc.join(' '),
-        // Connect für API/Blob ggf. erweitern
-        "connect-src 'self'",
-      ].join('; ');
-    })() }
-];
+// Dynamische Security Header (CSP in Preview etwas lockern für vercel.live Feedback Script)
+const securityHeaders = (() => {
+  const isPreview = process.env.VERCEL === '1' && process.env.VERCEL_ENV === 'preview';
+  const imgSrc = ["img-src 'self'", 'data:', 'blob:', 'https://blob.vercel-storage.com'];
+  const mediaSrc = ["media-src 'self'", 'blob:', 'https://blob.vercel-storage.com'];
+  if (webdavHost) {
+    imgSrc.push(`https://${webdavHost}`);
+    mediaSrc.push(`https://${webdavHost}`);
+  }
+  const scriptSrcParts = ["'self'", "'unsafe-inline'", "'unsafe-eval'"]; // aktuelle Basis (kann später gehärtet werden)
+  if (isPreview) {
+    // vercel.live wird nur in Preview benötigt für Feedback / Live Overlay
+    scriptSrcParts.push('https://vercel.live');
+  }
+  const connectSrcParts = ["'self'"];
+  if (isPreview) connectSrcParts.push('https://vercel.live');
+  const csp = [
+    "default-src 'self'",
+    `script-src ${scriptSrcParts.join(' ')}`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    imgSrc.join(' '),
+    "font-src 'self' https://fonts.gstatic.com",
+    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtu.be",
+    mediaSrc.join(' '),
+    `connect-src ${connectSrcParts.join(' ')}`,
+  ].join('; ');
+  return [
+    { key: 'X-DNS-Prefetch-Control', value: 'on' },
+    { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+    { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+    { key: 'X-Content-Type-Options', value: 'nosniff' },
+    { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+    { key: 'X-XSS-Protection', value: '1; mode=block' },
+    { key: 'Content-Security-Policy', value: csp }
+  ];
+})();
 
 const nextConfig: NextConfig = {
   output: 'standalone', // kleinere Lambda bundles (Vercel / Docker)
