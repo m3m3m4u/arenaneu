@@ -38,6 +38,14 @@ export default function LessonPage() {
   // Wohin zurück? Kurs oder Übungsmenü
   const [backHref, setBackHref] = useState<string>(`/kurs/${courseId}`);
   // (Lückentext lokaler Player rendert vollständig in eigener Komponente)
+  // Zoom für Bilder (MUSS vor möglichen Early Returns definiert werden, sonst Hook-Reihenfolge Fehler #310)
+  const [zoomSrc, setZoomSrc] = useState<string|null>(null);
+  useEffect(()=>{
+    if(!zoomSrc) return; 
+    const h=(e:KeyboardEvent)=>{ if(e.key==='Escape') setZoomSrc(null); };
+    window.addEventListener('keydown',h); 
+    return ()=>window.removeEventListener('keydown',h);
+  },[zoomSrc]);
 
   const loadLesson = useCallback(async () => {
     try {
@@ -566,10 +574,6 @@ export default function LessonPage() {
   const hasMedia = !!currentMedia;
   // Side-by-side jetzt für Single & Multiple Choice mit Media
   const sideBySideChoice = (isSingleChoice || isMultiple) && hasMedia;
-  const [zoomSrc, setZoomSrc] = useState<string|null>(null);
-  useEffect(()=>{
-    if(!zoomSrc) return; const h=(e:KeyboardEvent)=>{ if(e.key==='Escape') setZoomSrc(null); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h);
-  },[zoomSrc]);
 
   return (
   <div className="max-w-6xl mx-auto mt-10 p-6">
