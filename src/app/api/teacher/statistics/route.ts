@@ -73,7 +73,7 @@ export async function GET(req: Request) {
     }
   }
 
-  const learners = await User.find({ ownerTeacher: teacherId, class: classId }, '_id username name email stars completedLessons').lean();
+  const learners = await User.find({ ownerTeacher: teacherId, class: classId }, '_id username name email stars completedLessons firstTryCorrectTotal totalQuestionsTotal lessonStats').lean();
   const resultLearners = learners.map(u => {
     const completed = normalizeCompleted((u as any).completedLessons);
     const perCourse: Record<string, { completed: number; total: number; percent: number }> = {};
@@ -84,13 +84,19 @@ export async function GET(req: Request) {
       const percent = total > 0 ? Math.round((compCount / total) * 100) : 0;
       perCourse[cid] = { completed: compCount, total, percent };
     }
+    // First-Try Quote gesamt
+    const ftFirst = (u as any).firstTryCorrectTotal || 0;
+    const ftTotal = (u as any).totalQuestionsTotal || 0;
+    const ftPercent = ftTotal > 0 ? Math.round((ftFirst / ftTotal) * 100) : 0;
+
     return {
       username: (u as any).username,
       name: (u as any).name,
       email: (u as any).email || null,
       stars: (u as any).stars || 0,
       completedTotal: completed.length,
-      perCourse
+      perCourse,
+      firstTry: { first: ftFirst, total: ftTotal, percent: ftPercent }
     };
   });
 

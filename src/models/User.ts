@@ -13,6 +13,11 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
   lastOnline?: Date;
+  // Aggregierte Statistik: Anzahl Fragen insgesamt und wie viele beim ersten Versuch korrekt
+  firstTryCorrectTotal?: number;
+  totalQuestionsTotal?: number;
+  // Pro Lektion gespeicherte erste-Versuch Statistik
+  lessonStats?: Array<{ lessonId: string; firstTryCorrect: number; total: number }>;
 }
 
 const UserSchema: Schema = new Schema({
@@ -28,6 +33,9 @@ const UserSchema: Schema = new Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   lastOnline: { type: Date, default: Date.now, index: true }
+  , firstTryCorrectTotal: { type: Number, default: 0 }
+  , totalQuestionsTotal: { type: Number, default: 0 }
+  , lessonStats: [{ lessonId: { type: String, index: true }, firstTryCorrect: Number, total: Number }]
 });
 
 UserSchema.pre('save', function(next){ this.updatedAt = new Date(); next(); });

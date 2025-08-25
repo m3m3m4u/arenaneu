@@ -12,6 +12,7 @@ type LearnerRow = {
   stars: number;
   completedTotal: number;
   perCourse: Record<string, { completed: number; total: number; percent: number }>;
+  firstTry?: { first: number; total: number; percent: number };
 };
 
 export default function TeacherStatisticsPage(){
@@ -60,24 +61,17 @@ export default function TeacherStatisticsPage(){
     })();
   },[selectedClass, mode]);
 
-  const columns = useMemo(()=>{
-    return [
-      { key: 'name', label: 'Lernende/r' },
-      ...courses.map(c=>({ key: `course:${c._id}`, label: `${c.title} (${c.totalLessons})` })),
-      { key: 'stars', label: '⭐ Sterne' },
-      { key: 'completed', label: '✔️ gesamt' },
-    ];
-  },[courses]);
+  // (Hinweis: columns für StickyTable werden weiter unten inline definiert; diese Variable kann später entfernt werden)
 
   function shapeForExport(){
-    const head = ['Name', ...courses.map(c=>`${c.title} (${c.totalLessons})`), 'Sterne', 'Gesamt'];
+  const head = ['Name', ...courses.map(c=>`${c.title} (${c.totalLessons})`), 'Sterne', 'Gesamt', '1.Versuch %'];
     const rows2d = learners.map(l=>{
       const base = [l.name || l.username];
       const per = courses.map(c=>{
         const cell = l.perCourse?.[c._id] || { completed:0, total:c.totalLessons, percent:0 };
         return `${cell.completed}/${cell.total}`;
       });
-      return [...base, ...per, String(l.stars ?? 0), String(l.completedTotal ?? 0)];
+  return [...base, ...per, String(l.stars ?? 0), String(l.completedTotal ?? 0), `${l.firstTry?.percent ?? 0}%`];
     });
     return { head, rows: rows2d };
   }
@@ -137,6 +131,7 @@ export default function TeacherStatisticsPage(){
           <li>Wähle oben eine Klasse. Mit „Kursumfang“ steuerst du, ob nur Klassenkurse oder alle veröffentlichten Kurse ausgewertet werden.</li>
           <li>Pro Kurs siehst du den Fortschritt „abgeschlossen/gesamt“ sowie eine Fortschrittsleiste.</li>
           <li>„⭐ Sterne“ summiert die in Lektionen verdienten Sterne; „✔️ gesamt“ zählt abgeschlossene Lektionen.</li>
+          <li>„🎯 1. Versuch %“ Anteil korrekt beantworteter Fragen direkt beim ersten Versuch (über protokollierte Fragen).</li>
           <li>Du kannst die Tabelle als Excel, PDF oder Word exportieren.</li>
           <li>Hinweis: In Minigame-Lektionen wählen Lernende selbst die Spielform (Snake, Autospiel, Flugzeugspiel, PacMan oder Space Impact).</li>
         </ul>
@@ -199,6 +194,14 @@ export default function TeacherStatisticsPage(){
             })),
             { key:'stars', header:'⭐ Sterne', tdClassName:'whitespace-nowrap px-4 py-2', thClassName:'px-4 py-2' },
             { key:'completedTotal', header:'✔️ gesamt', tdClassName:'whitespace-nowrap px-4 py-2', thClassName:'px-4 py-2' },
+            { key:'firstTry', header:'🎯 1. Versuch %', tdClassName:'whitespace-nowrap px-4 py-2', thClassName:'px-4 py-2', render:(l: LearnerRow)=> (
+              <div className="flex items-center gap-2">
+                <div className="w-20 h-2 bg-gray-200 rounded overflow-hidden">
+                  <div className="h-2 bg-purple-500" style={{ width: `${Math.min(100, Math.max(0, l.firstTry?.percent || 0))}%` }} />
+                </div>
+                <span className="tabular-nums">{l.firstTry?.percent ?? 0}%</span>
+              </div>
+            ) },
           ], [courses])}
           rows={learners as any}
           minWidthClassName="min-w-[900px]"

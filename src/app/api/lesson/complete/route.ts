@@ -6,7 +6,7 @@ import AuditLog from "@/models/AuditLog";
 
 export async function POST(req: Request) {
   await dbConnect();
-  const { username, lessonId, courseId, earnedStar: clientEarnedStar } = await req.json();
+  const { username, lessonId, courseId, earnedStar: clientEarnedStar, questionStats } = await req.json();
 
   if (!username || !lessonId) {
     return NextResponse.json({ error: "Username und LessonId erforderlich." }, { status: 400 });
@@ -62,6 +62,30 @@ export async function POST(req: Request) {
     starGranted = true;
   }
 
+  // Frage-Statistik aktualisieren (first try Quote)
+  try {
+    if (Array.isArray(questionStats) && questionStats.length) {
+      // Erwartetes Format: [{ firstTryCorrect: number, total: number }]
+      const agg = questionStats.reduce((acc: { firstTryCorrect: number; total: number }, q: any) => {
+        const ft = Number(q.firstTryCorrect || 0); const tot = Number(q.total || 0);
+        if (tot > 0 && ft >= 0) { acc.firstTryCorrect += ft; acc.total += tot; }
+        return acc;
+      }, { firstTryCorrect: 0, total: 0 });
+      if (agg.total > 0) {
+        // Pro Lektion Eintrag aktualisieren / anlegen
+        if (!Array.isArray((user as any).lessonStats)) (user as any).lessonStats = [];
+        const ls: any[] = (user as any).lessonStats;
+        const existing = ls.find(l => l.lessonId === String(lessonId));
+        if (existing) { existing.firstTryCorrect = agg.firstTryCorrect; existing.total = agg.total; }
+        else { ls.push({ lessonId: String(lessonId), firstTryCorrect: agg.firstTryCorrect, total: agg.total }); }
+        // Gesamt aggregieren
+        const totals = ls.reduce((a, l) => { a.first += (l.firstTryCorrect||0); a.total += (l.total||0); return a; }, { first:0, total:0 });
+        (user as any).firstTryCorrectTotal = totals.first;
+        (user as any).totalQuestionsTotal = totals.total;
+      }
+    }
+  } catch(e) { console.warn('questionStats update failed', e); }
+
   await user.save();
 
   // Audit protokollieren (Fehler ignorieren, um Completion nicht zu blockieren)
@@ -76,10 +100,14 @@ export async function POST(req: Request) {
     });
   } catch (e) { console.warn('AuditLog lesson.complete fehlgeschlagen', e); }
 
-  return NextResponse.json({ 
-    message: "Lektion abgeschlossen!", 
-  earnedStar: starGranted,
+  return NextResponse.json({
+    message: "Lektion abgeschlossen!",
+    earnedStar: starGranted,
     totalStars: user.stars || 0,
-    alreadyCompleted
+    alreadyCompleted,
+    firstTry: {
+      aggregated: { firstTryCorrect: user.firstTryCorrectTotal || 0, total: user.totalQuestionsTotal || 0 },
+      lesson: (user as any).lessonStats?.find((l: any) => l.lessonId === String(lessonId)) || null
+    }
   });
 }
