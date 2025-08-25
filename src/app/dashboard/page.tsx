@@ -33,7 +33,8 @@ export default function DashboardPage() {
       if (k.includes('ueb') || k.includes('übung') || k.includes('uebung')) return '/ueben';
   if (k.includes('arena')) return '/arena';
       if (k.includes('medien')) return '/autor?tab=medien';
-      if (k.includes('dashboard')) return '/dashboard';
+  if (k.includes('dashboard')) return '/dashboard';
+  if (k.includes('nachricht') || k.includes('message')) return '/messages';
       if (k.includes('admin')) return '/admin/users';
       if (k.includes('gast') || k.includes('guest')) return '/guest';
       return undefined;
@@ -48,9 +49,9 @@ export default function DashboardPage() {
           const filtered = raw.filter((btn: any) => {
             const h = btn.href;
             if (!h) return false; // ohne Ziel nicht anzeigen
-            // Lernende: nur lernen, üben, arena, dashboard, messages/guest falls vorhanden
+            // Lernende: nur lernen, üben, arena, dashboard, messages, guest
             if (role === 'learner') {
-              return ['/lernen','/ueben','/arena','/dashboard','/guest'].some(p=>h.startsWith(p));
+              return ['/lernen','/ueben','/arena','/dashboard','/guest','/messages'].some(p=>h.startsWith(p));
             }
             // Teacher: keine Autor- oder Admin-Bereiche anzeigen
             if (role === 'teacher') {
@@ -59,7 +60,7 @@ export default function DashboardPage() {
             }
             // Pending Rollen wie learner behandeln (nur Basiszugriff)
             if (role === 'pending-author' || role === 'pending-teacher') {
-              return ['/lernen','/ueben','/arena','/dashboard','/guest'].some(p=>h.startsWith(p));
+              return ['/lernen','/ueben','/arena','/dashboard','/guest','/messages'].some(p=>h.startsWith(p));
             }
             // Default (admin, author etc.): alles lassen
             return true;
@@ -181,6 +182,10 @@ export default function DashboardPage() {
               {(!(session?.user as any)?.role || (session?.user as any)?.role==='learner') && (
                 <AutorWerden />
               )}
+              {/* Nachrichten Link */}
+              {(['teacher','learner'].includes((session?.user as any)?.role)) && (
+                <MessagesLink />
+              )}
             </div>
           ) : (
             <div>Keine Nutzerdaten vorhanden.</div>
@@ -255,4 +260,15 @@ function AutorWerden(){
   }
   if(requested) return <div className="text-xs text-green-700 bg-green-50 border border-green-300 rounded p-2 mt-2">Anfrage gesendet. Du erscheinst nun als pending-author.</div>;
   return <button disabled={busy} onClick={request} className="mt-3 text-xs px-3 py-1 border rounded bg-white hover:bg-gray-50 disabled:opacity-50">Autor werden (Anfrage)</button>;
+}
+
+function MessagesLink(){
+  const [unread,setUnread]=useState<number>(0);
+  useEffect(()=>{ let t:any; async function load(){ try{ const r=await fetch('/api/messages/unread'); const d=await r.json(); if(r.ok&&d.success) setUnread(d.count||0); else setUnread(0);} catch{} }
+    load(); t=setInterval(load, 120000); return ()=>{ if(t) clearInterval(t); };
+  },[]);
+  return <a href="/messages" className="inline-flex items-center gap-1 text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">
+    <span>Nachrichten</span>
+    {unread>0 && <span className="inline-flex items-center justify-center text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-red-600 text-white font-medium">{unread>99?'99+':unread}</span>}
+  </a>;
 }

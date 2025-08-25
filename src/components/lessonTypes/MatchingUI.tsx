@@ -43,8 +43,23 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
   const handleLeftClick=(l:string)=>{ if(matched[l]) return; setSelectedLeft(prev=> prev===l? null: l); };
   const handleRightClick=(r:string)=>{ if(!selectedLeft) return; const rightUsed = Object.values(matched).includes(r); if(rightUsed) return; const l= selectedLeft; if(isCorrectPair(l,r)){ setMatched(prev=>({...prev, [l]:r})); setSelectedLeft(null); } else { setErrorPair({ left:l, right:r }); setTimeout(()=> setErrorPair(null),700); setSelectedLeft(null); } };
   const isLeftMatched=(l:string)=> Boolean(matched[l]); const isRightMatched=(r:string)=> Object.values(matched).includes(r);
+  // Farbpalette für zusammengehörige Paare (Index anhand der korrekten Paarliste)
+  const pairOrder = (question.correctAnswers||[]).map(p=>{ const [l,r]=p.split('=>'); return {l,lTrim:l.trim(), r:r.trim()}; });
+  const pairIndex = (l:string,r:string)=> pairOrder.findIndex(p=>p.lTrim===l && p.r===r);
+  const colorClasses = [
+    { border:'border-blue-500', bg:'bg-blue-50', text:'text-blue-800' },
+    { border:'border-green-500', bg:'bg-green-50', text:'text-green-800' },
+    { border:'border-purple-500', bg:'bg-purple-50', text:'text-purple-800' },
+    { border:'border-amber-500', bg:'bg-amber-50', text:'text-amber-800' },
+    { border:'border-pink-500', bg:'bg-pink-50', text:'text-pink-800' },
+    { border:'border-indigo-500', bg:'bg-indigo-50', text:'text-indigo-800' },
+    { border:'border-teal-500', bg:'bg-teal-50', text:'text-teal-800' },
+    { border:'border-cyan-500', bg:'bg-cyan-50', text:'text-cyan-800' },
+  ];
+  const leftColor = (l:string)=>{ const r= matched[l]; if(!r) return null; const idx = pairIndex(l,r); return idx>=0? colorClasses[idx % colorClasses.length]: null; };
+  const rightColor = (r:string)=>{ const entry = Object.entries(matched).find(([l,rr])=> rr===r); if(!entry) return null; const [l,rr]=entry; const idx = pairIndex(l,rr); return idx>=0? colorClasses[idx % colorClasses.length]: null; };
   return <div className="grid grid-cols-2 gap-6">
-    <div className="space-y-2">{leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors bg-white'; const cls= matchedRight? `${base} border-green-500 bg-green-50 text-green-800 cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50`: `${base} border-gray-200 hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}>{renderOption(l)}</button>; })}</div>
-    <div className="space-y-2">{rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors bg-white'; const cls= isUsed? `${base} border-green-500 bg-green-50 text-green-800 cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}>{renderOption(r)}</button>; })}</div>
+    <div className="space-y-2">{leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50 bg-white`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}>{renderOption(l)}</button>; })}</div>
+    <div className="space-y-2">{rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}>{renderOption(r)}</button>; })}</div>
   </div>;
 }

@@ -1,4 +1,22 @@
 import mongoose from "mongoose";
+// Lazy Import für Event Persistierung
+async function logDbEvent(kind: 'connect'|'disconnect'|'selfHeal'|'warn'|'hardCut', data: { active?: number; message?: string }){
+  try {
+    // Vermeide Re-Entrant Connect: nur loggen wenn bereits eine Verbindung besteht oder beim ersten Connect
+    const active = (mongoose.connections||[]).filter(c=>c && c.readyState===1).length;
+    const maxObserved = metrics.maxObservedConnections;
+    // Dynamisch importieren um Zyklen zu vermeiden
+    const mod = await import('@/models/DbConnEvent');
+    const Model: any = mod.default;
+    // Nur jede 5 Sekunden pro (kind) loggen um Spam zu vermeiden
+    const key = `__last_log_${kind}`;
+    const g: any = global as any;
+    const now = Date.now();
+    if(g[key] && now - g[key] < 5000) return;
+    g[key] = now;
+    await Model.create({ kind, active, maxObserved, message: data.message });
+  } catch{}
+}
 // Globale Mongoose-Konfiguration (nur einmal pro Prozess)
 if(!(global as any).__MGO_BASE_SETUP__){
   (global as any).__MGO_BASE_SETUP__ = true;
@@ -43,6 +61,31 @@ if (!globalAny.__DB_METRICS__) {
   globalAny.__DB_METRICS__ = { disconnects:0, errors:0, reconnects:0, attempts:0 } as DbMetrics & { maxObservedConnections?: number; lastSelfHealAt?: number; selfHeals?: number };
 }
 const metrics = globalAny.__DB_METRICS__! as DbMetrics & { maxObservedConnections?: number; lastSelfHealAt?: number; selfHeals?: number };
+// Zusatz-Diagnostik
+if(!(metrics as any).firstConnectStack){ (metrics as any).firstConnectStack = undefined; }
+
+// Einfacher Mutex zur Serialisierung des echten Verbindungsaufbaus, um Connection-Stürme zu verhindern
+interface SimpleLock { busy: boolean; queue: Array<()=>void>; }
+const gAny: any = global as any;
+if(!gAny.__DB_CONNECT_LOCK__){ gAny.__DB_CONNECT_LOCK__ = { busy:false, queue:[] } as SimpleLock; }
+const connectLock: SimpleLock = gAny.__DB_CONNECT_LOCK__;
+
+async function withLock<T>(fn:()=>Promise<T>): Promise<T> {
+  if(!connectLock.busy){
+    connectLock.busy = true;
+    try { return await fn(); }
+    finally {
+      connectLock.busy = false;
+      const next = connectLock.queue.shift();
+      if(next) next();
+    }
+  }
+  return await new Promise<T>((resolve,reject)=>{
+    connectLock.queue.push(async ()=>{
+      try { resolve(await withLock(fn)); } catch(e){ reject(e); }
+    });
+  });
+}
 
 function attachConnectionEvents(conn: mongoose.Connection){
   if ((conn as any).__listenersAttached) return;
@@ -50,9 +93,11 @@ function attachConnectionEvents(conn: mongoose.Connection){
   conn.on('connected', ()=>{
     metrics.lastConnectedAt = Date.now();
     if (!metrics.firstConnectedAt) metrics.firstConnectedAt = metrics.lastConnectedAt;
+  logDbEvent('connect', { active: mongoose.connections.filter(c=>c.readyState===1).length }).catch(()=>undefined);
   });
   conn.on('disconnected', ()=>{
     metrics.disconnects++; metrics.lastDisconnectAt = Date.now();
+  logDbEvent('disconnect', { active: mongoose.connections.filter(c=>c.readyState===1).length }).catch(()=>undefined);
   });
   conn.on('reconnected', ()=>{
     metrics.reconnects++; metrics.lastReconnectAt = Date.now();
@@ -87,11 +132,27 @@ async function dbConnect() {
   enforceSingleConnection();
     return cached!.conn;
   }
-
+  // Bereits ein laufender Verbindungsversuch? Warte darauf.
+  if(cached!.promise){
+    try { await cached!.promise; } catch {}
+    if(cached!.conn) return cached!.conn;
+  }
   if (!cached!.promise) {
     const uri = getMongoUri();
     if (!uri) throw new Error('MONGODB_URI env fehlt');
-  const poolSize = parseInt(process.env.MONGODB_POOL_SIZE || '3', 10); // konservativer Default für M0
+    // Optionale kleine Verzögerung nach Self-Heal um Sturm zu dämpfen
+    const healBlockUntil = (gAny.__DB_HEAL_BLOCK_UNTIL__||0) as number;
+    if(healBlockUntil && Date.now() < healBlockUntil){
+      const waitMs = healBlockUntil - Date.now();
+      if(waitMs > 0) await new Promise(r=>setTimeout(r, waitMs));
+    }
+    // Adaptive Pool Size
+    const basePool = parseInt(process.env.MONGODB_POOL_SIZE || '3', 10); // konservativ für kleine Cluster
+    let poolSize = basePool;
+    if(process.env.DB_ADAPTIVE_POOL === '1'){
+      const observed = metrics.maxObservedConnections || 1;
+      poolSize = Math.min(basePool, Math.max(2, observed + 1));
+    }
     const minPoolSize = Math.min(parseInt(process.env.MONGODB_MIN_POOL_SIZE || '0', 10), poolSize);
     const serverSelTimeout = parseInt(process.env.MONGODB_SRV_TIMEOUT || '5000', 10);
     const socketTimeout = parseInt(process.env.MONGODB_SOCKET_TIMEOUT || '45000', 10);
@@ -113,7 +174,8 @@ async function dbConnect() {
     if (process.env.DB_LOG_ON_CONNECT === '1') {
       console.log(`[db] connecting uri=${uri.replace(/:[^:@/]+@/, ':***@')} pool=${minPoolSize}-${poolSize} attempts=${maxAttempts}`);
     }
-    cached!.promise = connectWithRetry(()=>mongoose.connect(uri, opts), maxAttempts);
+    // Serialisierter Aufbau
+    cached!.promise = withLock(()=>connectWithRetry(()=>mongoose.connect(uri, opts), maxAttempts));
   }
 
   try {
@@ -122,6 +184,7 @@ async function dbConnect() {
     attachConnectionEvents(cached!.conn);
   enforceSingleConnection();
   warnOnConnectionCount();
+  if(!(metrics as any).firstConnectStack){ (metrics as any).firstConnectStack = (new Error('first connect stack').stack); }
   } catch (e) {
     cached!.promise = null;
     throw e;
@@ -155,6 +218,8 @@ function softHeal(threshold: number){
     if(active > threshold){
       if(!(global as any).__DB_HEALING__){
         (global as any).__DB_HEALING__ = true;
+    // Kurzes Throttle, damit nach dem Heilen nicht sofort viele neue Connects anlaufen
+    (global as any).__DB_HEAL_BLOCK_UNTIL__ = Date.now() + 150;
         enforceSingleConnection();
         metrics.lastSelfHealAt = Date.now();
         metrics.selfHeals = (metrics.selfHeals||0)+1;
@@ -174,10 +239,12 @@ function warnOnConnectionCount(){
     if(count >= threshold && count !== lastWarnedCount){
       console.warn(`[db] WARN Verbindungen aktiv=${count} threshold=${threshold}`);
       lastWarnedCount = count;
+  logDbEvent('warn', { active: count, message:`threshold=${threshold}` }).catch(()=>undefined);
     }
     if(count > hard){
       console.error(`[db] NOTBREMSE aktiv=${count} > hard=${hard} – schließe Zusatzverbindungen`);
       enforceSingleConnection();
+  logDbEvent('hardCut', { active: count, message:`hard=${hard}` }).catch(()=>undefined);
     }
     if(process.env.DB_AUTO_SELF_HEAL === '1'){
       const healThreshold = parseInt(process.env.DB_SELF_HEAL_THRESHOLD || String(Math.max(threshold, 3)), 10);

@@ -1,6 +1,7 @@
 "use client";
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import AdminNav from '@/components/admin/AdminNav';
 
 interface DbStats {
   readyState?: number;
@@ -25,6 +26,8 @@ export default function AdminDbMonitorPage(){
   const [killResult, setKillResult] = useState<any>(null);
   const [watchdogLoading, setWatchdogLoading] = useState(false);
   const [watchdogResult, setWatchdogResult] = useState<any>(null);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsData, setEventsData] = useState<any>(null);
   const timerRef = useRef<NodeJS.Timeout|undefined>(undefined);
   const intervalMs = 5000;
 
@@ -59,6 +62,7 @@ export default function AdminDbMonitorPage(){
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-6">
+      <AdminNav />
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">DB Monitoring</h1>
@@ -87,6 +91,15 @@ export default function AdminDbMonitorPage(){
             } catch(e:any){ setWatchdogResult({ ok:false, error:String(e?.message||e) }); }
             finally { setWatchdogLoading(false); }
           }} disabled={watchdogLoading} className="px-3 py-1.5 rounded text-sm bg-amber-600 text-white disabled:opacity-50 hover:bg-amber-700">{watchdogLoading? 'Heile…':'Watchdog Heal'}</button>
+          <button onClick={async ()=>{
+            setEventsLoading(true); setEventsData(null);
+            try {
+              const res = await fetch('/api/admin/db/events?hours=24', { cache:'no-store' });
+              const data = await res.json().catch(()=>({}));
+              setEventsData({ ok: res.ok, data });
+            } catch(e:any){ setEventsData({ ok:false, error:String(e?.message||e) }); }
+            finally { setEventsLoading(false); }
+          }} disabled={eventsLoading} className="px-3 py-1.5 rounded text-sm bg-purple-600 text-white disabled:opacity-50 hover:bg-purple-700">{eventsLoading? 'Lade…':'Events 24h'}</button>
         </div>
       </header>
       {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">{error}</div>}
@@ -100,6 +113,12 @@ export default function AdminDbMonitorPage(){
         <div className={`p-3 text-xs rounded border ${watchdogResult.ok? 'bg-amber-50 border-amber-200 text-amber-700':'bg-red-50 border-red-200 text-red-700'}`}>
           <div className="font-semibold mb-1">Watchdog</div>
           <pre className="whitespace-pre-wrap break-all max-h-48 overflow-auto">{JSON.stringify(watchdogResult.data||watchdogResult.error, null, 2)}</pre>
+        </div>
+      )}
+      {eventsData && (
+        <div className={`p-3 text-xs rounded border ${eventsData.ok? 'bg-purple-50 border-purple-200 text-purple-700':'bg-red-50 border-red-200 text-red-700'}`}>
+          <div className="font-semibold mb-1">Events letzte 24h (max 1000)</div>
+          <pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{JSON.stringify(eventsData.data||eventsData.error, null, 2)}</pre>
         </div>
       )}
 

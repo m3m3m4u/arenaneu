@@ -63,10 +63,33 @@ export default function MemoryGame({ lesson, onCompleted, completedLessons, setC
     return <span className="text-xs p-1 break-words leading-tight text-center block">{canonical}</span>; 
   };
 
+  // Farben für Paar-Zuordnung (max 8 Paare genutzt)
+  const pairColorStyles = [
+    { border:'border-blue-500', bg:'bg-blue-50', text:'text-blue-800' },
+    { border:'border-green-500', bg:'bg-green-50', text:'text-green-800' },
+    { border:'border-purple-500', bg:'bg-purple-50', text:'text-purple-800' },
+    { border:'border-amber-500', bg:'bg-amber-50', text:'text-amber-800' },
+    { border:'border-pink-500', bg:'bg-pink-50', text:'text-pink-800' },
+    { border:'border-indigo-500', bg:'bg-indigo-50', text:'text-indigo-800' },
+    { border:'border-teal-500', bg:'bg-teal-50', text:'text-teal-800' },
+    { border:'border-cyan-500', bg:'bg-cyan-50', text:'text-cyan-800' },
+  ];
+
   return <div>
     {initialPairs.length===0 && <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">Keine Memory-Paare vorhanden.</div>}
     <div className="grid gap-4" style={{gridTemplateColumns:`repeat(${Math.min(4, Math.ceil(Math.sqrt(cards.length||1)))}, minmax(0,1fr))`}}>
-      {cards.map((card,idx)=>{ const flipped= card.flipped||card.matched; return <button key={card.id} onClick={()=>handleFlip(idx)} disabled={card.flipped||card.matched||lock} className={`relative h-32 md:h-40 border rounded-lg flex items-center justify-center bg-white transition-transform duration-300 ${flipped?'shadow-inner':'shadow hover:shadow-md'} ${card.matched?'border-green-500':'border-gray-200'}`}>{flipped ? <div className="w-full h-full flex items-center justify-center p-2">{renderCardFace(card)}</div>: <div className="w-full h-full flex items-center justify-center font-semibold text-gray-500 select-none">🧠</div>}</button>; })}
+      {cards.map((card,idx)=>{ 
+        const flipped= card.flipped||card.matched; 
+        const style = card.matched? pairColorStyles[card.pair % pairColorStyles.length]: null;
+        return <button 
+          key={card.id} 
+          onClick={()=>handleFlip(idx)} 
+          disabled={card.flipped||card.matched||lock} 
+          className={`relative h-32 md:h-40 border rounded-lg flex items-center justify-center transition-transform duration-300 ${flipped?'shadow-inner':'shadow hover:shadow-md'} ${style?`${style.border} ${style.bg}`:'border-gray-200 bg-white'}`}
+        >
+          {flipped ? <div className={`w-full h-full flex items-center justify-center p-2 ${style?style.text:''}`}>{renderCardFace(card)}</div>: <div className="w-full h-full flex items-center justify-center font-semibold text-gray-500 select-none">🧠</div>}
+        </button>; 
+      })}
     </div>
     <div className="mt-6 flex items-center gap-4 flex-wrap">
   {finished ? <span className="text-green-600 font-medium">✔️ Alle Paare gefunden!</span>: <span className="text-gray-600 text-sm">Finde alle Paare.</span>}
