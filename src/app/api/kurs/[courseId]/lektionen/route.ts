@@ -613,6 +613,10 @@ export async function POST(
         const dev = process.env.NODE_ENV !== 'production';
         return NextResponse.json({ success: false, error: 'Mindestens ein gültiger Fragenblock erforderlich', ...(dev ? { debug: { rawLength: raw.length, importRawLength: importRaw.length, blockCandidates: Array.isArray(blocks)? blocks.length: 'n/a' } }: {}) }, { status: 400 });
       }
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.log('[text-answer:create] rawLen=%d blocks=%d first=%o', raw.length, sanitized.length, sanitized[0]);
+      }
       finalContent = { raw, blocks: sanitized, caseSensitive, allowReveal, question: sanitized[0].question, answer: sanitized[0].answers[0] };
     }
 
