@@ -596,6 +596,7 @@ export default function LessonPage() {
   const isMatching = lesson.type === 'matching';
   const isMemory = lesson.type === 'memory';
   const isSingleChoice = lesson.type === 'single-choice';
+  const isTextAnswer = lesson.type === 'text-answer';
   const hasMedia = !!currentMedia;
   // Side-by-side jetzt für Single & Multiple Choice mit Media
   const sideBySideChoice = (isSingleChoice || isMultiple) && hasMedia;
@@ -621,6 +622,80 @@ export default function LessonPage() {
           <LueckentextPlayer lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} sessionUsername={session?.user?.username} allLessons={allLessons} progressionMode={progressionMode} backHref={backHref} />
         ) : isMemory ? (
           <MemoryGame lesson={{ ...lesson, type: 'memory' }} onCompleted={() => { setIsCorrect(true); setShowResult(true); setCompleted(true); }} completedLessons={completedLessons} />
+        ) : isTextAnswer ? (
+          (()=>{
+            const totalTA = textAnswerBlocks.length;
+            if(!totalTA) return <p>Keine Fragen vorhanden.</p>;
+            const currentIdx = textAnswerQueue[0];
+            const currentBlock = typeof currentIdx === 'number' ? textAnswerBlocks[currentIdx] : undefined;
+            const allowReveal = !!(lesson.content && (lesson.content as any).allowReveal);
+            const cMedia = currentBlock?.media ? resolveMediaPath(String(currentBlock.media)) : '';
+            const cHasMedia = !!cMedia;
+            const isRevealed = currentIdx!=null && textAnswerRevealed.has(currentIdx);
+            const progressTA = totalTA ? (textAnswerSolved.size / totalTA) * 100 : 0;
+            return <div className="space-y-6">
+              <div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full transition-all" style={{width: `${progressTA}%`}} />
+                </div>
+                <p className="text-xs text-gray-600 mt-1">Gelöst: {textAnswerSolved.size} / {totalTA} (Runde {textAnswerRound})</p>
+              </div>
+              {currentBlock && (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-semibold">{currentBlock.question}</h2>
+                  {cHasMedia && (
+                    <div className="p-3 bg-gray-50 rounded flex items-center justify-center max-h-72 overflow-hidden">
+                      {isImagePath(cMedia) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={cMedia} alt="Bild" className="max-w-full max-h-72 object-contain select-none cursor-zoom-in" draggable={false}
+                          onClick={(e)=>{ e.stopPropagation(); setZoomSrc((e.currentTarget as HTMLImageElement).currentSrc||cMedia); }}
+                          onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+                          onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(cMedia.split('/').pop()||''); if(!el.dataset.fallback1 && name){ el.dataset.fallback1='1'; el.src=`/medien/uploads/${name}`; } else if(!el.dataset.fallback2 && name){ el.dataset.fallback2='1'; el.src=`/uploads/${name}`; } else if(!el.dataset.fallback3 && name){ el.dataset.fallback3='1'; el.src=`/media/${name}`; } }} />
+                      ) : isAudioPath(cMedia) ? (
+                        <audio controls className="w-full max-w-md mx-auto">
+                          {(()=>{ const name=(cMedia.split('/').pop()||''); return name? <source src={`/medien/uploads/${name}`}/> : null; })()}
+                          <source src={cMedia} />
+                          <source src={cMedia.replace('/uploads/','/media/')}/>
+                        </audio>
+                      ) : (
+                        <a href={cMedia} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all text-sm">📎 {cMedia}</a>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-3">
+                    {!isRevealed && (
+                      <input
+                        type="text"
+                        value={textAnswerInput}
+                        onChange={(e)=>setTextAnswerInput(e.target.value)}
+                        onKeyDown={(e)=>{ if(e.key==='Enter'){ submitTextAnswer(); } }}
+                        placeholder="Antwort eingeben..."
+                        className="w-full border rounded px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={marking}
+                        autoFocus
+                      />
+                    )}
+                    {textAnswerFeedback && <div className="text-sm font-medium text-center">
+                      {textAnswerFeedback.startsWith('✅') && <span className="text-green-700">{textAnswerFeedback}</span>}
+                      {textAnswerFeedback.startsWith('❌') && <span className="text-red-700">{textAnswerFeedback}</span>}
+                      {textAnswerFeedback.startsWith('🛈') && <span className="text-blue-700">{textAnswerFeedback}</span>}
+                    </div>}
+                    {isRevealed && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+                        Lösung: {currentBlock.answers.join(', ')}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
+                      {!isRevealed && <button onClick={submitTextAnswer} disabled={!textAnswerInput.trim()} className="bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded hover:bg-blue-700">Prüfen</button>}
+                      {!isRevealed && allowReveal && <button onClick={revealCurrentTextAnswer} className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300 text-sm">Antwort anzeigen</button>}
+                      {isRevealed && <button onClick={advanceAfterReveal} className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700">Weiter</button>}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {!currentBlock && <p className="text-sm text-gray-600">Alle Antworten dieser Runde bearbeitet...</p>}
+            </div>;
+          })()
         ) : currentQuestion ? (
           <>
             {/* Matching UI separat */}
