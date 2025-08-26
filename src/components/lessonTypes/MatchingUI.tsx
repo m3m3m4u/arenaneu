@@ -14,11 +14,11 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
   useEffect(()=>{ if(!zoomSrc) return; const h=(e:KeyboardEvent)=>{ if(e.key==='Escape') setZoomSrc(null); }; window.addEventListener('keydown',h); return ()=> window.removeEventListener('keydown',h); },[zoomSrc]);
   const renderOption = (value:string)=>{ 
     const p = resolveMediaPath(value);
-    if(isImagePath(p)) return <div className="relative group w-full flex items-center justify-center">
+    if(isImagePath(p)) return <div className="relative group w-full h-full flex items-center justify-center">
       <img
         src={p}
         alt="Bild"
-        className="max-h-36 w-auto object-contain border rounded bg-white select-none pointer-events-none"
+        className="max-h-[85%] max-w-[85%] w-auto h-auto object-contain rounded bg-white/70 backdrop-blur select-none pointer-events-none shadow-sm"
         draggable={false}
         onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
         onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(p.split('/').pop()||''); if(name){ const fallbacks = buildMediaFallbacks(name); let idx = Number(el.dataset.fidx||'0'); if(idx < fallbacks.length){ el.dataset.fidx=String(idx+1); el.src = fallbacks[idx]; return; } } el.replaceWith(Object.assign(document.createElement('div'), { className:'text-[10px] text-red-600 text-center break-words p-1', innerText: name?`Fehlt: ${name}`:'Bild fehlt' })); }}
@@ -28,7 +28,7 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
         aria-label="Bild vergrößern"
         onClick={(e)=>{ e.stopPropagation(); setZoomSrc(p); }}
         onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
-        className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded p-1 opacity-80 group-hover:opacity-100 transition-opacity"
+        className="absolute top-1 right-1 bg-black/55 hover:bg-black/75 text-white rounded p-1 opacity-85 group-hover:opacity-100 transition-opacity"
       >🔍</button>
     </div>;
     if(isAudioPath(p)) return <div className="w-full flex items-center justify-center">
@@ -106,13 +106,13 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
         <div>
           <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Links</h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const base='w-full aspect-square flex items-center justify-center border rounded transition-colors p-2 md:p-4'; const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full text-center break-words ${adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
+            {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l)); const base='w-full aspect-square flex items-center justify-center border rounded transition-colors'; const pad = isImg? 'p-1 sm:p-1' : 'p-2 md:p-4'; const clsBase = `${base} ${pad}`; const cls= matchedRight? `${clsBase} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${clsBase} border-blue-500 bg-blue-50`: `${clsBase} border-gray-200 bg-white hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full h-full text-center break-words ${adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
           </div>
         </div>
         <div>
           <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Rechts</h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const base='w-full aspect-square flex items-center justify-center border rounded transition-colors p-2 md:p-4'; const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full text-center break-words ${adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
+            {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r)); const base='w-full aspect-square flex items-center justify-center border rounded transition-colors'; const pad = isImg? 'p-1 sm:p-1' : 'p-2 md:p-4'; const clsBase = `${base} ${pad}`; const cls= isUsed? `${clsBase} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800`: `${clsBase} border-gray-200 bg-white hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full text-center break-words ${adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
           </div>
         </div>
       </div>
