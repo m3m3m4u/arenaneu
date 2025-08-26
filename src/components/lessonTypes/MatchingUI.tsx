@@ -21,15 +21,15 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
       const ro = new ResizeObserver(entries=>{ for(const e of entries){ const r=e.contentRect; setBox({ w: r.width, h: r.height }); } });
       ro.observe(el); return ()=> ro.disconnect();
     },[]);
-    const maxW = Math.max(0, box.w - 8); // kleiner Puffer
-    const maxH = Math.max(0, box.h - 8);
+  const maxW = Math.max(0, box.w - 4); // kleinerer Puffer
+  const maxH = Math.max(0, box.h - 4);
     return <div ref={wrapRef} className="w-full h-full flex items-center justify-center overflow-hidden pointer-events-none select-none">
       <img
         src={src}
         alt={alt}
         draggable={false}
-        className="object-contain block max-h-24"
-        style={{ maxWidth: maxW || '100%', maxHeight: Math.min(maxH, 96) || '96px' }}
+    className="object-contain block"
+    style={{ maxWidth: maxW ? `${maxW}px` : '100%', maxHeight: maxH ? `${maxH}px` : '100%' }}
         onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
         onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(src.split('/').pop()||''); if(name){ const fallbacks = buildMediaFallbacks(name); let idx = Number(el.dataset.fidx||'0'); if(idx < fallbacks.length){ el.dataset.fidx=String(idx+1); el.src = fallbacks[idx]; return; } } el.replaceWith(Object.assign(document.createElement('div'), { className:'text-[10px] text-red-600 text-center break-words p-1', innerText: name?`Fehlt: ${name}`:'Bild fehlt' })); }}
       />
