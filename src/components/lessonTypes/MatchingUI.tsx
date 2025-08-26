@@ -133,9 +133,23 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
         </div>
       </div>
     ) : (
-      <div className="grid grid-cols-2 gap-6">
-        <div className="space-y-2">{leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50 bg-white`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full text-center break-words ${adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}</div>
-        <div className="space-y-2">{rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const base='w-full p-4 min-h-[180px] h-[180px] flex items-center justify-center border rounded transition-colors'; const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 bg-white hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full text-center break-words ${adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}</div>
+      <div className="flex flex-row gap-8">
+        <div className="flex flex-col gap-2">
+          {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l));
+            const baseImg='relative group w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
+            const baseText='w-full p-3 min-h-[70px] flex items-center justify-center border rounded transition-colors bg-white';
+            const base = isImg? baseImg : baseText;
+            const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50`: `${base} border-gray-200 hover:bg-gray-50`;
+            return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full h-full text-center break-words ${isImg?'':adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
+        </div>
+        <div className="flex flex-col gap-2">
+          {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r));
+            const baseImg='relative group w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
+            const baseText='w-full p-3 min-h-[70px] flex items-center justify-center border rounded transition-colors bg-white';
+            const base = isImg? baseImg : baseText;
+            const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 hover:bg-gray-50`;
+            return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full text-center break-words ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
+        </div>
       </div>
     )}
     {zoomSrc && (
