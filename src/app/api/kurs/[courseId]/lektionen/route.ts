@@ -574,16 +574,32 @@ export async function POST(
     // Text-Answer: jetzt Multi-Block Format { raw, blocks:[{question,answers[],media?}], caseSensitive, allowReveal, (legacy question/answer) }
     if (isTextAnswer) {
       const rawContent = (body.content || {}) as any;
-      const raw = String(rawContent.raw || '').replace(/\r/g,'');
+      // Unterstützt Import-Rohformat: body.raw oder body.text direkt mit Blöcken
+      let importRaw = '';
+      if(!rawContent.raw && (body as any).raw){ importRaw = String((body as any).raw||''); }
+      else if(!rawContent.raw && (body as any).text){ importRaw = String((body as any).text||''); }
+      const raw = String(rawContent.raw || importRaw || '').replace(/\r/g,'');
       const caseSensitive = !!rawContent.caseSensitive;
       const allowReveal = !!rawContent.allowReveal;
-      const blocks = Array.isArray(rawContent.blocks) ? rawContent.blocks : (() => {
+      const parseRawBlocks = (text:string)=>{
+        const chunks = text.replace(/\r/g,'').split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean).slice(0,50);
+        return chunks.map(b=>{
+          const lines = b.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+          if(!lines.length) return null;
+          let first = lines[0]; let media: string|undefined;
+          const m = first.match(/^(.+?)\s*\[(.+?)\]$/); if(m){ first=m[1].trim(); media=m[2].trim(); }
+          const answers = lines.slice(1).map(a=>a.trim()).filter(a=>a.length>0);
+          if(!first || !answers.length) return null;
+          return { question:first, answers, media };
+        }).filter(Boolean) as Array<{question:string;answers:string[];media?:string}>;
+      };
+      const blocks = Array.isArray(rawContent.blocks) ? rawContent.blocks : (raw ? parseRawBlocks(raw) : (() => {
         // Fallback: falls nur question/answer kam
         const q = String(rawContent.question||'').trim();
         const a = String(rawContent.answer||'').trim();
         if (q && a) return [{ question: q, answers: [a] }];
         return [];
-      })();
+      })());
       const sanitized = blocks.filter((b: any) => b && typeof b.question === 'string' && Array.isArray(b.answers) && b.answers.length>0)
   .map((b: any) => ({
         question: String(b.question).trim(),
