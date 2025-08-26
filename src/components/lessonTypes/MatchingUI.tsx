@@ -28,8 +28,8 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
         src={src}
         alt={alt}
         draggable={false}
-        className="object-contain block"
-        style={{ maxWidth: maxW || '100%', maxHeight: maxH || '100%' }}
+        className="object-contain block max-h-24"
+        style={{ maxWidth: maxW || '100%', maxHeight: Math.min(maxH, 96) || '96px' }}
         onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
         onError={(e)=>{ const el=e.currentTarget as HTMLImageElement; const name=(src.split('/').pop()||''); if(name){ const fallbacks = buildMediaFallbacks(name); let idx = Number(el.dataset.fidx||'0'); if(idx < fallbacks.length){ el.dataset.fidx=String(idx+1); el.src = fallbacks[idx]; return; } } el.replaceWith(Object.assign(document.createElement('div'), { className:'text-[10px] text-red-600 text-center break-words p-1', innerText: name?`Fehlt: ${name}`:'Bild fehlt' })); }}
       />
@@ -37,16 +37,16 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
   };
   const renderOption = (value:string)=>{ 
     const p = resolveMediaPath(value);
-    if(isImagePath(p)) return <div className="absolute inset-0">
-      <FittedImage src={p} alt="Bild" />
-      <button
-        type="button"
-        aria-label="Bild vergrößern"
-        onClick={(e)=>{ e.stopPropagation(); setZoomSrc(p); }}
-        onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
-        className="absolute top-1 right-1 bg-black/55 hover:bg-black/75 text-white rounded p-1 opacity-85 hover:opacity-100 transition-opacity"
-      >🔍</button>
-    </div>;
+    if(isImagePath(p)) return <div className="w-full h-full flex items-center justify-center relative">
+        <FittedImage src={p} alt="Bild" />
+        <button
+          type="button"
+          aria-label="Bild vergrößern"
+          onClick={(e)=>{ e.stopPropagation(); setZoomSrc(p); }}
+          onContextMenu={(e)=>{ e.preventDefault(); e.stopPropagation(); }}
+          className="absolute top-1 right-1 bg-black/55 hover:bg-black/75 text-white rounded p-1 opacity-85 hover:opacity-100 transition-opacity"
+        >🔍</button>
+      </div>;
     if(isAudioPath(p)) return <div className="w-full flex items-center justify-center">
       <audio controls className="w-full max-w-xs border rounded bg-white p-1">
         {(()=>{ const name=(p.split('/').pop()||''); return name? <source src={`/medien/uploads/${name}`}/> : null; })()}
@@ -118,34 +118,34 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
       </div>
     </div>
     {vertical ? (
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-10 items-center justify-center">
         <div>
           <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Links</h4>
-          <div className="flex flex-wrap gap-3 items-start">
-            {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l)); const base='relative group w-48 sm:w-56 md:w-64 h-32 sm:h-36 md:h-40 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden'; const clsBase = base; const cls= matchedRight? `${clsBase} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${clsBase} border-blue-500 bg-blue-50`: `${clsBase} border-gray-200 hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full h-full text-center break-words px-3 ${isImg?'':adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
+          <div className="flex flex-wrap gap-4 justify-center">
+            {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l)); const base='relative group w-56 md:w-64 h-28 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden'; const clsBase = base; const cls= matchedRight? `${clsBase} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${clsBase} border-blue-500 bg-blue-50`: `${clsBase} border-gray-200 hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full h-full flex items-center justify-center text-center break-words px-3 ${isImg?'':adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
           </div>
         </div>
         <div>
           <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Rechts</h4>
-          <div className="flex flex-wrap gap-3 items-start">
-            {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r)); const base='relative group w-48 sm:w-56 md:w-64 h-32 sm:h-36 md:h-40 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden'; const clsBase = base; const cls= isUsed? `${clsBase} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800`: `${clsBase} border-gray-200 hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full text-center break-words px-3 ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
+          <div className="flex flex-wrap gap-4 justify-center">
+            {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r)); const base='relative group w-56 md:w-64 h-28 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden'; const clsBase = base; const cls= isUsed? `${clsBase} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800`: `${clsBase} border-gray-200 hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full flex items-center justify-center text-center break-words px-3 ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
           </div>
         </div>
       </div>
     ) : (
-      <div className="flex flex-row gap-8">
+      <div className="flex flex-row gap-12 justify-center">
         <div className="flex flex-col gap-2">
           {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l));
-            const baseImg='relative group w-56 md:w-64 h-36 md:h-40 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
-            const baseText='w-56 md:w-64 h-24 md:h-28 p-3 flex items-center justify-center border rounded transition-colors bg-white';
+            const baseImg='relative group w-56 md:w-64 h-28 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
+            const baseText='w-56 md:w-64 h-28 p-3 flex items-center justify-center border rounded transition-colors bg-white';
             const base = isImg? baseImg : baseText;
             const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50`: `${base} border-gray-200 hover:bg-gray-50`;
             return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full h-full text-center break-words ${isImg?'':adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
         </div>
         <div className="flex flex-col gap-2">
           {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r));
-            const baseImg='relative group w-56 md:w-64 h-36 md:h-40 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
-            const baseText='w-56 md:w-64 h-24 md:h-28 p-3 flex items-center justify-center border rounded transition-colors bg-white';
+            const baseImg='relative group w-56 md:w-64 h-28 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
+            const baseText='w-56 md:w-64 h-28 p-3 flex items-center justify-center border rounded transition-colors bg-white';
             const base = isImg? baseImg : baseText;
             const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 hover:bg-gray-50`;
             return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full text-center break-words ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
