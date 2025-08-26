@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const hashedPassword = await hash(password, 10);
   let role: string = 'learner';
   if (desiredRole === 'author') role = 'pending-author';
-  if (desiredRole === 'teacher') role = 'pending-teacher';
+  if (desiredRole === 'teacher') role = 'teacher'; // Automatische Freischaltung für Lehrpersonen
 
   const newUser = new User({
     username,

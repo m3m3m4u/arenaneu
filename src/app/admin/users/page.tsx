@@ -93,7 +93,7 @@ export default function AdminUsersPage(){
 
   // Obere Abschnitte: aus kompletter Users-Liste
   const pending = users.filter(u=>u.role==='pending-author');
-  const pendingTeacher = users.filter(u=>u.role==='pending-teacher');
+  // pending-teacher entfällt – alte Konten werden automatisch hochgestuft
   const teachers = users.filter(u=>u.role==='teacher');
   const authors = users.filter(u=>u.role==='author');
 
@@ -150,7 +150,6 @@ export default function AdminUsersPage(){
         <select disabled={updating===u.username} value={u.role} onChange={(e)=>changeRole(u.username, e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
           <option value="learner">learner</option>
           <option value="pending-author">pending-author</option>
-          <option value="pending-teacher">pending-teacher</option>
           <option value="author">author</option>
           <option value="teacher">teacher</option>
           <option value="admin">admin</option>
@@ -184,21 +183,6 @@ export default function AdminUsersPage(){
         </div>
       </section>
 
-  <section className="bg-white border rounded p-4">
-        <h2 className="font-semibold mb-3">Ausstehende Lehrpersonen-Anfragen ({pendingTeacher.length})</h2>
-        {pendingTeacher.length===0 && <div className="text-xs text-gray-500">Keine.</div>}
-        <div className="divide-y">
-          {pendingTeacher.map(p=> (
-            <div key={p.username} className="py-2 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
-              <div className="text-sm"><span className="font-medium">{p.username}</span>{p.email && <span className="text-gray-500"> • {p.email}</span>}{p.lastOnline && <span className="text-gray-400"> • zuletzt {new Date(p.lastOnline).toLocaleString('de-DE',{ dateStyle:'short', timeStyle:'short'})}</span>}</div>
-              <div className="flex gap-2">
-                <button disabled={updating===p.username} onClick={()=>changeRole(p.username,'teacher')} className="px-3 py-1 text-xs rounded bg-green-600 text-white disabled:opacity-50">Freischalten → Lehrperson</button>
-                <button disabled={updating===p.username} onClick={()=>changeRole(p.username,'learner')} className="px-3 py-1 text-xs rounded bg-gray-600 text-white disabled:opacity-50">Ablehnen</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       <section className="bg-white border rounded p-4">
         <h2 className="font-semibold mb-3">Lehrpersonen ({teachers.length})</h2>

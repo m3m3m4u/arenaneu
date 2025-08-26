@@ -123,7 +123,7 @@ export async function PATCH(request: Request){
     const body = await request.json().catch(()=>({}));
     const { username, newRole } = body as any;
     if(!username || !newRole) return NextResponse.json({ success:false, error:'Felder fehlen' }, { status:400 });
-    if(!['author','teacher','admin','learner','pending-author','pending-teacher'].includes(newRole)) return NextResponse.json({ success:false, error:'Ungültige Rolle' }, { status:400 });
+  if(!['author','teacher','admin','learner','pending-author'].includes(newRole)) return NextResponse.json({ success:false, error:'Ungültige Rolle' }, { status:400 });
     const user = await User.findOneAndUpdate({ username }, { role:newRole }, { new:true });
     if(!user) return NextResponse.json({ success:false, error:'Benutzer nicht gefunden' }, { status:404 });
     return NextResponse.json({ success:true, user:{ username:user.username, role:user.role } });

@@ -58,8 +58,8 @@ export default function DashboardPage() {
               if (h.startsWith('/admin') || h.startsWith('/autor')) return false;
               return true;
             }
-            // Pending Rollen wie learner behandeln (nur Basiszugriff)
-            if (role === 'pending-author' || role === 'pending-teacher') {
+            // Pending-Author wie learner behandeln (pending-teacher existiert nicht mehr)
+            if (role === 'pending-author') {
               return ['/lernen','/ueben','/arena','/dashboard','/guest','/messages'].some(p=>h.startsWith(p));
             }
             // Default (admin, author etc.): alles lassen
@@ -175,9 +175,6 @@ export default function DashboardPage() {
               </div>
               {(session?.user as any)?.role === 'pending-author' && (
                 <div className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-300 rounded p-2">Dein Autor-Zugang wartet auf Freischaltung.</div>
-              )}
-              {(session?.user as any)?.role === 'pending-teacher' && (
-                <div className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-300 rounded p-2">Dein Lehrpersonen-Zugang wartet auf Freischaltung.</div>
               )}
               {(!(session?.user as any)?.role || (session?.user as any)?.role==='learner') && (
                 <AutorWerden />

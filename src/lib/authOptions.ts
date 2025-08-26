@@ -69,7 +69,18 @@ export const authOptions: NextAuthOptions = {
         if (u.id) (token as Record<string, unknown>).id = u.id;
         if (u.username) (token as Record<string, unknown>).username = u.username;
         if (u.name) token.name = u.name;
-        if (u.role) (token as Record<string, unknown>).role = u.role;
+        if (u.role) {
+          // pending-teacher sofort hochstufen
+          if (u.role === 'pending-teacher') {
+            (token as Record<string, unknown>).role = 'teacher';
+            // Best effort Persistierung
+            if (u.username) {
+              try { await dbConnect(); await User.updateOne({ username: u.username, role: 'pending-teacher' }, { $set: { role: 'teacher' } }); } catch { /* ignore */ }
+            }
+          } else {
+            (token as Record<string, unknown>).role = u.role;
+          }
+        }
       }
   // Keine Username-Eskalation mehr: Admin-Rechte kommen ausschließlich aus der Datenbank (role Feld)
       return token;
