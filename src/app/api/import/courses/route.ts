@@ -372,6 +372,7 @@ export async function POST(req: Request) {
             : l.type === 'minigame' && l.content?.questions ? l.content.questions.length
             : undefined,
           pairCount: (l.type === 'matching' || l.type === 'memory') && l.content?.pairs ? l.content.pairs.length : undefined
+          ,blockCount: l.type === 'text-answer' && Array.isArray(l.content?.blocks) ? l.content.blocks.length : undefined
         })),
         lessonCount: c.lessons.length,
         errors: c.errors
@@ -405,6 +406,19 @@ export async function POST(req: Request) {
           const base:any = { title: pl.title, courseId: String(course._id), category: pc.category, type: pl.type, order: order++ };
           if (pl.questions) base.questions = pl.questions;
           if (pl.content) base.content = pl.content;
+          if (pl.type === 'text-answer') {
+            // Dev-Debug: Block-Anzahl protokollieren
+            try {
+              const blocksLen = Array.isArray(pl.content?.blocks) ? pl.content.blocks.length : 0;
+              if (process.env.NODE_ENV !== 'production') {
+                // eslint-disable-next-line no-console
+                console.log('[import][text-answer] create lesson "%s" blocks=%d first=%o', pl.title, blocksLen, pl.content?.blocks?.[0]);
+              }
+              if (!blocksLen) {
+                base._importNote = 'Keine Blocks erkannt';
+              }
+            } catch {}
+          }
           // Spezielle Behandlung: Matching -> aus pairBlocks Fragen generieren (falls keine questions vorhanden)
           if (pl.type === 'matching' && !base.questions) {
             const pairs = (pl.content && (pl.content as any).pairs) || [];
