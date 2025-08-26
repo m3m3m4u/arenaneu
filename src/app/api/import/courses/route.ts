@@ -199,10 +199,21 @@ function parseLesson(raw: string): ParsedLesson {
   }
   // Text-Antwort
   if (type === 'text-answer') {
-    if (lines.length - idx < 2) return { type, title:'Text', raw, errors:['Kein Prompt'] };
-    const title = lines[idx] || 'Text';
-    const prompt = lines.slice(idx+1).join('\n');
-    return { type, title, raw, content:{ prompt }, errors };
+    if (lines.length - idx < 2) return { type, title:'Text-Antwort', raw, errors:['Keine Blöcke'] };
+    const title = lines[idx] || 'Text-Antwort';
+    const rawBlocks = lines.slice(idx+1).join('\n');
+    const normRaw = rawBlocks.replace(/\r/g,'');
+    const blocks = normRaw.split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean).slice(0,50).map(block => {
+      const ls = block.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+      if (!ls.length) return null;
+      let first = ls[0]; let media: string|undefined;
+      const m = first.match(/^(.+?)\s*\[(.+?)\]$/); if (m) { first = m[1].trim(); media = m[2].trim(); }
+      const answers = ls.slice(1).filter(a=>a.length>0);
+      if (!first || !answers.length) return null;
+      return { question:first, answers, media };
+    }).filter(Boolean) as Array<{question:string;answers:string[];media?:string}>;
+    if (!blocks.length) errors.push('Keine gültigen Fragenblöcke');
+    return { type, title, raw, content:{ raw: normRaw, blocks, question: blocks[0]?.question, answer: blocks[0]?.answers?.[0] }, errors };
   }
   // Minigame (frei konfigurierbar): Titel + optionale Konfigurationszeilen
   if (type === 'minigame') {

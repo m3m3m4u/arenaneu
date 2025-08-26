@@ -358,6 +358,9 @@ function NeueLektionPageInner() {
 
       // Wenn kein Kurs gewählt ist, lege eine eigenständige Übung im exercise-pool an
       const endpoint = courseId ? `/api/kurs/${courseId}/lektionen` : '/api/exercises';
+      if (process.env.NODE_ENV !== 'production' && lessonData.type === 'text-answer') {
+        try { console.log('[DEBUG text-answer submit]', { blocks: (payload.content as any)?.blocks?.length, sample: (payload.content as any)?.blocks?.[0] }); } catch {}
+      }
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
