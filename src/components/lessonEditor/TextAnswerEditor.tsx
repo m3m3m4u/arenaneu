@@ -2,7 +2,8 @@
 import BackLink from '@/components/shared/BackLink';
 import TitleCategoryBar from '@/components/shared/TitleCategoryBar';
 import { Lesson } from './types';
-import { Dispatch, SetStateAction, useState } from 'react';
+import { Dispatch, SetStateAction, useState, useEffect, useRef } from 'react';
+import { resolveMediaPath, buildMediaFallbacks, isImagePath, isAudioPath } from '@/lib/media';
 
 export interface TextAnswerEditorProps {
   lesson: Lesson;
@@ -33,6 +34,51 @@ export default function TextAnswerEditor({ lesson, title, setTitle, category, se
   }).filter(Boolean) as Block[];
   const blocks = parseBlocks(raw);
   const canSave = title.trim() && blocks.length>0;
+
+  // Medien-Existenzprüfung
+  const [mediaStatus, setMediaStatus] = useState<Record<string,{exists:boolean|null; checking:boolean; resolved?:string}>>({});
+  const pendingChecks = useRef<Set<string>>(new Set());
+  useEffect(()=>{
+    const medias = Array.from(new Set(blocks.map(b=>b.media).filter(Boolean))) as string[];
+    // Entferne veraltete Einträge
+    setMediaStatus(prev=>{ const next: typeof prev = {}; medias.forEach(m=>{ if(prev[m]) next[m]=prev[m]; else next[m]={ exists:null, checking:false }; }); return next; });
+    // Starte Checks für neue oder Unbekannte
+    medias.forEach(m=>{
+      if(pendingChecks.current.has(m)) return;
+      setMediaStatus(prev=> prev[m]?.exists==null && !prev[m].checking ? ({ ...prev, [m]: { ...prev[m], checking:true } }) : prev);
+      const doCheck = async()=>{
+        pendingChecks.current.add(m);
+        try {
+          const candidates = buildMediaFallbacks(m); // inklusive resolvter Varianten
+          let found = false; let resolved:string|undefined;
+          for(const candidate of candidates){
+            try {
+              const head = await fetch(candidate, { method:'HEAD' });
+              if(head.ok){ found=true; resolved=candidate; break; }
+              if(head.status===405 || head.status===501){ // Fallback falls HEAD nicht erlaubt
+                const getResp = await fetch(candidate, { method:'GET', cache:'no-store' });
+                if(getResp.ok){ found=true; resolved=candidate; break; }
+              }
+            } catch {}
+          }
+          setMediaStatus(prev=> ({ ...prev, [m]: { exists: found, checking:false, resolved } }));
+        } finally {
+          pendingChecks.current.delete(m);
+        }
+      };
+      doCheck();
+    });
+  }, [blocks]);
+
+  const statusIcon = (m?:string) => {
+    if(!m) return null;
+    const st = mediaStatus[m];
+    if(!st) return <span className="text-gray-300" title="Noch nicht geprüft">○</span>;
+    if(st.checking) return <span className="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full text-blue-400" title="Prüfe..." />;
+    if(st.exists) return <span className="text-green-600" title={`Gefunden: ${st.resolved}`}>✔</span>;
+    if(st.exists===false) return <span className="text-red-600" title="Nicht gefunden (prüfe Dateiname/Pfad)">✖</span>;
+    return null;
+  };
 
   const saveWithParsed = async () => {
     if (!canSave) return;
@@ -72,7 +118,7 @@ export default function TextAnswerEditor({ lesson, title, setTitle, category, se
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border rounded p-6 space-y-4">
           <h3 className="font-semibold">✍️ Fragen & Antworten (Blöcke)</h3>
-          <p className="text-xs text-gray-600">Jeder Block: erste Zeile Frage optional mit <code className="bg-gray-100 px-1 rounded">[media.jpg]</code> oder <code className="bg-gray-100 px-1 rounded">[audio.mp3]</code>, folgende Zeilen = korrekte Antworten. Leerzeile trennt Blöcke.</p>
+          <p className="text-xs text-gray-600">Jeder Block: erste Zeile Frage optional mit <code className="bg-gray-100 px-1 rounded">[media.jpg]</code> oder <code className="bg-gray-100 px-1 rounded">[audio.mp3]</code>, folgende Zeilen = korrekte Antworten. Leerzeile trennt Blöcke. Medien werden automatisch auf Existenz geprüft (✔ / ✖).</p>
           <textarea value={raw} onChange={e=>setRaw(e.target.value)} className="w-full h-96 p-3 border rounded font-mono text-sm" placeholder={'Was ist die Hauptstadt von Frankreich? [paris.jpg]\nParis\n\nNenne eine Primzahl kleiner als 5\n2\n3\n5'} />
           <div className="flex flex-col gap-2 text-xs">
             <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={caseSensitive} onChange={e=>setCaseSensitive(e.target.checked)} /> Groß-/Kleinschreibung beachten</label>
@@ -89,7 +135,21 @@ export default function TextAnswerEditor({ lesson, title, setTitle, category, se
             <ol className="list-decimal pl-5 space-y-3 text-sm">
               {blocks.map((b,i)=>(
                 <li key={i} className="bg-gray-50 border rounded p-3">
-                  <div className="font-medium mb-1 flex items-center gap-2">{b.question}{b.media && <span className="text-xs text-blue-600 break-all">📎 {b.media}</span>}</div>
+                  <div className="font-medium mb-1 flex items-center gap-2">
+                    {b.question}
+                    {b.media && (
+                      <>
+                        <span className="text-xs text-blue-600 break-all flex items-center gap-1">📎 {b.media} {statusIcon(b.media)}</span>
+                        {mediaStatus[b.media]?.exists && mediaStatus[b.media]?.resolved && isImagePath(mediaStatus[b.media].resolved as string) && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={mediaStatus[b.media].resolved} alt="preview" className="max-h-10 max-w-16 object-contain border rounded bg-white" />
+                        )}
+                        {mediaStatus[b.media]?.exists && mediaStatus[b.media]?.resolved && isAudioPath(mediaStatus[b.media].resolved as string) && (
+                          <audio src={mediaStatus[b.media].resolved} className="h-8" controls />
+                        )}
+                      </>
+                    )}
+                  </div>
                   <ul className="list-disc pl-5 text-xs text-gray-700 space-y-0.5">
                     {b.answers.map((a,ai)=><li key={ai}><code className="bg-white border px-1 rounded">{a}</code></li>)}
                   </ul>
