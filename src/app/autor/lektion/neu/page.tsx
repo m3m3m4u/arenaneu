@@ -148,7 +148,8 @@ function NeueLektionPageInner() {
       case "ordering":
         return { items: ["Schritt 1", "Schritt 2", "Schritt 3"] };
   case "text-answer":
-        return { question: "", answer: "", partials: [], caseSensitive: false };
+        // Neues Mehrblock-Format: raw + blocks (leere Startvorlage)
+        return { raw: '', blocks: [], caseSensitive: false, allowReveal: false };
   case "snake": // Legacy – fällt auf minigame zurück
   case "minigame":
         return { questions: "Frage 1\nRichtige Antwort\nFalsch A\nFalsch B\nFalsch C\n\nFrage 2\nRichtig\nFalsch\nFalsch\nFalsch", targetScore: 10, difficulty: 'mittel' } as SnakeContent;
@@ -291,25 +292,33 @@ function NeueLektionPageInner() {
         const c = (lessonData.content as any) || {};
         const raw: string = String(c.raw || '').replace(/\r/g,'');
         const caseSensitive = !!c.caseSensitive;
-        const blocks = raw.split(/\n\s*\n+/).map((b:string)=>b.trim()).filter(Boolean).slice(0,50).map(b => {
-          const lines = b.split(/\n+/).map(l=>l.trim()).filter(Boolean);
-          if (!lines.length) return null;
-            const question = lines[0];
+        const blocks = raw.split(/\n\s*\n+/)
+          .map((b:string)=>b.trim())
+          .filter(Boolean)
+          .slice(0,50)
+          .map(b => {
+            const lines = b.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+            if (!lines.length) return null;
+            let first = lines[0];
+            let media: string | undefined;
+            const m = first.match(/^(.+?)\s*\[(.+?)\]$/); // Frage [media]
+            if (m) { first = m[1].trim(); media = resolveMediaPath(m[2].trim()); }
             const answers = lines.slice(1).filter(l=>l.length>0);
-            if (!question || answers.length===0) return null;
-            return { question, answers };
-        }).filter(Boolean) as Array<{ question: string; answers: string[] }>;        
+            if (!first || answers.length===0) return null;
+            return { question: first, answers, media };
+          })
+          .filter(Boolean) as Array<{ question: string; answers: string[]; media?: string }>;        
         if (!blocks.length) {
           setIsSaving(false);
           alert('Mindestens ein gültiger Fragenblock benötigt.');
           return;
         }
-        // API für text-answer bisher single question -> wir legen content.raw + blocks ab
-  payload.content = { raw, blocks, caseSensitive, allowReveal: !!c.allowReveal };
-        // Wir speichern außerdem eine synthetische Frage + erste Antwort für Abwärtskompatibilität
+        // Server versteht jetzt raw + blocks (+ optionale media). allowReveal Flag durchreichen.
+        payload.content = { raw, blocks, caseSensitive, allowReveal: !!c.allowReveal };
+        // Legacy-Felder für alte Player belassen
         const first = blocks[0];
-        payload.content.question = first.question;
-        payload.content.answer = first.answers[0];
+        (payload.content as any).question = first.question;
+        (payload.content as any).answer = first.answers[0];
       }
 
   if (lessonData.type === 'minigame' || lessonData.type === 'snake') {

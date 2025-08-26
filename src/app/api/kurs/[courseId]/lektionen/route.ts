@@ -9,7 +9,7 @@ import User from '@/models/User';
 import ClassCourseAccess from '@/models/ClassCourseAccess';
 import { parseMemory } from '@/lib/memory';
 import { parseLueckentext } from '@/lib/lueckentext';
-import { canonicalizeMediaPath } from '@/lib/media';
+import { canonicalizeMediaPath, resolveMediaPath } from '@/lib/media';
 import mongoose from 'mongoose';
 
 // In-Memory Cache pro Runtime für Lesson-Listen (nur für Leserollen). Struktur: key => { expires, etag, payload }
@@ -590,7 +590,9 @@ export async function POST(
           const m = first.match(/^(.+?)\s*\[(.+?)\]$/); if(m){ first=m[1].trim(); media=m[2].trim(); }
           const answers = lines.slice(1).map(a=>a.trim()).filter(a=>a.length>0);
           if(!first || !answers.length) return null;
-          return { question:first, answers, media };
+          // Medienpfad normalisieren, falls es wie ein Dateiname aussieht
+          const mediaResolved = media ? resolveMediaPath(media) : undefined;
+          return { question:first, answers, media: mediaResolved };
         }).filter(Boolean) as Array<{question:string;answers:string[];media?:string}>;
       };
       const blocks = Array.isArray(rawContent.blocks) ? rawContent.blocks : (raw ? parseRawBlocks(raw) : (() => {
@@ -608,7 +610,8 @@ export async function POST(
       }))
         .slice(0,50);
       if (!sanitized.length) {
-        return NextResponse.json({ success: false, error: 'Mindestens ein gültiger Fragenblock erforderlich' }, { status: 400 });
+        const dev = process.env.NODE_ENV !== 'production';
+        return NextResponse.json({ success: false, error: 'Mindestens ein gültiger Fragenblock erforderlich', ...(dev ? { debug: { rawLength: raw.length, importRawLength: importRaw.length, blockCandidates: Array.isArray(blocks)? blocks.length: 'n/a' } }: {}) }, { status: 400 });
       }
       finalContent = { raw, blocks: sanitized, caseSensitive, allowReveal, question: sanitized[0].question, answer: sanitized[0].answers[0] };
     }
