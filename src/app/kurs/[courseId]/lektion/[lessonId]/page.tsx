@@ -243,6 +243,16 @@ export default function LessonPage() {
         .map((b: any) => ({ question: String(b.question), answers: b.answers.map((a: any)=>String(a)).filter((a:string)=>a.length>0), media: b.media && String(b.media) }));
     }
     if (c.question && c.answer) return [{ question: String(c.question), answers: [String(c.answer)] }];
+    // Fallback: aus questions Array rekonstruieren (Import Altformat)
+    if (Array.isArray((lesson as any).questions)) {
+      const qs = (lesson as any).questions as any[];
+      return qs.map((q,i)=>{
+        const answers:string[] = Array.isArray(q.correctAnswers) && q.correctAnswers.length ? q.correctAnswers.map((a:string)=>String(a)) : (q.correctAnswer? [String(q.correctAnswer)] : []);
+        const media = q.mediaLink ? String(q.mediaLink) : undefined;
+        if(!q.question || answers.length===0) return null;
+        return { question: String(q.question), answers, media };
+      }).filter(Boolean) as Array<{question:string;answers:string[];media?:string}>;
+    }
     return [];
   }, [lesson]);
   // Initial Queue setzen wenn Blocks geladen
@@ -561,7 +571,17 @@ export default function LessonPage() {
   const progress = totalQuestions > 0 ? (mastered.size / totalQuestions) * 100 : 0;
   const currentQuestion = lesson.questions && questionQueue.length > 0 ? lesson.questions[questionQueue[0]] : undefined;
   const currentQuestionIndex = questionQueue.length ? questionQueue[0] : -1;
-  const currentMedia = currentQuestion?.mediaLink ? resolveMediaPath(String(currentQuestion.mediaLink)) : '';
+  // Media aus Frage-Titel extrahieren (Pattern: ... [datei.ext]) falls kein separates mediaLink
+  let derivedMedia = '';
+  let displayQuestionRaw = currentQuestion?.question || '';
+  if (displayQuestionRaw && !(currentQuestion as any)?.mediaLink) {
+    const m = displayQuestionRaw.match(/^(.*)\[(.+?\.(?:png|jpe?g|gif|webp|svg|mp3|wav|ogg|m4a))]\s*$/i);
+    if (m) {
+      displayQuestionRaw = m[1].trim();
+      derivedMedia = m[2].trim();
+    }
+  }
+  const currentMedia = currentQuestion?.mediaLink ? resolveMediaPath(String(currentQuestion.mediaLink)) : (derivedMedia? resolveMediaPath(derivedMedia): '');
   const correctListNormalized = (currentQuestion && (Array.isArray(currentQuestion.correctAnswers) && currentQuestion.correctAnswers.length
     ? currentQuestion.correctAnswers
     : (currentQuestion?.correctAnswer ? [currentQuestion.correctAnswer] : [])).map(norm)) || [];
@@ -750,7 +770,7 @@ export default function LessonPage() {
                   </div>
                 )}
                 <div className={sideBySideChoice? 'md:basis-3/5 grow w-full space-y-3':'space-y-3 w-full'}>
-                  <h2 className="text-xl font-semibold mb-2">{currentQuestion.question}</h2>
+                  <h2 className="text-xl font-semibold mb-2">{displayQuestionRaw}</h2>
                   {!sideBySideChoice && hasMedia && (
                     <div className="p-4 bg-gray-50 rounded-lg">
                       {isImagePath(currentMedia) ? (
