@@ -26,6 +26,26 @@ async function importVercelBlob() {
   return importer(modName);
 }
 
+// Unicode-freundliche Dateinamen-Sanitizing-Funktion:
+// - Normalisiert nach NFC (wichtig für Mac/Linux Unterschiede)
+// - Erlaubt alle Buchstaben/Ziffern (Unicode), Punkt, Unterstrich, Bindestrich
+// - Wandelt Whitespace in Unterstrich um
+// - Entfernt führende Punkte (verhindert versteckte Dateien)
+// - Komprimiert Mehrfach-Unterstriche
+function sanitizeFilename(name: string): string {
+  let base = path.basename(String(name || ''));
+  try { base = base.normalize('NFC'); } catch {}
+  base = base.replace(/\s+/g, '_');
+  // Ersetze nicht erlaubte Zeichen durch _ (alles außer Unicode Letters/Numbers . _ -)
+  base = base.replace(/[^\p{L}\p{N}._-]+/gu, '_');
+  // Führe Punkte am Anfang entfernen
+  base = base.replace(/^\.+/, '');
+  // Mehrere Unterstriche reduzieren
+  base = base.replace(/_+/g, '_');
+  if(!base) base = 'datei';
+  return base;
+}
+
 export async function GET(){
   if(useWebdav){
     try{
@@ -110,8 +130,8 @@ export async function POST(req: any){
     if(!file || !(file instanceof Blob)){
       return NextResponse.json({ success:false, error:'Keine Datei übermittelt' }, { status:400 });
     }
-    const nameFromForm = (form.get('filename') as string | null) || (file as any).name || 'upload.bin';
-    const safeName = path.basename(nameFromForm).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const nameFromForm = (form.get('filename') as string | null) || (file as any).name || 'upload.bin';
+  const safeName = sanitizeFilename(nameFromForm);
     if(useWebdav){
       // Duplikat prüfen
       const exists = await davExists(BLOB_PREFIX + safeName);
@@ -216,8 +236,8 @@ export async function PATCH(req: any){
     const name = String(body?.name || '');
     const newName = String(body?.newName || '');
     if(!name || !newName) return NextResponse.json({ success:false, error:'name und newName erforderlich' }, { status:400 });
-    const safeOld = path.basename(name);
-    const safeNew = path.basename(newName).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeOld = sanitizeFilename(name); // Altname kommt aus UI (Liste) – zur Sicherheit erneut normalisieren
+  const safeNew = sanitizeFilename(newName);
     if(useWebdav){
       const oldKey = BLOB_PREFIX + safeOld;
       const newKey = BLOB_PREFIX + safeNew;
