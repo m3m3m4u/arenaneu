@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { resolveMediaPath, isImagePath, isAudioPath, buildMediaFallbacks } from '../../lib/media';
 
-interface MatchingProps { question: { allAnswers: string[]; correctAnswers?: string[] }; onSolved: () => void; }
-export default function MatchingUI({ question, onSolved }: MatchingProps){
+interface MatchingProps { question: { allAnswers: string[]; correctAnswers?: string[] }; onSolved: () => void; onContinue?: () => void; }
+export default function MatchingUI({ question, onSolved, onContinue }: MatchingProps){
   const [leftOptions, setLeftOptions] = useState<string[]>([]);
   const [rightOptions, setRightOptions] = useState<string[]>([]);
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
@@ -93,7 +93,14 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
   }, []);
   const toggleLayout=()=> setVertical(v=>{ const next=!v; try{ localStorage.setItem('matchingLayout', next? 'vertical':'horizontal'); }catch{} return next; });
   const Wrapper: React.FC<{children:React.ReactNode}> = ({children}) => fullscreen ? (
-    <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm overflow-auto p-4 md:p-8"><div className="max-w-6xl mx-auto">{children}</div></div>
+    <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm overflow-auto p-4 md:p-8 flex flex-col">
+      <div className="max-w-6xl w-full mx-auto flex-1">{children}</div>
+      {allMatched && onContinue && (
+        <div className="mt-4 max-w-6xl w-full mx-auto">
+          <button onClick={onContinue} className="w-full md:w-auto bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700">Weiter</button>
+        </div>
+      )}
+    </div>
   ) : <>{children}</>;
   const adaptiveText=(val:string)=>{
     const len = val.length;
@@ -150,6 +157,11 @@ export default function MatchingUI({ question, onSolved }: MatchingProps){
             const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 hover:bg-gray-50`;
             return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full flex items-center justify-center text-center break-words ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
         </div>
+      </div>
+    )}
+    {allMatched && !fullscreen && onContinue && (
+      <div className="mt-6">
+        <button onClick={onContinue} className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700">Weiter</button>
       </div>
     )}
     {zoomSrc && (

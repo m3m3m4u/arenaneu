@@ -723,14 +723,11 @@ export default function LessonPage() {
               <>
                 <MatchingUI
                   question={currentQuestion}
-                  onSolved={() => {
-                    setIsCorrect(true);
-                    setShowResult(true);
-                  }}
+                  onSolved={() => { setIsCorrect(true); setShowResult(true); }}
+                  onContinue={() => { handleNextQuestion(); }}
                 />
                 {showResult && (
-                  <div className="flex items-center gap-3 mt-4">
-                    <button onClick={handleNextQuestion} className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700">Weiter</button>
+                  <div className="flex items-center gap-3 mt-4 md:hidden">
                     <span className="text-sm font-medium text-green-700">Alle Paare korrekt verbunden!</span>
                   </div>
                 )}
