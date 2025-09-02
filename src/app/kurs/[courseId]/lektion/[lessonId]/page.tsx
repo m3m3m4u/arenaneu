@@ -537,7 +537,7 @@ export default function LessonPage() {
   // Early returns NACH allen Hooks:
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto mt-10 p-6">
+  <div className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
         <div className="text-center">
           <div className="animate-spin inline-block w-8 h-8 border-4 border-current border-t-transparent text-blue-600 rounded-full"></div>
           <p className="mt-2 text-gray-600">Lektion wird geladen...</p>
@@ -558,7 +558,7 @@ export default function LessonPage() {
 
   if (!lesson) {
     return (
-      <div className="max-w-6xl mx-auto mt-10 p-6 bg-white rounded shadow">
+  <div className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6 bg-white rounded shadow">
         <h2 className="text-xl font-bold text-red-600">Lektion nicht gefunden</h2>
         <p className="text-gray-600 mt-2">Die angeforderte Lektion konnte nicht geladen werden.</p>
         <button onClick={() => router.push(backHref)} className="mt-4 text-blue-600 hover:underline">← {backHref === '/ueben' ? 'Zurück zu Übungen' : 'Zurück zum Kurs'}</button>
@@ -591,7 +591,7 @@ export default function LessonPage() {
 
   if (lesson && isSnake) {
   return (
-      <div className="max-w-6xl mx-auto mt-10 p-6">
+  <div className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
     <button onClick={() => router.push(backHref)} className="text-blue-600 hover:underline mb-4">← {backHref === '/ueben' ? 'Zurück zu Übungen' : 'Zurück zum Kurs'}</button>
         <h1 className="text-2xl font-bold mb-6">{lesson.title}</h1>
         <SnakeGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
@@ -603,7 +603,7 @@ export default function LessonPage() {
   // Render für Markdown-Lektion
   if (isMarkdown) {
   return (
-      <div className="max-w-6xl mx-auto mt-10 p-6">
+  <div className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
     <button onClick={() => router.push(backHref)} className="text-blue-600 hover:underline mb-4">← {backHref === '/ueben' ? 'Zurück zu Übungen' : 'Zurück zum Kurs'}</button>
         <h1 className="text-2xl font-bold mb-6">{lesson.title}</h1>
         <MarkdownLesson lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} sessionUsername={session?.user?.username} />
@@ -622,7 +622,7 @@ export default function LessonPage() {
   const sideBySideChoice = (isSingleChoice || isMultiple) && hasMedia;
 
   return (
-  <div className="max-w-6xl mx-auto mt-10 p-6">
+  <div className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
       <div className="mb-6">
         <button onClick={() => router.push(backHref)} className="text-blue-600 hover:underline mb-4">← {backHref === '/ueben' ? 'Zurück zu Übungen' : 'Zurück zum Kurs'}</button>
         <h1 className="text-2xl font-bold mb-2">{lesson.title}</h1>

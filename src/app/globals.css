@@ -24,6 +24,14 @@ body {
   color: var(--foreground);
 }
 
+/* Skip-Link (Accessibility) */
+.skip-link { position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; }
+.skip-link:focus { left:8px; top:8px; width:auto; height:auto; padding:8px 12px; background:#111; color:#fff; z-index:2000; border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+
+/* Hide scrollbars utility */
+.scrollbar-none { -ms-overflow-style:none; scrollbar-width:none; }
+.scrollbar-none::-webkit-scrollbar { display:none; }
+
 /* Sticky edge shadows for tables */
 .sticky-edge-left::after {
   content: "";
@@ -47,20 +55,43 @@ body {
 }
 
 /* Navigation-Buttons (Bildwechsel up/down) */
-.navigation { width: 420px; }
+.navigation { width: 100%; max-width: 420px; }
+@media (min-width: 480px){
+  .navigation { width: 100%; }
+}
+@media (min-width: 640px){
+  .navigation { width: 420px; }
+}
 .left { float: left; }
 .right { float: right; }
 
 /* Gemeinsame Basis für Button-Klassen */
 .kurse, .arena, .admin, .uebungen, .autor, .gast {
-  width: 210px;
+  width: 50%;
+  max-width: 210px;
   line-height: 48px;
-  display: block;
+  display: inline-block;
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center;
   color: transparent; /* Text ausblenden */
+  vertical-align: top;
 }
+@media (min-width: 480px){
+  .kurse, .arena, .admin, .uebungen, .autor, .gast { width: 160px; }
+}
+@media (min-width: 640px){
+  .kurse, .arena, .admin, .uebungen, .autor, .gast { width: 180px; }
+}
+@media (min-width: 768px){
+  .kurse, .arena, .admin, .uebungen, .autor, .gast { width: 210px; }
+}
+
+/* Utility für horizontales Scrollen auf sehr kleinen Displays */
+.mobile-h-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Bessere Tap-Ziele für Buttons (Tailwind ergänzt dennoch :active States) */
+button, a { touch-action: manipulation; }
 
 /* Kurse */
 .kurse { background-image: url('/media/buttons/kurseup.png'); }

@@ -23,7 +23,7 @@ export default function OrderingEditor({ lesson, title, setTitle, category, setC
   };
   const canSave = title.trim() && orderingItems.length >=2;
   return (
-    <main className="max-w-6xl mx-auto mt-10 p-6">
+  <main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
       <BackLink lesson={lesson} returnToExercises={returnToExercises} />
       <h1 className="text-2xl font-bold mb-6">🔢 Reihenfolge-Lektion bearbeiten</h1>
       <TitleCategoryBar title={title} setTitle={setTitle} category={category} setCategory={setCategory} />

@@ -35,7 +35,7 @@ function MemoryCardSide({ side }: { side: { kind: string; value: string } }) {
 export default function MemoryEditor({ lesson, title, setTitle, category, setCategory, memoryRaw, setMemoryRaw, memoryPairs, memoryWarnings, memoryErrors, parseMemoryClient, handleSave, saving, returnToExercises }: MemoryEditorProps) {
   const canSave = title.trim() && memoryErrors.length === 0 && memoryPairs.length >= 4 && memoryPairs.length <= 8;
   return (
-    <main className="max-w-6xl mx-auto mt-10 p-6">
+  <main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
       <BackLink lesson={lesson} returnToExercises={returnToExercises} />
       <h1 className="text-2xl font-bold mb-6">🧠 Memory-Lektion bearbeiten</h1>
       <TitleCategoryBar title={title} setTitle={setTitle} category={category} setCategory={setCategory} />

@@ -321,7 +321,7 @@ function LernenPageInner() {
   }, [courses, session?.user?.username, recalcProgress]);
 
   return (
-    <main className="max-w-6xl mx-auto mt-10 p-6">
+  <main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
   {isTeacher ? (
         <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-4 text-sm">
@@ -485,7 +485,7 @@ function LernenPageInner() {
 
 export default function LernenPage() {
   return (
-    <Suspense fallback={<main className="max-w-6xl mx-auto mt-10 p-6 text-gray-500">Lade…</main>}>
+  <Suspense fallback={<main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6 text-gray-500">Lade…</main>}>
       <LernenPageInner />
     </Suspense>
   );

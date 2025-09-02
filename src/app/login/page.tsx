@@ -29,8 +29,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded shadow">
-      <h2 className="text-2xl font-bold mb-4">Login</h2>
+    <div className="max-w-md mx-auto mt-6 sm:mt-10 p-4 sm:p-6 bg-white rounded shadow">
+      <h2 className="text-xl sm:text-2xl font-bold mb-4">Login</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="text"
@@ -50,16 +50,16 @@ export default function LoginPage() {
           className="w-full p-2 border rounded"
           required
         />
-        <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded font-semibold">Login</button>
+  <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded font-semibold">Login</button>
       </form>
       {error && <p className="text-red-600 mt-4">{error}</p>}
-      <p className="mt-4">Noch keinen Account? <a href="/register" className="text-blue-600 underline">Registrieren</a></p>
-      <div className="mt-6 border-t pt-4">
+  <p className="mt-4 text-sm sm:text-base">Noch keinen Account? <a href="/register" className="text-blue-600 underline">Registrieren</a></p>
+  <div className="mt-6 border-t pt-4">
         <button
           onClick={()=>{ try { localStorage.setItem('guest:active','1'); } catch {}; window.location.href = '/guest'; }}
           className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded font-semibold"
         >Als Gast weitermachen</button>
-        <p className="mt-2 text-xs text-yellow-800 bg-yellow-50 border border-yellow-300 rounded p-2">
+  <p className="mt-2 text-[11px] sm:text-xs text-yellow-800 bg-yellow-50 border border-yellow-300 rounded p-2 leading-snug">
           Hinweis: Im Gastmodus werden Fortschritte und Einstellungen nur lokal im Browser gespeichert.
         </p>
       </div>

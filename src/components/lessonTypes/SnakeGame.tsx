@@ -177,7 +177,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
         className={"w-full flex flex-col lg:flex-row gap-6 " + (isFullscreen ? "border-2 border-gray-300 rounded-xl p-3 bg-white" : "")}
         onDoubleClick={()=>{ if(document.fullscreenElement){ exitFullscreen(); } else { enterFullscreen(); } }}
       >
-  <div className={(isFullscreen ? "lg:w-[420px] p-5 text-[0.95rem]" : "lg:w-80 p-4") + " flex-shrink-0 bg-white border rounded space-y-4 h-fit min-h-[420px]"}>
+  <div className={(isFullscreen ? "lg:w-[420px] p-5 text-[0.95rem]" : "lg:w-80 p-4") + " w-full lg:w-auto flex-shrink-0 bg-white border rounded space-y-4 h-fit min-h-[420px]"}>
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold">🐍 Snake Quiz</h2>
           </div>

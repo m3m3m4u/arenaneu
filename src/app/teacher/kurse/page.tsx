@@ -169,7 +169,7 @@ function TeacherCoursesContent(){
   }
 
   return (
-    <main className="max-w-6xl mx-auto mt-10 p-6">
+  <main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
       {/* Kopfzeile mit Zurück- und Dashboard-Link */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">

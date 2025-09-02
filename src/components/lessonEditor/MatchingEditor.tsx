@@ -52,7 +52,7 @@ export default function MatchingEditor({ lesson, title, setTitle, category, setC
   }, [matchingBlocksPreview]);
   const icon = (m:string)=>{ const st=mediaStatus[m]; if(!st) return <span className="text-gray-300" title="unbekannt">○</span>; if(st.checking) return <span className="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full text-blue-400" title="prüfe"/>; if(st.exists) return <span className="text-green-600" title={`gefunden: ${st.resolved}`}>✔</span>; if(st.exists===false) return <span className="text-red-600" title="nicht gefunden">✖</span>; return null; };
   return (
-    <main className="max-w-6xl mx-auto mt-10 p-6">
+  <main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
       <BackLink lesson={lesson} returnToExercises={returnToExercises} />
       <h1 className="text-2xl font-bold mb-6">🔗 Matching-Lektion bearbeiten</h1>
       <TitleCategoryBar title={title} setTitle={setTitle} category={category} setCategory={setCategory} />

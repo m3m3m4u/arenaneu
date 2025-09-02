@@ -186,7 +186,7 @@ export default function KursAnsichtPage() {
   }
 
   return (
-    <main className="max-w-6xl mx-auto mt-10 p-6">
+    <main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
   <CourseContextSwitcher currentCourseId={course._id} currentCourseTitle={course.title} />
       {/* Navigation */}
       <div className="mb-6">
@@ -198,11 +198,11 @@ export default function KursAnsichtPage() {
         <div className="mb-4 text-xs text-yellow-800 bg-yellow-50 border border-yellow-300 rounded p-2">Gastmodus aktiv: Fortschritte werden nur lokal im Browser gespeichert.</div>
       )}
       {/* Kurs Header */}
-      <div className="bg-white border rounded p-6 mb-6">
+  <div className="bg-white border rounded p-4 sm:p-6 mb-6">
         <h1 className="text-3xl font-bold mb-4">{course.title}</h1>
         <p className="text-gray-600 mb-4 text-lg">{course.description}</p>
         
-        <div className="flex gap-6 text-sm text-gray-500 mb-4">
+  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500 mb-4">
           <span>📚 {course.category}</span>
           <span> {course.createdAt ? new Date(course.createdAt).toLocaleDateString('de-DE') : ''}</span>
         </div>
@@ -219,14 +219,14 @@ export default function KursAnsichtPage() {
 
       {/* Lektionen Liste */}
       <div className="bg-white border rounded">
-        <div className="p-6 border-b">
+        <div className="p-4 sm:p-6 border-b">
           <h2 className="text-xl font-bold">📚 Kurs-Inhalte</h2>
           <p className="text-gray-600 text-sm mt-1">
             {lessons.length} Lektionen in diesem Kurs
           </p>
         </div>
 
-        <div className="p-6">
+  <div className="p-4 sm:p-6">
           {lessons.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <div className="text-4xl mb-4">📚</div>
@@ -237,8 +237,8 @@ export default function KursAnsichtPage() {
             <div className="space-y-4">
               {lessons.map((lesson, index) => (
                 <div key={lesson._id || lesson.id} className="border rounded p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-start gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-between items-start sm:items-start">
+                    <div className="flex items-start gap-4 w-full sm:w-auto">
                       <div className="bg-blue-100 rounded px-3 py-1 text-sm font-medium text-blue-800 flex-shrink-0">
                         #{index + 1}
                       </div>
@@ -272,7 +272,7 @@ export default function KursAnsichtPage() {
                             return t === 'markdown' ? 'Text' : 'Lektion';
                           })()}
                         </p>
-                        <div className="flex gap-3 text-sm text-gray-500">
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500">
                           <span>{getLessonTypeIcon(lesson.type)} {getLessonTypeName(lesson.type)}</span>
                           <span>📅 {new Date((lesson.createdAt || lesson.addedAt) as string).toLocaleDateString('de-DE')}</span>
                           {(() => {
@@ -302,7 +302,7 @@ export default function KursAnsichtPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
                       {completedLessonIds.includes((lesson._id || lesson.id) as string) && (
                         <span className="text-green-600 text-sm font-semibold flex items-center gap-1">
                           ✓ {lesson.type !== 'markdown' ? <span className="text-yellow-400">★</span> : null}

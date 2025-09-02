@@ -32,12 +32,14 @@ export default function RootLayout({
     <html lang="de">
       <head>
         <meta charSet="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans min-h-screen flex flex-col`}>        
+        <a href="#main-content" className="skip-link">Zum Inhalt springen</a>
         <CustomSessionProvider>
           <ToastProvider>
             <HeaderGate />
-            <main className="flex-1 w-full">{children}</main>
+            <main id="main-content" tabIndex={-1} className="flex-1 w-full px-3 sm:px-4 lg:px-6 max-w-[1400px] mx-auto w-full">{children}</main>
             <GlobalFooter />
             <CookieConsent />
           </ToastProvider>

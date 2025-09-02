@@ -20,7 +20,7 @@ export interface SnakeEditorProps {
 export default function SnakeEditor({ lesson, title, setTitle, category, setCategory, questionsText, setQuestionsText, parsedQuestions, saving, handleSave, snakeTargetScore, setSnakeTargetScore, snakeDifficulty, setSnakeDifficulty, returnToExercises }: SnakeEditorProps) {
   const canSave = title.trim() && questionsText.trim() && parsedQuestions.length>0;
   return (
-    <main className="max-w-6xl mx-auto mt-10 p-6">
+  <main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
       <BackLink lesson={lesson} returnToExercises={returnToExercises} />
   <h1 className="text-2xl font-bold">Minigame bearbeiten</h1>
   <p className="text-sm text-gray-600 mb-6">Kursteilnehmer entscheiden, welche Art von Minigame sie machen.</p>
