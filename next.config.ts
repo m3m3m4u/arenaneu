@@ -29,7 +29,7 @@ const securityHeaders = (() => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     imgSrc.join(' '),
     "font-src 'self' https://fonts.gstatic.com",
-    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtu.be",
+  `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtu.be${isPreview ? ' https://vercel.live' : ''}`,
     mediaSrc.join(' '),
     `connect-src ${connectSrcParts.join(' ')}`,
   ].join('; ');
