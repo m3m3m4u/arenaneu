@@ -1,6 +1,7 @@
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useAntiGuessing, AntiGuessingOverlay } from '../../../../../components/lessonTypes/useAntiGuessing';
 import { useSession } from 'next-auth/react';
 // Ausgelagerte Lektionstyp-Komponenten (schrittweises Refactoring)
 import { MarkdownLesson, YouTubeLesson, MemoryGame, LueckentextPlayer, OrderingPlayer, MatchingUI, LessonFooterNavigation, SnakeGame } from '../../../../../components/lessonTypes';
@@ -40,6 +41,8 @@ export default function LessonPage() {
   const [lockedRedirecting, setLockedRedirecting] = useState(false);
   // Wohin zurück? Kurs oder Übungsmenü
   const [backHref, setBackHref] = useState<string>(`/kurs/${courseId}`);
+  // Anti-Guessing nur für Single / Multiple / Matching / Lückentext
+  const antiGuess = useAntiGuessing({ maxWrongStreak:3, windowMs:12000, cooldownMs:6000 });
   // (Lückentext lokaler Player rendert vollständig in eigener Komponente)
   // Zoom für Bilder (MUSS vor möglichen Early Returns definiert werden, sonst Hook-Reihenfolge Fehler #310)
   const [zoomSrc, setZoomSrc] = useState<string|null>(null);
@@ -180,6 +183,7 @@ export default function LessonPage() {
   const norm = (s: unknown) => (typeof s === 'string' ? s.trim() : String(s ?? ''));
 
   const handleAnswerSelect = (answer: string) => {
+    if(antiGuess.blocked) return;
     if (showResult) return;
     if (lesson?.type === 'multiple-choice') {
       setSelectedAnswers(prev => prev.includes(answer) ? prev.filter(a => a !== answer) : [...prev, answer]);
@@ -191,11 +195,12 @@ export default function LessonPage() {
     const qIdx = questionQueue[0];
     setQuestionAttempts(prev=> ({ ...prev, [qIdx]: (prev[qIdx]||0)+1 }));
     const correct = norm(answer) === norm(currentQuestion.correctAnswer);
-    setIsCorrect(correct);
+  setIsCorrect(correct);
     setShowResult(true);
     if (correct && !mastered.has(questionQueue[0])) {
       setScore(prev => prev + 1);
     }
+  antiGuess.registerAnswer(correct);
     // First try correct markieren
     if(correct && !(qIdx in firstTryCorrect) && (questionAttempts[qIdx]||0)===0){
       setFirstTryCorrect(prev=> ({ ...prev, [qIdx]: true }));
@@ -205,6 +210,7 @@ export default function LessonPage() {
   };
 
   const handleCheckMultiple = () => {
+    if(antiGuess.blocked) return;
     if (!lesson || !lesson.questions || questionQueue.length === 0) return;
     const currentQuestion = lesson.questions[questionQueue[0]] as Question;
     const correctList = (Array.isArray(currentQuestion.correctAnswers) && currentQuestion.correctAnswers.length
@@ -212,13 +218,14 @@ export default function LessonPage() {
       : (currentQuestion.correctAnswer ? [currentQuestion.correctAnswer] : [])).map(norm);
     const selNorm = selectedAnswers.map(norm);
     const isSetEqual = selNorm.length === correctList.length && correctList.every(a => selNorm.includes(a));
-    setIsCorrect(isSetEqual);
+  setIsCorrect(isSetEqual);
     setShowResult(true);
     const qIdx = questionQueue[0];
     setQuestionAttempts(prev=> ({ ...prev, [qIdx]: (prev[qIdx]||0)+1 }));
-    if (isSetEqual && !mastered.has(questionQueue[0])) {
+  if (isSetEqual && !mastered.has(questionQueue[0])) {
       setScore(prev => prev + 1);
     }
+  antiGuess.registerAnswer(isSetEqual);
     if(isSetEqual && !(qIdx in firstTryCorrect) && (questionAttempts[qIdx]||0)===0){
       setFirstTryCorrect(prev=> ({ ...prev, [qIdx]: true }));
     } else if(!(qIdx in firstTryCorrect) && !isSetEqual && (questionAttempts[qIdx]||0)===0){
@@ -371,6 +378,7 @@ export default function LessonPage() {
 
   // Wiederhergestellt: Fortschrittslogik nach Bewertung
   const handleNextQuestion = () => {
+    if(antiGuess.blocked) return;
     if (!lesson || questionQueue.length === 0) return;
     const currentIdx = questionQueue[0];
     let newQueue = [...questionQueue];
@@ -419,6 +427,7 @@ export default function LessonPage() {
   };
 
   const handleRetry = () => {
+    if(antiGuess.blocked) return; // warten bis Block vorbei
     setCurrentQuestionIndex(0);
     setSelectedAnswer("");
     setShowResult(false);
@@ -592,6 +601,7 @@ export default function LessonPage() {
   if (lesson && isSnake) {
   return (
   <div className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
+      {antiGuess.blocked && (lesson && (lesson.type==='single-choice' || lesson.type==='multiple-choice' || lesson.type==='matching')) && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} />}
     <button onClick={() => router.push(backHref)} className="text-blue-600 hover:underline mb-4">← {backHref === '/ueben' ? 'Zurück zu Übungen' : 'Zurück zum Kurs'}</button>
         <h1 className="text-2xl font-bold mb-6">{lesson.title}</h1>
         <SnakeGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />

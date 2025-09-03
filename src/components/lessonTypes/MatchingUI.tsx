@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
+import { useAntiGuessing, AntiGuessingOverlay } from './useAntiGuessing';
 import { resolveMediaPath, isImagePath, isAudioPath, buildMediaFallbacks } from '../../lib/media';
 
 interface MatchingProps { question: { allAnswers: string[]; correctAnswers?: string[] }; onSolved: () => void; onContinue?: () => void; }
 export default function MatchingUI({ question, onSolved, onContinue }: MatchingProps){
+  const antiGuess = useAntiGuessing({ maxWrongStreak:3, windowMs: 12000, cooldownMs: 6000 });
   const [leftOptions, setLeftOptions] = useState<string[]>([]);
   const [rightOptions, setRightOptions] = useState<string[]>([]);
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
@@ -59,8 +61,8 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
   const isCorrectPair=(l:string,r:string)=> (question.correctAnswers||[]).includes(`${l}=>${r}`);
   const allMatched= Object.keys(matched).length>0 && Object.keys(matched).length === (question.correctAnswers?.length||0);
   useEffect(()=>{ if(allMatched) onSolved(); },[allMatched,onSolved]);
-  const handleLeftClick=(l:string)=>{ if(matched[l]) return; setSelectedLeft(prev=> prev===l? null: l); };
-  const handleRightClick=(r:string)=>{ if(!selectedLeft) return; const rightUsed = Object.values(matched).includes(r); if(rightUsed) return; const l= selectedLeft; if(isCorrectPair(l,r)){ setMatched(prev=>({...prev, [l]:r})); setSelectedLeft(null); } else { setErrorPair({ left:l, right:r }); setTimeout(()=> setErrorPair(null),700); setSelectedLeft(null); } };
+  const handleLeftClick=(l:string)=>{ if(antiGuess.blocked) return; if(matched[l]) return; setSelectedLeft(prev=> prev===l? null: l); };
+  const handleRightClick=(r:string)=>{ if(antiGuess.blocked) return; if(!selectedLeft) return; const rightUsed = Object.values(matched).includes(r); if(rightUsed) return; const l= selectedLeft; if(isCorrectPair(l,r)){ setMatched(prev=>({...prev, [l]:r})); setSelectedLeft(null); antiGuess.registerAnswer(true); } else { antiGuess.registerAnswer(false); setErrorPair({ left:l, right:r }); setTimeout(()=> setErrorPair(null),700); setSelectedLeft(null); } };
   const isLeftMatched=(l:string)=> Boolean(matched[l]); const isRightMatched=(r:string)=> Object.values(matched).includes(r);
   // Farbpalette für zusammengehörige Paare (Index anhand der korrekten Paarliste)
   const pairOrder = (question.correctAnswers||[]).map(p=>{ const [l,r]=p.split('=>'); return {l,lTrim:l.trim(), r:r.trim()}; });
@@ -109,7 +111,7 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
     if(isSmall) return; // Toggle mobil deaktiviert (kein Button sichtbar)
     setVertical(v=>{ const next=!v; try{ localStorage.setItem('matchingLayout', next? 'vertical':'horizontal'); }catch{} return next; });
   };
-  const resetMatches=()=>{ setMatched({}); setSelectedLeft(null); setErrorPair(null); };
+  const resetMatches=()=>{ if(antiGuess.blocked) return; setMatched({}); setSelectedLeft(null); setErrorPair(null); };
   const Wrapper: React.FC<{children:React.ReactNode}> = ({children}) => fullscreen ? (
     <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm overflow-auto p-4 md:p-8 flex flex-col">
       <div className="max-w-6xl w-full mx-auto flex-1 pb-6">{children}</div>
@@ -142,6 +144,7 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
   const progress = totalPairs? Math.round((matchedCount/totalPairs)*100) : 0;
   const effectiveVertical = vertical && !isSmall; // mobil immer 2-Spalten horizontal
   return <Wrapper>
+    {antiGuess.blocked && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} />}
     <div className="flex items-start justify-between mb-3 gap-4 flex-wrap relative">
       <div className="space-y-1">
   <h3 className="font-semibold text-base text-gray-700 md:text-lg">Zuordnung</h3>

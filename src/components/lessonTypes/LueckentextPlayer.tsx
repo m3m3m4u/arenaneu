@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, ComponentType } from 'react';
+import { useAntiGuessing, AntiGuessingOverlay } from './useAntiGuessing';
 import type { Lesson } from './types';
 import { finalizeLesson } from '../../lib/lessonCompletion';
 import { LessonFooterNavigation } from './index';
@@ -19,6 +20,7 @@ interface Props {
   showFooter?: boolean; // Standard: true
 }
 export default function LueckentextPlayer({ lesson, courseId, completedLessons, setCompletedLessons, sessionUsername, allLessons = [], progressionMode = 'free', backHref, showFooter = true }: Props) {
+  const antiGuess = useAntiGuessing({ maxWrongStreak:3, windowMs: 12000, cooldownMs: 6000 });
   const [InlineMD, setInlineMD]= useState<ComponentType<any>|null>(null); const [gfm,setGfm]=useState<any>(null);
   useEffect(()=>{ let mounted=true;(async()=>{ const m= await import('react-markdown'); const g= await import('remark-gfm'); if(!mounted) return; setInlineMD(()=> m.default as any); setGfm(()=> (g as any).default ?? g);})(); return ()=>{mounted=false}; },[]);
   const c= (lesson.content||{}) as any; const masked: string= String(c.markdownMasked||''); const gaps: Gap[] = Array.isArray(c.gaps)? c.gaps.map((g:any)=>({id:g.id, answer:String(g.answer)})):[]; const mode: Mode = c.mode==='drag'?'drag':'input';
@@ -33,6 +35,7 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
   },[mode,gaps]);
 
   const check=()=>{
+    if(antiGuess.blocked) return;
     const allCorrectNow = gaps.every(g=> (answersState[g.id]||'').trim() === g.answer.trim());
     let next = { ...answersState };
     if(mode==='drag' && !allCorrectNow){
@@ -44,7 +47,8 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
       setAnswersState(next);
       setUsedAnswers(Object.values(next).filter(Boolean));
     }
-    setChecked(true);
+  antiGuess.registerAnswer(allCorrectNow);
+  setChecked(true);
     setCorrectAll(allCorrectNow);
     if(allCorrectNow && !completedLessons.includes(lesson._id)){
       (async()=>{
@@ -112,7 +116,8 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
     >{val? val: <span className="opacity-40 select-none tracking-wider">_____</span>}</span>;
   };
 
-  return <div className="bg-white rounded shadow p-6">
+  return <div className="bg-white rounded shadow p-6 relative">
+    {antiGuess.blocked && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} />}
   <div className="text-base leading-8 whitespace-pre-wrap">{parts.map(renderPart)}</div>
     {mode==='drag' && <div className="mt-6">
       <h3 className="font-semibold mb-2 text-base">Antworten</h3>

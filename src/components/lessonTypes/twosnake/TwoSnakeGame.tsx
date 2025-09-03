@@ -208,39 +208,48 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
       if(gA && !gameOverA){ nextScoreA -= 1; setScoreA(s=>s-1); }
       if(gB && !gameOverB){ nextScoreB -= 1; setScoreB(s=>s-1); }
 
-      // Foods / growth
+  // Foods / growth & quiz handling
       if(!gA || !gB){
         if(activeBlocks.length){
-          const hitA = !gA && foods.find(f=>f.x===nextA.x && f.y===nextA.y);
-          const hitB = !gB && foods.find(f=>f.x===nextB.x && f.y===nextB.y);
+          const hitA = !gA && foods.find(f=> f.x===nextA.x && f.y===nextA.y);
+          const hitB = !gB && foods.find(f=> f.x===nextB.x && f.y===nextB.y);
           let newQuestionNeeded = false;
-          let removeWrongA = false;
-          let removeWrongB = false;
+
           if(hitA){
-            if(hitA.correct){ nextScoreA += 1; setScoreA(s=>s+1); newQuestionNeeded = true; }
-            else { nextScoreA -= 1; setScoreA(s=>s-1); removeWrongA = true; /* keep growth: do not pop tail */ }
+            if(hitA.correct){
+      nextScoreA += 1; setScoreA(s=>s+1); newQuestionNeeded = true;
+            } else {
+      nextScoreA -= 1; setScoreA(s=>s-1); /* keep growth on wrong */
+            }
           }
           if(hitB){
-            if(hitB.correct){ nextScoreB += 1; setScoreB(s=>s+1); newQuestionNeeded = true; }
-            else { nextScoreB -= 1; setScoreB(s=>s-1); removeWrongB = true; /* keep growth: do not pop tail */ }
+            if(hitB.correct){
+      nextScoreB += 1; setScoreB(s=>s+1); newQuestionNeeded = true;
+            } else {
+      nextScoreB -= 1; setScoreB(s=>s-1);
+            }
           }
-          if(!hitA && !gA){ newA = newA.slice(0, -1); }
-          if(!hitB && !gB){ newB = newB.slice(0, -1); }
-          if(newQuestionNeeded && !finished && !(gA && gB)){
+          // shrink only if not eating
+            if(!hitA && !gA) newA = newA.slice(0,-1);
+            if(!hitB && !gB) newB = newB.slice(0,-1);
+
+          // remove eaten foods
+          if(hitA || hitB){
+            setFoods(prev => prev.filter(f => f !== hitA && f !== hitB));
+          }
+
+          // create next question only if at least one correct
+          if(newQuestionNeeded){
             const q = activeBlocks[Math.floor(Math.random()*activeBlocks.length)];
             setCurrentQuestion(q);
             questionIdRef.current += 1;
             placeAnswerFoods(q);
-          } else if((removeWrongA || removeWrongB) && foods.length){
-            const ax = nextA.x, ay = nextA.y;
-            const bx = nextB.x, by = nextB.y;
-            setFoods(prev => prev.filter(f => !((removeWrongA && f.x===ax && f.y===ay && !f.correct) || (removeWrongB && f.x===bx && f.y===by && !f.correct))));
           }
         } else {
           const aAte = !gA && (nextA.x===food.x && nextA.y===food.y);
           const bAte = !gB && (nextB.x===food.x && nextB.y===food.y);
-          if(!aAte && !gA){ newA = newA.slice(0, -1); }
-          if(!bAte && !gB){ newB = newB.slice(0, -1); }
+          if(!aAte && !gA) newA = newA.slice(0,-1);
+          if(!bAte && !gB) newB = newB.slice(0,-1);
           if(aAte){ nextScoreA += 1; setScoreA(s=>s+1); }
           if(bAte){ nextScoreB += 1; setScoreB(s=>s+1); }
           if(aAte || bAte) placeClassicFood();

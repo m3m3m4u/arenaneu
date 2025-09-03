@@ -1,8 +1,16 @@
 "use client";
+import { Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
 
 export default function ResetPasswordConfirmPage(){
+  return (
+    <Suspense fallback={<div className="max-w-md mx-auto mt-10 text-sm text-gray-600">Lade…</div>}>
+      <ResetPasswordInner />
+    </Suspense>
+  );
+}
+
+function ResetPasswordInner(){
   const sp = useSearchParams();
   const token = sp?.get('token') || '';
   const u = sp?.get('u') || '';
@@ -41,3 +49,4 @@ export default function ResetPasswordConfirmPage(){
     </div>
   );
 }
+
