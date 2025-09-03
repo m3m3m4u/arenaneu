@@ -4,6 +4,8 @@ import ShopProduct from '@/models/ShopProduct';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import { s3Delete } from '@/lib/storage';
+import { isWebdavEnabled, davDelete } from '@/lib/webdavClient';
+import { normalizeCategory } from '@/lib/categories';
 
 async function ensureAuth(){
   const session: any = await getServerSession(authOptions as any);
@@ -33,7 +35,11 @@ export async function PATCH(req: Request, ctx: { params: { id: string }} ){
     const update: any = {};
     if(body.title) update.title = String(body.title).trim();
     if(typeof body.description === 'string') update.description = body.description;
-    if(typeof body.category === 'string') update.category = body.category.trim();
+    if(typeof body.category === 'string'){
+      const catNorm = normalizeCategory(body.category);
+      if(body.category && !catNorm) return NextResponse.json({ success:false, error:'Ungültige Kategorie' }, { status:400 });
+      update.category = catNorm;
+    }
     if(Array.isArray(body.tags)) update.tags = body.tags.map((t:any)=>String(t).trim()).filter(Boolean);
     if(typeof body.isPublished === 'boolean') update.isPublished = body.isPublished;
     const doc = await ShopProduct.findByIdAndUpdate(ctx.params.id, update, { new:true });
@@ -52,7 +58,17 @@ export async function DELETE(_req: Request, ctx: { params: { id: string }} ){
     const doc = await ShopProduct.findById(ctx.params.id);
     if(!doc) return NextResponse.json({ success:false, error:'Nicht gefunden' }, { status:404 });
     // Dateien auf S3 löschen
-    try { for(const f of doc.files){ if(f.key) await s3Delete(f.key); } } catch{}
+    const useWebdav = isWebdavEnabled();
+    try {
+      for(const f of doc.files){
+        if(!f.key) continue;
+        if(useWebdav){
+          try { await davDelete(f.key); } catch{}
+        } else {
+          try { await s3Delete(f.key); } catch{}
+        }
+      }
+    } catch{}
     await doc.deleteOne();
     return NextResponse.json({ success:true });
   } catch(e){

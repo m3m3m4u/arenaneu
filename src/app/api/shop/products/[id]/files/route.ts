@@ -30,8 +30,9 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     // Gemeinsamer Schlüssel – identisch für WebDAV & S3
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g,'_');
-    const key = `shop/${doc._id}/${Date.now()}_${safeName}`;
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g,'_');
+  const shopBase = (process.env.WEBDAV_SHOP_PREFIX || 'shop').replace(/^[\\/]+|[\\/]+$/g,'');
+  const key = `${shopBase}/${doc._id}/${Date.now()}_${safeName}`;
 
     const useWebdav = isWebdavEnabled();
     let finalUrl: string | undefined;
