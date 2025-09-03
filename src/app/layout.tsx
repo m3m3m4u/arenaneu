@@ -39,7 +39,7 @@ export default function RootLayout({
         <CustomSessionProvider>
           <ToastProvider>
             <HeaderGate />
-            <main id="main-content" tabIndex={-1} className="flex-1 w-full px-3 sm:px-4 lg:px-6 max-w-[1400px] mx-auto w-full">{children}</main>
+            <main id="main-content" tabIndex={-1} className="flex-1 w-full px-3 sm:px-4 lg:px-6 max-w-[1400px] mx-auto w-full pt-16">{children}</main>
             <GlobalFooter />
             <CookieConsent />
           </ToastProvider>

@@ -52,6 +52,9 @@ export default function LoginPage() {
         />
   <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded font-semibold">Login</button>
       </form>
+      <div className="mt-4 flex justify-end">
+        <a href="/forgot-password" className="text-sm text-blue-600 font-medium underline hover:text-blue-700">Passwort vergessen?</a>
+      </div>
       {error && <p className="text-red-600 mt-4">{error}</p>}
   <p className="mt-4 text-sm sm:text-base">Noch keinen Account? <a href="/register" className="text-blue-600 underline">Registrieren</a></p>
   <div className="mt-6 border-t pt-4">

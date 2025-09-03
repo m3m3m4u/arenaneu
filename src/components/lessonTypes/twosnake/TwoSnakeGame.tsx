@@ -94,6 +94,24 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
   const [marking, setMarking] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Fullscreen API Handler
+  const enterFullscreen = useCallback(()=>{
+    const el = containerRef.current; if(!el) return;
+    if(document.fullscreenElement) return;
+    el.requestFullscreen?.().then(()=> setIsFullscreen(true)).catch(()=>{});
+  },[]);
+  const exitFullscreen = useCallback(()=>{
+    if(document.fullscreenElement) document.exitFullscreen?.();
+  },[]);
+  useEffect(()=>{
+    const handler = () => { setIsFullscreen(!!document.fullscreenElement); };
+    document.addEventListener('fullscreenchange', handler);
+    return ()=> document.removeEventListener('fullscreenchange', handler);
+  },[]);
+  // ESC Hinweis optional – bereits durch fullscreenchange erfasst
 
   const questionIdRef = useRef(0);
   const lastScorePostedRef = useRef(0);
@@ -336,11 +354,17 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
     }
   },[snakeA, snakeB, foods, food, blocks.length, scoreA, scoreB, finished, targetScore, running, gameOverA, gameOverB, tickMs, currentQuestion, onState]);
 
+  // Canvas bleibt jetzt auch im Vollbild bei ursprünglicher Maximalgröße.
+
   return (
     <div className="w-full flex flex-col gap-4">
   {/* Kopfzeile entfernt: Titel-Badge '🐍×2 Gemeinsames Board' */}
-      <div className="w-full flex flex-col lg:flex-row gap-6">
-        <div className="lg:w-80 p-4 bg-white border rounded space-y-3 h-fit">
+  <div ref={containerRef} className={`w-full flex flex-col lg:flex-row gap-6 ${isFullscreen? 'fixed inset-0 z-50 bg-white p-2 md:p-4 overflow-auto':''}`}>
+        <div id="twosnake-sidebar" className="lg:w-80 p-4 bg-white border rounded space-y-3 h-fit relative">
+          <div className="absolute top-2 right-2 flex gap-1">
+            {!isFullscreen && <button onClick={enterFullscreen} className="px-2 py-1 text-[11px] rounded border bg-gray-50 hover:bg-white">Vollbild</button>}
+            {isFullscreen && <button onClick={exitFullscreen} className="px-2 py-1 text-[11px] rounded border bg-gray-50 hover:bg-white">Exit</button>}
+          </div>
           <div className="text-sm"><span className="font-medium">Ziel:</span> {targetScore} Punkte</div>
           {questionSets && questionSets.length > 0 && (
             <div className="text-sm">
@@ -365,14 +389,14 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
             </span>
           </div>
           {activeBlocks.length>0 && currentQuestion && !(finished) && (
-            <div className="text-sm">
-              <div className="text-gray-700 whitespace-pre-wrap break-words">{currentQuestion.question}</div>
+            <div className={`text-sm ${isFullscreen ? 'text-base leading-snug' : ''}`}>
+              <div className={`text-gray-700 whitespace-pre-wrap break-words ${isFullscreen? 'text-lg font-medium': ''}`}>{currentQuestion.question}</div>
               {foods.length === 4 && (
-                <ul className="mt-2 space-y-1 text-xs">
+                <ul className={`mt-2 space-y-1 ${isFullscreen? 'text-sm' : 'text-xs'}` }>
                   {foods.map((f,i)=> (
                     <li key={i} className="flex items-center gap-2">
                       <span className="inline-block w-4 h-4 rounded-sm border" style={{background:f.color}}></span>
-                      <span className="flex-1 break-words">{f.answer}</span>
+                      <span className={`flex-1 break-words ${isFullscreen? 'text-[15px]' : ''}`}>{f.answer}</span>
                     </li>
                   ))}
                 </ul>
@@ -385,49 +409,76 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
             </div>
           )}
           <div className="pt-3 border-t mt-2">
-            {localControlA && (
-              <>
-                <div className="text-xs text-gray-500 mb-2">Steuerung A (Pfeile)</div>
-                <div className="grid grid-cols-3 gap-2 w-56 select-none mb-2">
-                  <div />
-                  <button onClick={()=> setDirA(d=> (d.y!==1?{x:0,y:-1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">↑</button>
-                  <div />
-                  <button onClick={()=> setDirA(d=> (d.x!==1?{x:-1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">←</button>
-                  <div />
-                  <button onClick={()=> setDirA(d=> (d.x!==-1?{x:1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">→</button>
-                  <div />
-                  <button onClick={()=> setDirA(d=> (d.y!==-1?{x:0,y:1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">↓</button>
-                  <div />
-                </div>
-              </>
-            )}
-            {localControlB && (
-              <>
-                <div className="text-xs text-gray-500 mb-2">Steuerung B (WASD)</div>
-            <div className="grid grid-cols-3 gap-2 w-56 select-none">
-              <div />
-                  <button onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">W</button>
-              <div />
-                  <button onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">A</button>
-              <div />
-                  <button onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">D</button>
-              <div />
-                  <button onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">S</button>
-              <div />
+            <div className={isFullscreen ? 'hidden' : ''}>
+              {localControlA && (
+                <>
+                  <div className="text-xs text-gray-500 mb-2">Steuerung A (Pfeile)</div>
+                  <div className="grid grid-cols-3 gap-2 w-56 select-none mb-2">
+                    <div />
+                    <button onClick={()=> setDirA(d=> (d.y!==1?{x:0,y:-1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">↑</button>
+                    <div />
+                    <button onClick={()=> setDirA(d=> (d.x!==1?{x:-1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">←</button>
+                    <div />
+                    <button onClick={()=> setDirA(d=> (d.x!==-1?{x:1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">→</button>
+                    <div />
+                    <button onClick={()=> setDirA(d=> (d.y!==-1?{x:0,y:1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">↓</button>
+                    <div />
+                  </div>
+                </>
+              )}
+              {localControlB && (
+                <>
+                  <div className="text-xs text-gray-500 mb-2">Steuerung B (WASD)</div>
+                  <div className="grid grid-cols-3 gap-2 w-56 select-none">
+                    <div />
+                    <button onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">W</button>
+                    <div />
+                    <button onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">A</button>
+                    <div />
+                    <button onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">D</button>
+                    <div />
+                    <button onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} disabled={!running || finished} className="px-3 py-2 rounded-md border bg-gray-50 disabled:opacity-50">S</button>
+                    <div />
+                  </div>
+                </>
+              )}
             </div>
-              </>
-            )}
             <div className="mt-3">
               <button onClick={restart} className="px-3 py-1 text-xs rounded border bg-white hover:bg-gray-50">Neu starten</button>
             </div>
           </div>
         </div>
         <div className="flex-1 flex justify-center items-start">
-          <div className="inline-block relative w-full">
+          <div className={`inline-block relative w-full ${isFullscreen? '':' '}`}> 
+            {isFullscreen && (
+              <div className="flex items-center justify-between mb-2 text-xs text-gray-600">
+                <div className="flex items-center gap-2">
+                  <button onClick={()=> exitFullscreen()} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">Schließen (Esc)</button>
+                  <button onClick={restart} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">Neu</button>
+                  <button onClick={()=> setRunning(r=>!r)} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">{running? 'Pause':'Start'}</button>
+                </div>
+                <div className="hidden md:block">Pfeile / WASD · Space = Start/Pause</div>
+              </div>
+            )}
             <canvas ref={canvasRef} width={COLS*CELL} height={ROWS*CELL} className="border rounded bg-white block mx-auto" style={{ aspectRatio:'1/1', width:'100%', maxWidth: COLS*CELL }} />
+            {/* Vollbild-Button jetzt im Start-Overlay integriert */}
+            {isFullscreen && !finished && (
+              <button onClick={exitFullscreen} className="absolute top-2 right-2 px-2 py-1 text-[11px] rounded bg-white/90 backdrop-blur border shadow hover:bg-white">Beenden</button>
+            )}
       {!running && !finished && scoreA===0 && scoreB===0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm text-center p-4 gap-2">
-        <button onClick={()=> canStart && setRunning(true)} disabled={!canStart} className="px-6 py-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md text-sm disabled:opacity-50">{canStart ? 'Start (Leertaste)' : 'Warte auf zweiten Spieler …'}</button>
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-3">
+            <button onClick={()=> canStart && setRunning(true)} disabled={!canStart} className="px-6 py-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md text-sm disabled:opacity-50">{canStart ? 'Start (Leertaste)' : 'Warte auf zweiten Spieler …'}</button>
+            {!isFullscreen && (
+              <button onClick={enterFullscreen} className="px-4 py-3 rounded border bg-white/80 backdrop-blur hover:bg-white text-sm shadow">Vollbild</button>
+            )}
+            {isFullscreen && (
+              <button onClick={exitFullscreen} className="px-4 py-3 rounded border bg-white/80 backdrop-blur hover:bg-white text-sm shadow">Beenden</button>
+            )}
+          </div>
+          <div className="text-[11px] text-gray-600">Steuerung: Spieler A WASD · Spieler B Pfeile · Space Start/Pause</div>
+        </div>
   <div className="text-[11px] text-gray-600">{[localControlA? 'A: Pfeile': null, localControlB? 'B: WASD': null].filter(Boolean).join(' • ')}</div>
               </div>
             )}
@@ -439,6 +490,43 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
             )}
           </div>
           {marking && <div className="mt-2 text-xs text-gray-500">Speichere Abschluss…</div>}
+          {/* Vollbild Touch-Steuerungen */}
+          {isFullscreen && !finished && running && (
+            <>
+              {localControlA && (
+                <div className="fixed left-6 bottom-6 z-[70] select-none">
+                  <div className="text-[11px] text-gray-600 mb-2 font-semibold">A</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div />
+                    <button aria-label="A hoch" onClick={()=> setDirA(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↑</button>
+                    <div />
+                    <button aria-label="A links" onClick={()=> setDirA(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">←</button>
+                    <div />
+                    <button aria-label="A rechts" onClick={()=> setDirA(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">→</button>
+                    <div />
+                    <button aria-label="A runter" onClick={()=> setDirA(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↓</button>
+                    <div />
+                  </div>
+                </div>
+              )}
+              {localControlB && (
+                <div className="fixed right-6 bottom-6 z-[70] select-none">
+                  <div className="text-[11px] text-gray-600 mb-2 font-semibold text-right">B</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div />
+                    <button aria-label="B hoch" onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">W</button>
+                    <div />
+                    <button aria-label="B links" onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">A</button>
+                    <div />
+                    <button aria-label="B rechts" onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">D</button>
+                    <div />
+                    <button aria-label="B runter" onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">S</button>
+                    <div />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

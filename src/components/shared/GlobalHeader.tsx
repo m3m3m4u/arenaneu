@@ -52,21 +52,49 @@ export default function GlobalHeader(){
   ];
 
   const [mobileOpen,setMobileOpen]=useState(false);
+  const [showFab,setShowFab]=useState(false);
+  // Scroll-gestütztes Ein-/Ausblenden des Floating-Menü-Buttons (nur Mobile)
+  useEffect(()=>{
+    const onScroll=()=>{
+      if(window.innerWidth >= 768){ if(showFab) setShowFab(false); return; }
+      const y = window.scrollY;
+      setShowFab(y > 280); // erst nach etwas Scroll
+    };
+    window.addEventListener('scroll', onScroll, { passive:true });
+    onScroll();
+    const onResize=()=>{ if(window.innerWidth >= 768 && showFab) setShowFab(false); };
+    window.addEventListener('resize', onResize);
+    return ()=>{ window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onResize); };
+  },[showFab]);
   const endGuest = ()=>{
     try { localStorage.removeItem('guest:active'); } catch {}
     setIsGuest(false);
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b">
+  <header className={`fixed top-0 left-0 right-0 z-40 border-b shadow-sm transition-colors ${mobileOpen ? 'bg-white' : 'bg-white/90 backdrop-blur'}`}> 
       <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <button aria-label="Menü öffnen" className="md:hidden p-2 rounded hover:bg-gray-100 active:bg-gray-200" onClick={()=>setMobileOpen(true)}>
-            <span className="block w-5 h-5 relative">
-              <span className="absolute inset-x-0 top-1 h-0.5 bg-current rounded" />
-              <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-current rounded" />
-              <span className="absolute inset-x-0 bottom-1 h-0.5 bg-current rounded" />
-            </span>
+          <button
+            aria-label={mobileOpen ? 'Menü schließen' : 'Menü öffnen'}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-navigation-panel"
+            className="md:hidden p-2 rounded hover:bg-gray-100 active:bg-gray-200 transition-colors"
+            onClick={()=>setMobileOpen(o=>!o)}
+          >
+            {!mobileOpen && (
+              <span className="block w-5 h-5 relative" aria-hidden="true">
+                <span className="absolute inset-x-0 top-1 h-0.5 bg-current rounded transition-all" />
+                <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-current rounded transition-all" />
+                <span className="absolute inset-x-0 bottom-1 h-0.5 bg-current rounded transition-all" />
+              </span>
+            )}
+            {mobileOpen && (
+              <span className="block w-5 h-5 relative" aria-hidden="true">
+                <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-current rounded rotate-45" />
+                <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-current rounded -rotate-45" />
+              </span>
+            )}
           </button>
           <span className="font-semibold text-sm sm:text-base select-none">LernArena</span>
           <nav className="hidden md:flex items-center gap-3 sm:gap-4 text-[13px] sm:text-sm">
@@ -142,6 +170,18 @@ export default function GlobalHeader(){
             onLogout={session? ()=> signOut({ callbackUrl: '/login', redirect: true }) : undefined}
             onEndGuest={endGuest}
         />
+        {/* Floating Hamburger Button (nur Mobile, weiter unten auf der Seite) */}
+        {showFab && !mobileOpen && (
+          <button
+            type="button"
+            aria-label="Menü öffnen"
+            onClick={()=>setMobileOpen(true)}
+            className="md:hidden fixed bottom-5 right-5 z-40 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg rounded-full w-12 h-12 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-blue-300"
+          >
+            <span className="sr-only">Menü öffnen</span>
+            <svg width="26" height="26" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+        )}
       </div>
     </header>
   );

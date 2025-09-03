@@ -79,6 +79,20 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
   const rightColor = (r:string)=>{ const entry = Object.entries(matched).find(([l,rr])=> rr===r); if(!entry) return null; const [l,rr]=entry; const idx = pairIndex(l,rr); return idx>=0? colorClasses[idx % colorClasses.length]: null; };
   const [fullscreen,setFullscreen] = useState(false);
   const [vertical,setVertical] = useState(false); // Layout-Umschaltung
+  const [isSmall, setIsSmall] = useState(false); // screen < md für kompakte 2-Spalten Ansicht
+
+  // Responsive Breakpoint Überwachung
+  useEffect(()=>{
+    const update = () => {
+      if (typeof window === 'undefined') return;
+      const small = window.innerWidth < 768; // md
+      setIsSmall(small);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  // Keine erzwungene Vertikal-Ansicht mehr: Auf kleinen Screens nutzen wir eine kompakte 2-Spalten Horizontal-Variante
 
   // Layout Präferenz laden (und auf kleinen Screens initial vertikal)
   useEffect(()=>{
@@ -87,19 +101,33 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
       if(saved === 'vertical') setVertical(true);
       else if(saved === 'horizontal') setVertical(false);
       else {
-        if(typeof window !== 'undefined' && window.innerWidth < 640){ setVertical(true); }
+        if(typeof window !== 'undefined' && window.innerWidth < 768){ setVertical(true); }
       }
     } catch {}
   }, []);
-  const toggleLayout=()=> setVertical(v=>{ const next=!v; try{ localStorage.setItem('matchingLayout', next? 'vertical':'horizontal'); }catch{} return next; });
+  const toggleLayout=()=> {
+    if(isSmall) return; // Toggle mobil deaktiviert (kein Button sichtbar)
+    setVertical(v=>{ const next=!v; try{ localStorage.setItem('matchingLayout', next? 'vertical':'horizontal'); }catch{} return next; });
+  };
+  const resetMatches=()=>{ setMatched({}); setSelectedLeft(null); setErrorPair(null); };
   const Wrapper: React.FC<{children:React.ReactNode}> = ({children}) => fullscreen ? (
     <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm overflow-auto p-4 md:p-8 flex flex-col">
-      <div className="max-w-6xl w-full mx-auto flex-1">{children}</div>
-      {allMatched && onContinue && (
-        <div className="mt-4 max-w-6xl w-full mx-auto">
-          <button onClick={onContinue} className="w-full md:w-auto bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700">Weiter</button>
+      <div className="max-w-6xl w-full mx-auto flex-1 pb-6">{children}</div>
+      <div className="max-w-6xl w-full mx-auto flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-xs text-gray-500">Gefundene Paare: {Object.keys(matched).length}/{question.correctAnswers?.length||0}</div>
+        <div className="flex gap-2 ml-auto">
+          <button onClick={toggleLayout} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50" title="Layout umschalten">
+            {vertical? 'Vertikal' : 'Horizontal'}
+          </button>
+          <button onClick={()=>setFullscreen(false)} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">Schließen</button>
+          {Object.keys(matched).length>0 && !allMatched && (
+            <button onClick={resetMatches} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50" title="Zurücksetzen">Reset</button>
+          )}
+          {allMatched && onContinue && (
+            <button onClick={onContinue} className="text-xs px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700">Weiter</button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   ) : <>{children}</>;
   const adaptiveText=(val:string)=>{
@@ -109,60 +137,90 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
   if(len <= 60) return 'text-base';
   return 'text-sm';
   };
+  const totalPairs = question.correctAnswers?.length || 0;
+  const matchedCount = Object.keys(matched).length;
+  const progress = totalPairs? Math.round((matchedCount/totalPairs)*100) : 0;
+  const effectiveVertical = vertical && !isSmall; // mobil immer 2-Spalten horizontal
   return <Wrapper>
-    <div className="flex items-start justify-between mb-3 gap-4 flex-wrap">
+    <div className="flex items-start justify-between mb-3 gap-4 flex-wrap relative">
       <div className="space-y-1">
   <h3 className="font-semibold text-base text-gray-700 md:text-lg">Zuordnung</h3>
-  <p className="text-xs md:text-sm text-gray-500 leading-snug max-w-xl">Verbinde linke und rechte Elemente, die zusammengehören. Gefundene Paare erhalten dieselbe Farbe. Du kannst das Layout umschalten (nebeneinander oder oben/unten).</p>
+  <p className="text-xs md:text-sm text-gray-500 leading-snug max-w-xl">Tippe zuerst links, dann rechts. Gefundene Paare erhalten eine Farbe. Layout umschaltbar: nebeneinander oder übereinander.</p>
+  <div className="mt-2 w-full max-w-xs">
+    <div className="h-2 rounded bg-gray-200 overflow-hidden">
+      <div className="h-full bg-green-500 transition-all" style={{width: `${progress}%`}} />
+    </div>
+    <div className="mt-1 text-[10px] tracking-wide text-gray-500">Fortschritt {matchedCount}/{totalPairs}</div>
+  </div>
       </div>
       <div>
         <div className="flex gap-2">
-          <button onClick={toggleLayout} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50" title="Layout umschalten">
-            {vertical? 'Layout: Vertikal' : 'Layout: Horizontal'}
-          </button>
+          {!isSmall && (
+            <button onClick={toggleLayout} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50" title="Layout umschalten">
+              {vertical? 'Layout: Vertikal' : 'Layout: Horizontal'}
+            </button>
+          )}
           <button onClick={()=>setFullscreen(f=>!f)} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">{fullscreen? 'Schließen':'Vollbild'}</button>
+          {Object.keys(matched).length>0 && !fullscreen && !allMatched && (
+            <button onClick={resetMatches} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50" title="Zurücksetzen">Reset</button>
+          )}
         </div>
       </div>
     </div>
-    {vertical ? (
-      <div className="flex flex-col gap-10 items-center justify-center">
+  {effectiveVertical ? (
+      <div className="flex flex-col gap-8 items-stretch justify-center pb-20 md:pb-0">
         <div>
           <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Links</h4>
-          <div className="flex flex-wrap gap-4 justify-center">
-            {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l)); const base='relative group w-40 h-40 sm:w-48 sm:h-48 md:w-56 md:h-56 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden'; const clsBase = base; const cls= matchedRight? `${clsBase} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${clsBase} border-blue-500 bg-blue-50`: `${clsBase} border-gray-200 hover:bg-gray-50`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full h-full flex items-center justify-center text-center break-words px-2 sm:px-3 ${isImg?'':adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
+          <div className="flex flex-col gap-3 sm:gap-4">
+            {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l)); const base='relative group w-full h-24 sm:w-40 sm:h-40 md:w-48 md:h-48 flex items-center justify-center border rounded-lg transition-colors bg-white overflow-hidden'; const clsBase = base; const cls= matchedRight? `${clsBase} animate-match ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800 animate-shake`: (selectedLeft===l)? `${clsBase} border-blue-500 bg-blue-50`: `${clsBase} border-gray-200 hover:bg-gray-50 active:scale-[0.97]`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full h-full flex items-center justify-center text-center break-words px-3 ${isImg?'':adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
           </div>
         </div>
         <div>
           <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Rechts</h4>
-          <div className="flex flex-wrap gap-4 justify-center">
-            {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r)); const base='relative group w-40 h-40 sm:w-48 sm:h-48 md:w-56 md:h-56 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden'; const clsBase = base; const cls= isUsed? `${clsBase} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800`: `${clsBase} border-gray-200 hover:bg-gray-50`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full flex items-center justify-center text-center break-words px-2 sm:px-3 ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
+          <div className="flex flex-col gap-3 sm:gap-4">
+            {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r)); const base='relative group w-full h-24 sm:w-40 sm:h-40 md:w-48 md:h-48 flex items-center justify-center border rounded-lg transition-colors bg-white overflow-hidden'; const clsBase = base; const cls= isUsed? `${clsBase} animate-match ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${clsBase} border-red-500 bg-red-50 text-red-800 animate-shake`: `${clsBase} border-gray-200 hover:bg-gray-50 active:scale-[0.97]`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full flex items-center justify-center text-center break-words px-3 ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
           </div>
         </div>
       </div>
     ) : (
-      <div className="flex flex-row gap-12 justify-center">
-        <div className="flex flex-col gap-2">
+      <div className="w-full flex flex-row gap-2 sm:gap-8 items-start">
+        <div className="w-1/2 flex flex-col gap-2 sm:gap-3">
           {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l));
-            const baseImg='relative group w-[28rem] md:w-[32rem] h-28 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
-            const baseText='w-[28rem] md:w-[32rem] h-28 px-4 flex items-center justify-center border rounded transition-colors bg-white';
+            const baseImg='relative group w-full h-20 sm:h-24 md:h-28 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
+            const baseText='w-full h-20 sm:h-24 md:h-28 px-2 sm:px-3 flex items-center justify-center border rounded transition-colors bg-white';
             const base = isImg? baseImg : baseText;
-            const cls= matchedRight? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50`: `${base} border-gray-200 hover:bg-gray-50`;
+            const cls= matchedRight? `${base} animate-match ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800 animate-shake`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50`: `${base} border-gray-200 hover:bg-gray-50 active:scale-[0.97]`;
             return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`w-full h-full flex items-center justify-center text-center break-words ${isImg?'':adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="w-1/2 flex flex-col gap-2 sm:gap-3">
           {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r));
-            const baseImg='relative group w-[28rem] md:w-[32rem] h-28 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
-            const baseText='w-[28rem] md:w-[32rem] h-28 px-4 flex items-center justify-center border rounded transition-colors bg-white';
+            const baseImg='relative group w-full h-20 sm:h-24 md:h-28 flex items-center justify-center border rounded transition-colors bg-white overflow-hidden';
+            const baseText='w-full h-20 sm:h-24 md:h-28 px-2 sm:px-3 flex items-center justify-center border rounded transition-colors bg-white';
             const base = isImg? baseImg : baseText;
-            const cls= isUsed? `${base} ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800`: `${base} border-gray-200 hover:bg-gray-50`;
+            const cls= isUsed? `${base} animate-match ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800 animate-shake`: `${base} border-gray-200 hover:bg-gray-50 active:scale-[0.97]`;
             return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full flex items-center justify-center text-center break-words ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
         </div>
       </div>
     )}
     {allMatched && !fullscreen && onContinue && (
-      <div className="mt-6">
+      <div className="mt-6 hidden md:block">
         <button onClick={onContinue} className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700">Weiter</button>
       </div>
+    )}
+    {/* Bottom mobile control bar */}
+    {!fullscreen && (
+      <>
+        <div className="md:hidden h-16" />{/* spacer so content not hidden */}
+  <div className="md:hidden fixed left-0 right-0 bottom-0 z-30 bg-white/95 backdrop-blur border-t shadow flex items-center gap-2 px-3 py-2 pb-[calc(env(safe-area-inset-bottom,0)+0.5rem)]">
+          <button onClick={()=>setFullscreen(true)} className="text-[11px] px-2 py-1 border rounded bg-white hover:bg-gray-50" aria-label="Vollbild">Vollbild</button>
+          {Object.keys(matched).length>0 && !allMatched && (
+            <button onClick={resetMatches} className="text-[11px] px-2 py-1 border rounded bg-white hover:bg-gray-50 ml-auto" aria-label="Zurücksetzen">Reset</button>
+          )}
+          {allMatched && onContinue && (
+            <button onClick={onContinue} className="ml-auto bg-green-600 text-white rounded px-3 py-1.5 text-[11px] hover:bg-green-700">Weiter</button>
+          )}
+        </div>
+      </>
     )}
     {zoomSrc && (
       <div
@@ -185,5 +243,11 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
         >Schließen (Esc)</button>
       </div>
     )}
+    <style jsx global>{`
+      @keyframes match-pulse { 0%{transform:scale(1);} 40%{transform:scale(1.04);} 100%{transform:scale(1);} }
+      .animate-match { animation: match-pulse .35s ease-out; }
+      @keyframes shake { 0%,100%{transform:translateX(0);} 20%{transform:translateX(-4px);} 40%{transform:translateX(4px);} 60%{transform:translateX(-3px);} 80%{transform:translateX(3px);} }
+      .animate-shake { animation: shake .45s ease; }
+    `}</style>
   </Wrapper>;
 }

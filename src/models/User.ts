@@ -13,6 +13,7 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
   lastOnline?: Date;
+  tokenVersion?: number; // Inkrement für Session-Invalidierung (bei Passwort-Reset etc.)
   // Aggregierte Statistik: Anzahl Fragen insgesamt und wie viele beim ersten Versuch korrekt
   firstTryCorrectTotal?: number;
   totalQuestionsTotal?: number;
@@ -36,6 +37,7 @@ const UserSchema: Schema = new Schema({
   , firstTryCorrectTotal: { type: Number, default: 0 }
   , totalQuestionsTotal: { type: Number, default: 0 }
   , lessonStats: [{ lessonId: { type: String, index: true }, firstTryCorrect: Number, total: Number }]
+  , tokenVersion: { type: Number, default: 0 }
 });
 
 UserSchema.pre('save', function(next){ this.updatedAt = new Date(); next(); });

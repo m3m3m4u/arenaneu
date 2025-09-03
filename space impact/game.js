@@ -182,6 +182,29 @@ function togglePause(){
 const pauseBtn = document.getElementById('pauseBtn');
 if(pauseBtn){ pauseBtn.addEventListener('click', togglePause); }
 
+// Touch Controls (optional sichtbar bei Touch-Geräten)
+function isTouch(){ return (('ontouchstart' in window) || navigator.maxTouchPoints>0); }
+if(isTouch()){
+  const btnUp = document.getElementById('btnUp');
+  const btnDown = document.getElementById('btnDown');
+  const btnShoot = document.getElementById('btnShoot');
+  const press = (btn, on, off) => {
+    if(!btn) return;
+    const down = (e)=>{ e.preventDefault(); on(); };
+    const up = (e)=>{ e.preventDefault(); off(); };
+    btn.addEventListener('touchstart', down, {passive:false});
+    btn.addEventListener('mousedown', down);
+    btn.addEventListener('touchend', up);
+    btn.addEventListener('touchcancel', up);
+    btn.addEventListener('mouseup', up);
+    btn.addEventListener('mouseleave', up);
+  };
+  press(btnUp, ()=>{ input.up=true; }, ()=>{ input.up=false; });
+  press(btnDown, ()=>{ input.down=true; }, ()=>{ input.down=false; });
+  // Shoot als Momentary; hält gedrückt = Dauerfeuer wie Space
+  press(btnShoot, ()=>{ input.shoot=true; }, ()=>{ input.shoot=false; });
+}
+
 function update(dt){
   if(gameOver || isPaused) return;
 

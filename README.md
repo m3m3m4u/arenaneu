@@ -4,6 +4,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 Gamifizierte Lernplattform mit MongoDB & next-auth. Unterstützte Lektionstypen: single-choice, multiple-choice, matching, memory, lueckentext, markdown, video (YouTube), text.
 
+Aktuelle UI Änderung (2025-09-03): Mobiler & Desktop Header jetzt als fixed Overlay mit zusätzlichem Top-Padding im Main-Container; mobiles Off-Canvas Menü + Floating Action Button bei Scroll.
+
 ### Fortschritt & Normalisierung
 
 `completedLessons` speichert jetzt nur `lessonId`. Legacy-Einträge im Format `courseId-lessonId` werden beim Abschluss / Speichern oder per Admin-Endpoint normalisiert.
@@ -138,3 +140,18 @@ Hinweis: In-Memory Limiter ist nicht global synchronisiert (Edge / mehrere Lambd
 | Session Secret | Fallback Warnung | Muss gesetzt sein |
 | DB Fehler bei Build | Lazy (kein Crash) | Warnung falls fehlt |
 | Caching | Dev Hot Reload | Edge / Functions Cold Starts |
+
+### Passwort-Zurücksetzen Flow
+
+| Schritt | Beschreibung |
+|--------|--------------|
+| 1 | Nutzer klickt "Passwort vergessen?" auf `/login` |
+| 2 | Formular `/forgot-password` nimmt Benutzername ODER E-Mail (E-Mail optional im System) |
+| 3 | Request an `POST /api/auth/password-reset/request` erzeugt 30 Min Token (alte gelöscht). Rate Limit: 5/IP mit langsamer Auffüllung (silent) |
+| 4 | Dev-Modus: Response enthält `resetLink`; Prod: E-Mail-Versand (Platzhalter) sofern E-Mail vorhanden, sonst silent success |
+| 5 | Nutzer öffnet `/reset-password?token=...&u=...` und setzt neues Passwort (>=6 Zeichen) |
+| 6 | `POST /api/auth/password-reset/confirm` validiert Token (BCrypt), setzt Hash, löscht Token & loggt Audit `auth.passwordReset.confirm` |
+| 7 | (Optional offen) Aktive Sessions invalidieren / erneute Anmeldung forcieren |
+
+Sicherheit: Tokens nur gehasht gespeichert, TTL-Index Cleanup, silent responses gegen Enumeration, Rate Limiting. Für Cluster: Redis Rate Limiter implementieren.
+

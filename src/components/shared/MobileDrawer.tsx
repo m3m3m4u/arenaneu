@@ -64,9 +64,13 @@ export function MobileDrawer({ open, onClose, primary, teacher, author, admin, m
   };
 
   return (
-    <div className="fixed inset-0 z-[100]" aria-modal="true" role="dialog" aria-labelledby="mobile-drawer-title">
+    <div id="mobile-navigation-panel" className="fixed inset-0 z-[100]" aria-modal="true" role="dialog" aria-labelledby="mobile-drawer-title">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm opacity-0 animate-fade-in" onClick={onClose} />
-      <div ref={dialogRef} className="absolute top-0 left-0 h-full w-[84%] max-w-[340px] bg-gradient-to-b from-white to-gray-50 shadow-xl border-r flex flex-col overflow-y-auto p-5 animate-slide-in outline-none" data-test-id="mobile-drawer">
+      <div
+        ref={dialogRef}
+        className="absolute top-0 left-0 h-full w-full bg-white sm:w-[84%] sm:max-w-[360px] sm:bg-gradient-to-b sm:from-white sm:to-gray-50 shadow-xl sm:border-r flex flex-col overflow-y-auto p-6 sm:p-5 animate-fullscreen-fade sm:animate-slide-in outline-none"
+        data-test-id="mobile-drawer"
+      >
         <div className="flex items-center justify-between mb-4">
           <div className="flex flex-col leading-tight">
             <span id="mobile-drawer-title" className="text-sm font-semibold truncate max-w-[180px]" title={username}>{username}</span>
@@ -100,8 +104,10 @@ export function MobileDrawer({ open, onClose, primary, teacher, author, admin, m
       <style jsx global>{`
         @keyframes slide-in { from { transform: translateX(-100%); opacity:0; } to { transform: translateX(0); opacity:1; } }
         @keyframes fade-in { from { opacity:0; } to { opacity:1; } }
-        .animate-slide-in { animation: slide-in .25s ease-out; }
+        @keyframes fullscreen-fade { from { opacity:0; transform: scale(.98); } to { opacity:1; transform: scale(1); } }
+        .animate-slide-in { animation: slide-in .28s ease-out; }
         .animate-fade-in { animation: fade-in .25s ease-out forwards; }
+        .animate-fullscreen-fade { animation: fullscreen-fade .20s ease-out; }
       `}</style>
     </div>
   );

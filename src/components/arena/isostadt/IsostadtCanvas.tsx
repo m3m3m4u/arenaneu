@@ -127,21 +127,49 @@ export default function IsostadtCanvas({ width, height }: Props) {
   }, [balance, stars]);
 
   // Optionales Seed: Profil-Sterne nur verwenden, wenn noch keine DB/Snapshot-Sterne vorhanden sind
+  // Profil-Sterne beim Start holen und als Mindestwert setzen (falls höher als Arena)
+  const profileStarsRef = useRef<number | null>(null);
   useEffect(() => {
     const uname = (session?.user as any)?.username as string | undefined;
     if (!uname) return;
     (async () => {
       try {
-        const res = await fetch(`/api/user?username=${encodeURIComponent(uname)}`);
+        const res = await fetch(`/api/user?username=${encodeURIComponent(uname)}`, { cache:'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         const st = Number(data?.user?.stars);
-        if (Number.isFinite(st) && !dbStarsSeenRef.current) {
-          setStars(st);
+        if (Number.isFinite(st)) {
+          profileStarsRef.current = st;
+          if (!dbStarsSeenRef.current) {
+            // Arena noch nicht aus DB/Snapshot geladen -> nimm Profilwert
+            setStars(st);
+          } else if (st > starsRef.current) {
+            // Profil höher als aktuell Arena -> anheben
+            setStars(st);
+          }
         }
       } catch {}
     })();
   }, [session?.user]);
+
+  // Wenn Arena-Sterne steigen über Profil, Profil sofort (best-effort) updaten
+  const lastPushedStarsRef = useRef(0);
+  useEffect(()=>{ lastPushedStarsRef.current = stars; },[stars]);
+  useEffect(()=>{
+    const uname = (session?.user as any)?.username as string | undefined;
+    if(!uname) return;
+    if(profileStarsRef.current == null) return; // Noch kein Profilwert
+    if(starsRef.current > (profileStarsRef.current||0)){
+      // Push neuer Wert
+      (async()=>{
+        try {
+          const newVal = starsRef.current;
+          const res = await fetch('/api/user/stars', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: uname, stars: newVal }) });
+          if(res.ok){ profileStarsRef.current = newVal; }
+        } catch {}
+      })();
+    }
+  },[stars]);
 
   const panRef = useRef(false);
   const toolRef = useRef<[number, number] | null>(null); // [row, col]
@@ -1703,6 +1731,57 @@ export default function IsostadtCanvas({ width, height }: Props) {
   const [bauenCols, setBauenCols] = useState<number>(3);
   const [visibleBuildCount, setVisibleBuildCount] = useState<number>(6);
   const [showAllBuilds, setShowAllBuilds] = useState<boolean>(false);
+  // Mobile Sidebar Offen/Zu Zustand (nur < md relevant)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const menuToggleRef = useRef<HTMLButtonElement|null>(null);
+  // Dynamische Sidebar-Breite (Desktop) damit alle Buttons ohne Umbruch sichtbar bleiben
+  const [sidebarWidth, setSidebarWidth] = useState(300);
+
+  // Sync Klassen & Scroll-Lock wenn Zustand wechselt
+  useEffect(()=>{
+    const el = document.querySelector('.arena-sidebar');
+    if(!el) return;
+    if(mobileSidebarOpen){
+      el.classList.add('open');
+      document.documentElement.style.overflow='hidden';
+    } else {
+      el.classList.remove('open');
+      document.documentElement.style.overflow='';
+  // Fokus zurück auf Toggle (Mobile)
+  setTimeout(()=>{ menuToggleRef.current?.focus(); }, 60);
+    }
+  },[mobileSidebarOpen]);
+
+  // ESC schließt Sidebar auf Mobile
+  useEffect(()=>{
+    const handler = (e: KeyboardEvent) => { if(e.key==='Escape') setMobileSidebarOpen(false); };
+    window.addEventListener('keydown', handler);
+    return ()=> window.removeEventListener('keydown', handler);
+  },[]);
+
+  // Helper zum Schließen auf Mobile nach Auswahl (kein Auto-Close auf Desktop)
+  const closeSidebarIfMobile = () => {
+    if(typeof window !== 'undefined' && window.innerWidth < 768){
+      setMobileSidebarOpen(false);
+    }
+  };
+
+  // Swipe nach links schließt Menü (nur wenn offen & mobile)
+  useEffect(()=>{
+    if(!mobileSidebarOpen) return;
+    if(typeof window === 'undefined' || window.innerWidth >= 768) return;
+    const el = asideRef.current; if(!el) return;
+    let startX = 0; let isTouch = false;
+    const onStart = (e: TouchEvent) => { isTouch = true; startX = e.touches[0].clientX; };
+    const onMove = (e: TouchEvent) => {
+      if(!isTouch) return;
+      const dx = e.touches[0].clientX - startX;
+      if(dx < -70){ setMobileSidebarOpen(false); isTouch = false; }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: true });
+    return () => { el.removeEventListener('touchstart', onStart); el.removeEventListener('touchmove', onMove); };
+  },[mobileSidebarOpen]);
 
   useEffect(()=>{
     const adjust = () => {
@@ -1717,6 +1796,21 @@ export default function IsostadtCanvas({ width, height }: Props) {
       const rows = Math.max(1, Math.floor((available + gap) / rowH));
       const total = 6; const visible = Math.max(1, Math.min(total, desiredCols * rows));
       setVisibleBuildCount(visible);
+      // Sidebar-Breite nach tatsächlichen Button-Zeilen berechnen (nur Desktop)
+      if(typeof window !== 'undefined' && window.innerWidth >= 768){
+        const btns = Array.from(aside.querySelectorAll('.tool-actions button')) as HTMLElement[];
+        if(btns.length){
+          const rowsMap: Record<number, HTMLElement[]> = {};
+            btns.forEach(b=>{ const t = b.offsetTop; (rowsMap[t] ||= []).push(b); });
+            let maxRowWidth = 0;
+            Object.values(rowsMap).forEach(r=>{
+              const w = r.reduce((a,e)=> a + e.offsetWidth, 0) + (r.length-1)*8 + 32; // 16px Padding links/rechts
+              if(w>maxRowWidth) maxRowWidth = w;
+            });
+            const desiredW = Math.min(520, Math.max(300, Math.ceil(maxRowWidth)));
+            setSidebarWidth(desiredW);
+        }
+      }
     };
     const ro = new ResizeObserver(()=> adjust());
     if(asideRef.current) ro.observe(asideRef.current);
@@ -1727,9 +1821,16 @@ export default function IsostadtCanvas({ width, height }: Props) {
   },[]);
 
   return (
-  <div id="main" style={{ display: "grid", gridTemplateColumns: "0.8fr 3fr", height: "100%", position: "relative" }}>
-  <aside id="sidebar" ref={asideRef} aria-label="Werkzeuge" style={{ borderRight: "1px solid #e5e7eb", padding: 12, overflow: "hidden", background: "#fbfbfd" }}>
+  <div id="main" style={{ display: "grid", gridTemplateColumns: typeof window !== 'undefined' && window.innerWidth < 768 ? '1fr' : `${sidebarWidth}px 1fr`, height: "100%", position: "relative" }}>
+  <aside id="sidebar" ref={asideRef} aria-label="Werkzeuge" style={{ borderRight: "1px solid #e5e7eb", padding: 12, overflow: "hidden", background: "#fbfbfd" }} className="arena-sidebar hidden md:block">
   <div className="sidebar-header" style={{ position: "sticky", top: 0, zIndex: 5, background: "#ffffffea", backdropFilter: "blur(6px)", display: "grid", alignItems: "stretch", gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #eef2f7" }}>
+            {/* Mobile Close Button */}
+            <button
+              type="button"
+              onClick={()=> setMobileSidebarOpen(false)}
+              className="md:hidden absolute top-2 right-2 bg-white/80 border border-gray-300 rounded px-2 py-1 text-xs font-medium shadow-sm active:scale-[0.96]"
+              aria-label="Menü schließen"
+            >Schließen</button>
           {/* Oben: Platz für Zurück-Button und HUD */}
           <div style={{ display: 'grid', gap: 8 }}>
             <div aria-hidden style={{ height: 40 }} />
@@ -1848,14 +1949,14 @@ export default function IsostadtCanvas({ width, height }: Props) {
             </div>
             <div>
               <h2 style={{ fontSize: 18, margin: 0 }}>Bauen</h2>
-              <div ref={bauenGridRef} className="tool-actions" role="toolbar" aria-label="Bauen" style={{ display: "grid", gridTemplateColumns: `repeat(${bauenCols}, minmax(120px, 1fr))`, gap: 8, marginTop: 8 }}>
+              <div ref={bauenGridRef} className="tool-actions" role="toolbar" aria-label="Bauen" style={{ display: "grid", gridTemplateColumns: 'repeat(2, minmax(72px, 1fr))', gap: 8, marginTop: 8 }}>
             <button
               id="roadBtn"
               className="tool-btn"
               aria-pressed={activePanel === "roads" ? "true" : "false"}
               title="Straßen bauen"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "roads" ? null : "roads")); updateCursor(); }}
-              style={{ border: activePanel === "roads"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "roads"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 0)? 'none': undefined }}
+              style={{ border: activePanel === "roads"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "roads"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '7px 6px', cursor: "pointer", width: '100%', fontSize: 13.5, lineHeight: 1.22, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}
             >
               Straße
             </button>
@@ -1865,7 +1966,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "houses" ? "true" : "false"}
               title="Wohnhäuser"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "houses" ? null : "houses")); updateCursor(); }}
-              style={{ border: activePanel === "houses"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "houses"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 1)? 'none': undefined }}
+              style={{ border: activePanel === "houses"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "houses"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '7px 6px', cursor: "pointer", width: '100%', fontSize: 13.5, lineHeight: 1.22, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}
             >
               Wohnhäuser
             </button>
@@ -1875,7 +1976,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "market" ? "true" : "false"}
               title="Supermarkt"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "market" ? null : "market")); updateCursor(); }}
-              style={{ border: activePanel === "market"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "market"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 2)? 'none': undefined }}
+              style={{ border: activePanel === "market"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "market"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '7px 6px', cursor: "pointer", width: '100%', fontSize: 13.5, lineHeight: 1.22, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}
             >
               Supermarkt
             </button>
@@ -1885,7 +1986,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "townhouse" ? "true" : "false"}
               title="Stadthaus"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "townhouse" ? null : "townhouse")); updateCursor(); }}
-              style={{ border: activePanel === "townhouse"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "townhouse"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 3)? 'none': undefined }}
+              style={{ border: activePanel === "townhouse"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "townhouse"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '7px 6px', cursor: "pointer", width: '100%', fontSize: 13.5, lineHeight: 1.22, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}
             >
               Stadthaus
             </button>
@@ -1895,7 +1996,7 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "kiosk" ? "true" : "false"}
               title="Kiosk"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "kiosk" ? null : "kiosk")); updateCursor(); }}
-              style={{ border: activePanel === "kiosk"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "kiosk"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 4)? 'none': undefined }}
+              style={{ border: activePanel === "kiosk"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "kiosk"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '7px 6px', cursor: "pointer", width: '100%', fontSize: 13.5, lineHeight: 1.22, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}
             >
               Kiosk
             </button>
@@ -1905,21 +2006,12 @@ export default function IsostadtCanvas({ width, height }: Props) {
               aria-pressed={activePanel === "office" ? "true" : "false"}
               title="Bürogebäude"
               onClick={() => { setInspectMode(false); setDemolishMode(false); setInspect(null); setPanMode(false); setActivePanel((p) => (p === "office" ? null : "office")); updateCursor(); }}
-              style={{ border: activePanel === "office"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "office"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '8px 10px', cursor: "pointer", width: '100%', fontSize: 13, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center', display: (!showAllBuilds && visibleBuildCount <= 5)? 'none': undefined }}
+              style={{ border: activePanel === "office"?"1px solid #1d4ed8":"1px solid #d1d5db", background: activePanel === "office"?"#dbeafe":"#f9fafb", borderRadius: 8, padding: '7px 6px', cursor: "pointer", width: '100%', fontSize: 13.5, lineHeight: 1.22, whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}
             >
               Bürogebäude
             </button>
               </div>
-              {(!showAllBuilds && visibleBuildCount < 6) && (
-                <div style={{ marginTop: 6 }}>
-                  <button onClick={()=> setShowAllBuilds(true)} style={{ fontSize: 12, color: '#1d4ed8', background: 'transparent', border: 'none', padding: 4, cursor: 'pointer' }}>Alle anzeigen</button>
-                </div>
-              )}
-              {(showAllBuilds && visibleBuildCount < 6) && (
-                <div style={{ marginTop: 6 }}>
-                  <button onClick={()=> setShowAllBuilds(false)} style={{ fontSize: 12, color: '#1d4ed8', background: 'transparent', border: 'none', padding: 4, cursor: 'pointer' }}>Weniger anzeigen</button>
-                </div>
-              )}
+              {/* Alle 6 Buttons immer sichtbar; Show/Hide entfernt */}
             </div>
           </div>
         </div>
@@ -2384,6 +2476,36 @@ export default function IsostadtCanvas({ width, height }: Props) {
        className="touch-help">
     Ziehen: Verschieben · Pinch: Zoom · Tipp: Bauen/Info
   </div>
+  {/* Mobile Sidebar Toggle */}
+  {!mobileSidebarOpen && (
+    <button
+      ref={menuToggleRef}
+      type="button"
+      onClick={() => setMobileSidebarOpen(true)}
+      className="md:hidden fixed left-2 bottom-4 z-[95] bg-white/95 backdrop-blur border shadow-lg px-4 py-2 rounded-full text-sm font-semibold active:scale-[0.97]"
+      aria-controls="sidebar"
+      aria-expanded="false"
+      aria-label="Menü öffnen"
+    >Menü</button>
+  )}
+  {mobileSidebarOpen && (
+    <button
+      type="button"
+      onClick={() => setMobileSidebarOpen(false)}
+      className="md:hidden fixed left-2 bottom-4 z-[95] bg-rose-600 text-white shadow-lg px-4 py-2 rounded-full text-sm font-semibold active:scale-[0.97]"
+      aria-controls="sidebar"
+      aria-expanded="true"
+      aria-label="Menü schließen"
+    >Schließen</button>
+  )}
+  <style jsx global>{`
+    @media (max-width: 767px){
+      #main{ grid-template-columns: 1fr !important; }
+  .arena-sidebar{ position: fixed; top:0; left:0; bottom:0; z-index:80; display:block !important; transform: translateX(-100%); transition: transform .28s ease; width:100%; max-width:none; background:#ffffff; overscroll-behavior: contain; overflow-y:auto !important; padding-bottom:calc(env(safe-area-inset-bottom,0) + 2rem); pointer-events:none; visibility:hidden; }
+  .arena-sidebar.open{ transform: translateX(0); box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); pointer-events:auto; visibility:visible; }
+      .arena-sidebar .sidebar-header{ backdrop-filter: blur(10px); background:#ffffffdd; }
+    }
+  `}</style>
   <canvas ref={bgRef} id="bg" style={{ position: "absolute", inset: 0, zIndex: 0 }} />
   <canvas ref={fgRef} id="fg" style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: "auto" }} />
 

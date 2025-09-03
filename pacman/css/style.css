@@ -107,7 +107,7 @@ canvas {
 }
 #controls .row { display:flex; gap:6px; }
 #controls .ctrl {
-        width: 56px; height: 56px;
+    width: 64px; height: 64px;
         background: linear-gradient(135deg,#394b6a,#253247);
         color:#eef3ff; border:1px solid #4a607f;
         border-radius:10px; cursor:pointer;
@@ -119,5 +119,5 @@ canvas {
 #controls .ctrl:active { transform: scale(0.94); }
 @media (max-width: 860px){
     #controls { right: 12px; bottom: 12px; }
-    #controls .ctrl { width: 52px; height: 52px; font-size: 20px; }
+    #controls .ctrl { width: 58px; height: 58px; font-size: 22px; }
 }

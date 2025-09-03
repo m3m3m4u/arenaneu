@@ -64,30 +64,48 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
+      // Wenn frischer Login -> Basisdaten setzen
       if (user) {
         const u = user as { id?: string; username?: string; name?: string; role?: string };
         if (u.id) (token as Record<string, unknown>).id = u.id;
         if (u.username) (token as Record<string, unknown>).username = u.username;
         if (u.name) token.name = u.name;
         if (u.role) {
-          // pending-teacher sofort hochstufen
           if (u.role === 'pending-teacher') {
             (token as Record<string, unknown>).role = 'teacher';
-            // Best effort Persistierung
             if (u.username) {
-              try { await dbConnect(); await User.updateOne({ username: u.username, role: 'pending-teacher' }, { $set: { role: 'teacher' } }); } catch { /* ignore */ }
+              try { await dbConnect(); await User.updateOne({ username: u.username, role: 'pending-teacher' }, { $set: { role: 'teacher' } }); } catch {}
             }
           } else {
             (token as Record<string, unknown>).role = u.role;
           }
         }
+        // Beim Login aktuelle tokenVersion laden
+        try {
+          await dbConnect();
+          if ((token as any).id) {
+            const doc = await User.findById((token as any).id).select('tokenVersion');
+            (token as any).tv = doc?.tokenVersion ?? 0;
+          }
+        } catch {}
+      } else {
+        // Bei jedem Aufruf sicherstellen, dass tokenVersion noch übereinstimmt
+        try {
+          if ((token as any).id) {
+            await dbConnect();
+            const doc = await User.findById((token as any).id).select('tokenVersion');
+            if (doc && (token as any).tv != null && doc.tokenVersion !== (token as any).tv) {
+              // Ungültig geworden -> Flag setzen
+              (token as any).invalidated = true;
+            }
+          }
+        } catch {}
       }
-  // Keine Username-Eskalation mehr: Admin-Rechte kommen ausschließlich aus der Datenbank (role Feld)
       return token;
     },
     async session({ session, token }) {
       if (session?.user) {
-        const t = token as { id?: string; sub?: string; username?: string; name?: string; role?: 'learner' | 'author' | 'teacher' | 'admin' | 'pending-author' | 'pending-teacher' };
+        const t = token as { id?: string; sub?: string; username?: string; name?: string; role?: 'learner' | 'author' | 'teacher' | 'admin' | 'pending-author' | 'pending-teacher'; invalidated?: boolean };
         session.user = {
           ...session.user,
           ...(t.id ? { id: t.id } : (t.sub ? { id: String(t.sub) } : {})),
@@ -95,6 +113,10 @@ export const authOptions: NextAuthOptions = {
           ...(t.name ? { name: t.name } : {}),
           ...(t.role ? { role: t.role } : {})
         } as typeof session.user;
+        if (t.invalidated) {
+          // Client kann darauf reagieren (z.B. Logout auslösen)
+          (session as any).invalidated = true;
+        }
       }
       return session;
     },
