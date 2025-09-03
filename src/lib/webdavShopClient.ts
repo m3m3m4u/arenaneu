@@ -1,0 +1,82 @@
+// Shop-spezifischer WebDAV Client (separate Credentials). Fällt auf generischen Client zurück falls SHOP_* nicht gesetzt.
+// Dieses Modul ist server-only
+export const runtime = 'nodejs';
+
+import { davPut as basePut, davDelete as baseDelete, webdavPublicUrl as basePublicUrl, isWebdavEnabled as baseEnabled } from './webdavClient';
+
+function b64(str: string){
+  try {
+    const g: any = globalThis as any;
+    if (g.Buffer && typeof g.Buffer.from === 'function') return g.Buffer.from(str).toString('base64');
+    if (typeof g.btoa === 'function') return g.btoa(unescape(encodeURIComponent(str)));
+  } catch {}
+  return str;
+}
+
+function conf(){
+  const baseURL = process.env.SHOP_WEBDAV_BASEURL;
+  const username = process.env.SHOP_WEBDAV_USERNAME;
+  const password = process.env.SHOP_WEBDAV_PASSWORD;
+  if(!baseURL || !username || !password) return null;
+  const url = baseURL.replace(/\/$/, '');
+  const auth = 'Basic ' + b64(`${username}:${password}`);
+  return { url, auth };
+}
+
+export function isShopWebdavEnabled(){ return !!conf(); }
+
+export function shopWebdavPublicUrl(pathname: string){
+  const cdn = process.env.SHOP_WEBDAV_PUBLIC_BASEURL;
+  if(cdn) return `${cdn.replace(/\/$/, '')}/${encodeURIComponent(pathname).replace(/%2F/g,'/')}`;
+  // Wenn kein eigener CDN Host dann generischer Mechanismus aus Basisklient
+  return basePublicUrl(pathname);
+}
+
+// Minimal eigene PUT/DELETE Implementierung nur falls separate Creds aktiv sind. Sonst Basismethoden verwenden.
+export async function shopDavPut(key: string, body: Uint8Array | ArrayBuffer | Blob, contentType?: string){
+  const c = conf();
+  if(!c){
+    // Rückfall: generischer Client
+    return basePut(key, body as any, contentType);
+  }
+  const blobBody = body instanceof Blob ? body : new Blob([body as any], { type: contentType || 'application/octet-stream' });
+  // Elternordner sicherstellen (einfache rekursive Anlage)
+  await ensureParentDir(key, c.url, c.auth);
+  const target = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
+  const res = await fetch(target, { method:'PUT', headers: { Authorization: c.auth, ...(contentType? { 'Content-Type': contentType }: {}) }, body: blobBody });
+  if(!res.ok){
+    throw new Error('SHOP WebDAV PUT failed: '+res.status);
+  }
+  return { url: shopWebdavPublicUrl(key), key };
+}
+
+export async function shopDavDelete(key: string){
+  const c = conf();
+  if(!c){
+    return baseDelete(key);
+  }
+  const target = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
+  const res = await fetch(target, { method:'DELETE', headers: { Authorization: c.auth } });
+  if(!res.ok && res.status !== 404){
+    throw new Error('SHOP WebDAV DELETE failed: '+res.status);
+  }
+}
+
+async function ensureParentDir(key: string, baseUrl: string, auth: string){
+  const idx = key.lastIndexOf('/');
+  if(idx <= 0) return;
+  const dirPath = key.substring(0, idx);
+  const parts = dirPath.split('/').filter(Boolean);
+  let acc = '';
+  for(const part of parts){
+    acc += (acc?'/':'') + part;
+    const uri = `${baseUrl}/${encodeURIComponent(acc).replace(/%2F/g,'/')}`;
+    const pf = await fetch(uri, { method:'PROPFIND', headers: { Authorization: auth, Depth: '0' } });
+    if(!pf.ok){
+      await fetch(uri, { method:'MKCOL', headers: { Authorization: auth } }).catch(()=>undefined);
+    }
+  }
+}
+
+// Hilfsfunktion für Routen: gesamter Shop-WebDAV aktiv ODER generischer.
+export function anyShopWebdavEnabled(){ return isShopWebdavEnabled() || baseEnabled(); }

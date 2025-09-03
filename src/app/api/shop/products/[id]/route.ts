@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import { s3Delete } from '@/lib/storage';
 import { isWebdavEnabled, davDelete } from '@/lib/webdavClient';
+import { isShopWebdavEnabled, shopDavDelete } from '@/lib/webdavShopClient';
 import { normalizeCategory } from '@/lib/categories';
 
 async function ensureAuth(){
@@ -58,12 +59,13 @@ export async function DELETE(_req: Request, ctx: { params: { id: string }} ){
     const doc = await ShopProduct.findById(ctx.params.id);
     if(!doc) return NextResponse.json({ success:false, error:'Nicht gefunden' }, { status:404 });
     // Dateien auf S3 löschen
-    const useWebdav = isWebdavEnabled();
+  const useShopWebdav = isShopWebdavEnabled();
+  const useWebdav = useShopWebdav || isWebdavEnabled();
     try {
       for(const f of doc.files){
         if(!f.key) continue;
         if(useWebdav){
-          try { await davDelete(f.key); } catch{}
+          try { useShopWebdav ? await shopDavDelete(f.key) : await davDelete(f.key); } catch{}
         } else {
           try { await s3Delete(f.key); } catch{}
         }

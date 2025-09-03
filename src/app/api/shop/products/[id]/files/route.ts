@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import { s3Put, isS3Enabled } from '@/lib/storage';
 import { isWebdavEnabled, davPut, webdavPublicUrl } from '@/lib/webdavClient';
+import { isShopWebdavEnabled, shopDavPut, shopWebdavPublicUrl } from '@/lib/webdavShopClient';
 
 export const runtime = 'nodejs'; // benötigt für Buffer
 
@@ -34,13 +35,16 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
   const shopBase = (process.env.WEBDAV_SHOP_PREFIX || 'shop').replace(/^[\\/]+|[\\/]+$/g,'');
   const key = `${shopBase}/${doc._id}/${Date.now()}_${safeName}`;
 
-    const useWebdav = isWebdavEnabled();
+  const useShopWebdav = isShopWebdavEnabled();
+  const useWebdav = useShopWebdav || isWebdavEnabled();
     let finalUrl: string | undefined;
 
     if(useWebdav){
       try {
-        const up = await davPut(key, bytes, file.type||'application/octet-stream');
-        finalUrl = up?.url || webdavPublicUrl(key);
+        const up = useShopWebdav
+          ? await shopDavPut(key, bytes, file.type||'application/octet-stream')
+          : await davPut(key, bytes, file.type||'application/octet-stream');
+        finalUrl = up?.url || (useShopWebdav ? shopWebdavPublicUrl(key) : webdavPublicUrl(key));
       } catch(err){
         console.error('WebDAV Upload fehlgeschlagen, versuche ggf. S3 Fallback', err);
         if(isS3Enabled()){

@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import { s3PublicUrl } from '@/lib/storage';
 import { isWebdavEnabled, webdavPublicUrl } from '@/lib/webdavClient';
+import { isShopWebdavEnabled, shopWebdavPublicUrl } from '@/lib/webdavShopClient';
 import { CATEGORIES, normalizeCategory } from '@/lib/categories';
 
 export async function GET(req: Request){
@@ -28,12 +29,13 @@ export async function GET(req: Request){
     if (cat) filter.category = cat;
     const total = await ShopProduct.countDocuments(filter);
     const itemsRaw = await ShopProduct.find(filter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
-    const useWebdav = isWebdavEnabled();
+  const useShopWebdav = isShopWebdavEnabled();
+  const useWebdav = useShopWebdav || isWebdavEnabled();
     const items = itemsRaw.map(doc => ({
       ...doc,
       files: Array.isArray((doc as any).files) ? (doc as any).files.map((f: any) => ({
         ...f,
-        downloadUrl: f.key ? (useWebdav ? webdavPublicUrl(f.key) : s3PublicUrl(f.key)) : undefined
+  downloadUrl: f.key ? (useWebdav ? (useShopWebdav ? shopWebdavPublicUrl(f.key) : webdavPublicUrl(f.key)) : s3PublicUrl(f.key)) : undefined
       })) : []
     }));
   // Kategorienquelle vereinheitlicht: zentrale Liste zurückgeben, gefiltert auf verwendete falls gewünscht
