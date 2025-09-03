@@ -6,17 +6,24 @@ import { useToast } from '@/components/shared/ToastProvider';
 
 function InvalidationWatcher(){
   const { data: session } = useSession();
-  const { toast } = useToast();
+  let toastFn: ((o:{message:string; title?:string; kind?:any})=>void) | null = null;
+  try {
+    // useToast nur im Browser mit Provider gültig
+    const { toast } = useToast();
+    toastFn = toast;
+  } catch {
+    // außerhalb des Providers (SSR / not-found prerender) einfach nichts tun
+  }
   const [fired,setFired]=useState(false);
   useEffect(()=>{
     if ((session as any)?.invalidated && !fired) {
       setFired(true);
       let remaining = 6; // Sekunden
-      toast({ kind:'info', title:'Sicherheit', message:'Passwort geändert – Sitzung wird beendet in '+remaining+'s' });
+      toastFn?.({ kind:'info', title:'Sicherheit', message:'Passwort geändert – Sitzung wird beendet in '+remaining+'s' } as any);
       const interval = setInterval(()=>{
         remaining -=1;
         if(remaining>0){
-          toast({ kind:'info', message:'Sitzung läuft noch '+remaining+'s …' });
+          toastFn?.({ kind:'info', message:'Sitzung läuft noch '+remaining+'s …' } as any);
         } else {
           clearInterval(interval);
           signOut({ callbackUrl: '/login', redirect: true });
@@ -24,7 +31,7 @@ function InvalidationWatcher(){
       },1000);
       return ()=> clearInterval(interval);
     }
-  }, [session, toast, fired]);
+  }, [session, fired, toastFn]);
   return null;
 }
 
