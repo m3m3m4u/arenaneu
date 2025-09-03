@@ -876,9 +876,12 @@ function ImportTab(){
                                 <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-700 min-w-[5.2rem] text-center">{l.type}</span>
                                 <span className="flex-1 break-words">{l.title}</span>
                                 {(l.questionCount!=null) && (
-                                  <span className="text-blue-600">{l.questionCount} Fr.</span>
+                                  <span className="text-blue-600 whitespace-nowrap">{l.questionCount} Fr.</span>
                                 )}
-                                {(l.pairCount!=null) && <span className="text-indigo-600">{l.pairPattern ? `${l.pairPattern} (${l.pairCount})` : `${l.pairCount}`} Paar{l.pairCount===1?'':'e'}</span>}
+                                {(l.pairCount!=null) && <span className="text-indigo-600 whitespace-nowrap">{l.pairPattern ? `${l.pairPattern} (${l.pairCount})` : `${l.pairCount}`} Paar{l.pairCount===1?'':'e'}</span>}
+                                {l.type==='text-answer' && (l.blockCount!=null) && <span className="text-amber-600 whitespace-nowrap">{l.blockCount} Bl.</span>}
+                                {l.type==='text-answer' && (l.blockAnswerTotal!=null) && <span className="text-amber-700 whitespace-nowrap">{l.blockAnswerTotal} Antw.</span>}
+                                {l.type==='text-answer' && (l.blockAnswerAvg!=null) && <span className="text-amber-700 whitespace-nowrap">Ø {l.blockAnswerAvg}</span>}
                                 {l.errors?.length>0 && <span className="text-red-600">{l.errors.join('; ')}</span>}
                               </li>
                             ))}
