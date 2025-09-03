@@ -12,6 +12,7 @@ export default function AdminMaterialPage(){
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [cat, setCat] = useState('');
+  const [newCat, setNewCat] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [uploading, setUploading] = useState<string|null>(null);
@@ -32,14 +33,15 @@ export default function AdminMaterialPage(){
 
   async function createProduct(){
     if(!title.trim()) return;
+    const chosenCat = cat === '__new' ? newCat : cat;
     setCreating(true);
     try {
-  const payload: any = { title: title.trim(), description: desc.trim() };
-  if(cat.trim()) payload.category = cat.trim();
-  const r = await fetch('/api/shop/products', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
+      const payload: any = { title: title.trim(), description: desc.trim() };
+      if(chosenCat && chosenCat.trim()) payload.category = chosenCat.trim();
+      const r = await fetch('/api/shop/products', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
       const d = await r.json();
       if(!(r.ok && d.success)) setError(d.error||'Erstellen fehlgeschlagen');
-      else { setTitle(''); setDesc(''); await load(); }
+      else { setTitle(''); setDesc(''); setCat(''); setNewCat(''); await load(); }
     } catch { setError('Netzwerkfehler'); }
     setCreating(false);
   }
@@ -68,8 +70,17 @@ export default function AdminMaterialPage(){
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Titel" className="border rounded px-3 py-2 text-sm flex-1" />
-            <input value={cat} onChange={e=>setCat(e.target.value)} placeholder="Fach / Kategorie" className="border rounded px-3 py-2 text-sm w-44" />
-            <button disabled={!title.trim()||creating} onClick={createProduct} className="bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-40">Anlegen</button>
+            <div className="flex flex-col gap-2 w-48">
+              <select value={cat} onChange={e=>{ setCat(e.target.value); }} className="border rounded px-2 py-2 text-sm bg-white">
+                <option value="">Kategorie wählen</option>
+                {categories.map(c=> <option key={c} value={c}>{c}</option>)}
+                <option value="__new">+ Neue Kategorie...</option>
+              </select>
+              {cat==='__new' && (
+                <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Neue Kategorie" className="border rounded px-2 py-1 text-xs" />
+              )}
+            </div>
+            <button disabled={!title.trim()||creating|| (cat==='__new' && !newCat.trim())} onClick={createProduct} className="bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-40">Anlegen</button>
           </div>
           <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Beschreibung (optional)" className="border rounded px-3 py-2 text-sm w-full min-h-[70px] resize-y" />
         </div>
@@ -80,7 +91,7 @@ export default function AdminMaterialPage(){
           <h2 className="font-semibold">Produkte</h2>
           <div className="flex items-center gap-2 text-xs">
             <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} className="border rounded px-2 py-1 bg-white">
-              <option value="">Alle Fächer</option>
+              <option value="">Alle Kategorien</option>
               {categories.map(c=> <option key={c} value={c}>{c}</option>)}
             </select>
             {filterCat && <button onClick={()=>setFilterCat('')} className="text-blue-600 hover:underline">Zurücksetzen</button>}

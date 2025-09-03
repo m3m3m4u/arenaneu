@@ -10,10 +10,12 @@ export interface AntiGuessingConfig {
 export function useAntiGuessing(cfg: AntiGuessingConfig = {}) {
   const maxWrong = cfg.maxWrongStreak ?? 3;
   const windowMs = cfg.windowMs ?? 12000;
-  const cooldownMs = cfg.cooldownMs ?? 6000;
+  // Neuer Default: 10s Block
+  const cooldownMs = cfg.cooldownMs ?? 10000;
   const wrongTimesRef = useRef<number[]>([]);
   const [blocked,setBlocked] = useState(false);
   const [until,setUntil] = useState<number|undefined>();
+  const [tick,setTick] = useState(0); // erzwingt Re-Renders während Block für Countdown
   // Anzahl der bisherigen Block-Events (nur Client, für 3er-Schwelle)
   const blockCountRef = useRef(0);
   const lastReportRef = useRef<number>(0);
@@ -54,21 +56,24 @@ export function useAntiGuessing(cfg: AntiGuessingConfig = {}) {
         wrongTimesRef.current = [];
         setBlocked(false);
         setUntil(undefined);
+        setTick(t=>t+1);
+      } else {
+        setTick(t=>t+1); // Fortschritt updaten
       }
-    }, 500);
+    }, 250); // 4x pro Sekunde für flüssigeren Balken
     return ()=> clearInterval(id);
   },[blocked, until]);
 
-  const remainingMs = blocked && until ? Math.max(0, until - Date.now()) : 0;
+  const remainingMs = blocked && until ? Math.max(0, until - Date.now()) : 0; // tick erzwingt Re-Render
   const remainingSec = Math.ceil(remainingMs/1000);
-
   const cooldownSec = Math.ceil(cooldownMs/1000);
-  return { blocked, remainingMs, remainingSec, cooldownSec, registerAnswer };
+  return { blocked, remainingMs, remainingSec, cooldownSec, cooldownMs, registerAnswer };
 }
 
-export function AntiGuessingOverlay({ remainingSec, totalSec }: { remainingSec: number; totalSec: number }) {
-  const safeTotal = totalSec || remainingSec || 1;
-  const progressed = Math.min(100, Math.max(0, ((safeTotal - remainingSec)/safeTotal) * 100));
+export function AntiGuessingOverlay({ remainingMs, totalMs }: { remainingMs: number; totalMs: number }) {
+  const safeTotal = totalMs || 1;
+  const progressed = Math.min(100, Math.max(0, ((safeTotal - remainingMs)/safeTotal) * 100));
+  const remainingSec = Math.ceil(remainingMs/1000);
   return (
     <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-xl border border-amber-300 p-6 animate-[fadeIn_.25s_ease-out]">

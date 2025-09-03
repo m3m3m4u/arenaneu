@@ -3,7 +3,8 @@ import dbConnect from '@/lib/db';
 import ShopProduct from '@/models/ShopProduct';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
-import { s3Put } from '@/lib/storage';
+import { s3Put, isS3Enabled } from '@/lib/storage';
+import { isWebdavEnabled, davPut, webdavPublicUrl } from '@/lib/webdavClient';
 
 export const runtime = 'nodejs'; // benötigt für Buffer
 
@@ -28,11 +29,37 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
     if(!doc){ return NextResponse.json({ success:false, error:'Produkt nicht gefunden' }, { status:404 }); }
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
-    const key = `shop/${doc._id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]+/g,'_')}`;
-    const uploaded = await s3Put(key, bytes, file.type||'application/octet-stream');
+    // Gemeinsamer Schlüssel – identisch für WebDAV & S3
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g,'_');
+    const key = `shop/${doc._id}/${Date.now()}_${safeName}`;
+
+    const useWebdav = isWebdavEnabled();
+    let finalUrl: string | undefined;
+
+    if(useWebdav){
+      try {
+        const up = await davPut(key, bytes, file.type||'application/octet-stream');
+        finalUrl = up?.url || webdavPublicUrl(key);
+      } catch(err){
+        console.error('WebDAV Upload fehlgeschlagen, versuche ggf. S3 Fallback', err);
+        if(isS3Enabled()){
+          const up2 = await s3Put(key, bytes, file.type||'application/octet-stream');
+          finalUrl = up2?.url;
+        } else {
+          return NextResponse.json({ success:false, error:'Upload fehlgeschlagen (WebDAV)' }, { status:500 });
+        }
+      }
+    } else {
+      if(!isS3Enabled()){
+        return NextResponse.json({ success:false, error:'Kein Storage konfiguriert' }, { status:500 });
+      }
+      const up = await s3Put(key, bytes, file.type||'application/octet-stream');
+      finalUrl = up?.url;
+    }
+
     doc.files.push({ key, name: file.name, size: bytes.length, contentType: file.type });
     await doc.save();
-    return NextResponse.json({ success:true, file: { key, url: uploaded?.url } });
+    return NextResponse.json({ success:true, file: { key, url: finalUrl } });
   } catch(e){
     console.error('Upload file error', e);
     return NextResponse.json({ success:false, error:'Upload fehlgeschlagen' }, { status:500 });

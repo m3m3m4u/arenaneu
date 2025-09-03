@@ -144,7 +144,7 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
   const progress = totalPairs? Math.round((matchedCount/totalPairs)*100) : 0;
   const effectiveVertical = vertical && !isSmall; // mobil immer 2-Spalten horizontal
   return <Wrapper>
-  {antiGuess.blocked && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} totalSec={antiGuess.cooldownSec} />}
+  {antiGuess.blocked && <AntiGuessingOverlay remainingMs={antiGuess.remainingMs} totalMs={antiGuess.cooldownMs} />}
     <div className="flex items-start justify-between mb-3 gap-4 flex-wrap relative">
       <div className="space-y-1">
   <h3 className="font-semibold text-base text-gray-700 md:text-lg">Zuordnung</h3>
