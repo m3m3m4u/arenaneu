@@ -31,16 +31,13 @@ export function useAntiGuessing(cfg: AntiGuessingConfig = {}) {
         setBlocked(true);
         setUntil(now + cooldownMs);
         blockCountRef.current += 1;
-        const shouldReport = (blockCountRef.current % 3 === 0);
-        if(shouldReport){
-          const since = Date.now() - lastReportRef.current;
-          if(since > REPORT_INTERVAL_MS){
-            lastReportRef.current = Date.now();
-            // Username aus localStorage (Fallback) oder Session via DOM CustomEvent (vereinfachte Variante)
-            const username = typeof window !== 'undefined' ? (localStorage.getItem('session:username') || '') : '';
-            if(username){
-              fetch('/api/anti-guessing/report', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ username }) }).catch(()=>{});
-            }
+        // Jede Blockade melden (Server entscheidet über Nachricht). Throttle minimal.
+        const since = Date.now() - lastReportRef.current;
+        if(since > REPORT_INTERVAL_MS){
+          lastReportRef.current = Date.now();
+          const username = typeof window !== 'undefined' ? (localStorage.getItem('session:username') || '') : '';
+          if(username){
+            fetch('/api/anti-guessing/report', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ username }) }).catch(()=>{});
           }
         }
       }

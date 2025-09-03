@@ -8,11 +8,12 @@ import AntiGuessingEvent from '@/models/AntiGuessingEvent';
 /*
   POST /api/anti-guessing/report
   Body: { username: string }
-  Client meldet nur jeden 3. Block (min. 5s Abstand). Wir speichern jedes Event
-  und senden höchstens 1 Hinweis / Stunde pro Lernenden an den Teacher.
-*/
 
-const COOLDOWN_MS = 60 * 60 * 1000; // 1h
+  Client meldet GENAU jeden 3. Block (=> 3 Sperren = 1 Report). Beim ERSTEN Report
+  wird automatisch eine Nachricht an die Lehrperson gesendet (falls vorhanden).
+  Weitere Reports (6, 9, … Sperren) erzeugen zwar Events (Analytics), aber KEINE
+  weiteren Nachrichten mehr – so bleibt Spam aus.
+*/
 
 export async function POST(req: Request){
   try {
@@ -25,25 +26,26 @@ export async function POST(req: Request){
     const cls = await TeacherClass.findById(user.class, 'teacher').lean();
     if(!cls?.teacher) return NextResponse.json({ ok:true, skipped:true, reason:'kein_teacher' });
 
-    // Event protokollieren
+    // Event protokollieren (jede Blockade)
     await AntiGuessingEvent.create({ user: user._id, class: user.class, teacher: cls.teacher });
 
-    // Bereits kürzlich Nachricht gesendet?
-    const since = new Date(Date.now() - COOLDOWN_MS);
-    const recent = await Message.findOne({
+    // Bereits Nachricht gesendet?
+    const existing = await Message.findOne({
       sender: user._id,
       recipientUser: cls.teacher,
-      subject: { $regex: /^Hinweis: Häufiges Raten bei /i },
-      createdAt: { $gte: since }
+      subject: { $regex: /^Hinweis: Häufiges Raten bei /i }
     }, '_id').lean();
-    if(recent){
-      return NextResponse.json({ ok:true, createdEvent:true, throttled:true });
+
+    // Anzahl aller Block-Events für diesen Lernenden
+    const totalEvents = await AntiGuessingEvent.countDocuments({ user: user._id });
+    if(existing || totalEvents < 3){
+      return NextResponse.json({ ok:true, createdEvent:true, totalEvents, alreadyNotified: !!existing, thresholdReached: totalEvents>=3 });
     }
 
-  const subject = `Hinweis: Häufiges Raten bei ${user.username}`;
-  const body = `Der Lernende "${user.username}" hat wiederholt innerhalb kurzer Zeit falsche Antworten gegeben und wurde durch die Anti-Raten-Sperre gebremst.\n\nEmpfehlung: Lernstand / Verständnis klären oder kurze Rückfrage stellen. (Automatische Systemnachricht)`;
-  await Message.create({ sender: user._id, recipientUser: cls.teacher, subject, body });
-  return NextResponse.json({ ok:true, createdEvent:true, notified:true });
+    const subject = `Hinweis: Häufiges Raten bei ${user.username}`;
+    const body = `Automatische Meldung (Anti-Raten-Schutz):\n\nDer Lernende "${user.username}" wurde jetzt mindestens 3-mal wegen sehr schneller falscher Antworten kurzzeitig blockiert (Hinweis auf mögliches Raten).\n\nEmpfehlung: Lernstand / Verständnis prüfen oder Rückfrage stellen. (Einmalige Systemnachricht)`;
+    await Message.create({ sender: user._id, recipientUser: cls.teacher, subject, body });
+    return NextResponse.json({ ok:true, createdEvent:true, totalEvents, notified:true });
   } catch (e:any) {
     return NextResponse.json({ ok:false, error: e?.message || 'server error' }, { status:500 });
   }
