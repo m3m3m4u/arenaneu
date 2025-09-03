@@ -406,6 +406,12 @@ export async function POST(req: Request) {
             : undefined,
           pairCount: (l.type === 'matching' || l.type === 'memory') && l.content?.pairs ? l.content.pairs.length : undefined
           ,blockCount: l.type === 'text-answer' && Array.isArray(l.content?.blocks) ? l.content.blocks.length : undefined
+          ,blockAnswerTotal: l.type === 'text-answer' && Array.isArray(l.content?.blocks)
+            ? l.content.blocks.reduce((acc:number,b:any)=> acc + (Array.isArray(b.answers)? b.answers.length : 0), 0)
+            : undefined
+          ,blockAnswerAvg: l.type === 'text-answer' && Array.isArray(l.content?.blocks) && l.content.blocks.length
+            ? Number((l.content.blocks.reduce((acc:number,b:any)=> acc + (Array.isArray(b.answers)? b.answers.length : 0), 0) / l.content.blocks.length).toFixed(2))
+            : undefined
         })),
         lessonCount: c.lessons.length,
         errors: c.errors

@@ -152,7 +152,7 @@ export default function DashboardPage() {
   }
 
   return (
-  <main className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
+  <div className="w-full mx-auto mt-6 sm:mt-10 px-3 sm:px-4 lg:px-6 max-w-[1400px]">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profil-Spalte */}
   <section className="bg-white rounded shadow p-6">
@@ -241,7 +241,7 @@ export default function DashboardPage() {
           )}
         </section>
       </div>
-    </main>
+  </div>
   );
 }
 
