@@ -22,6 +22,7 @@ function LernenPageInner() {
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0); // manuelles Reload (Retry Button)
   const [progress, setProgress] = useState<ProgressMap>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [searchText, setSearchText] = useState<string>('');
@@ -145,6 +146,7 @@ function LernenPageInner() {
   useEffect(() => {
     if (viewTab !== 'general') return;
     let cancelled = false;
+    const controller = new AbortController();
     const load = async () => {
       setLoading(true); setError(null);
       try {
@@ -155,32 +157,51 @@ function LernenPageInner() {
         if (selectedCategory) qParams.set('cat', selectedCategory);
         if (searchText.trim()) qParams.set('q', searchText.trim());
         const url = `/api/kurse?${qParams.toString()}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!cancelled) {
-          if (res.ok && data.success) {
-            setCourses(data.courses || []);
-            setTotalCount(typeof data.totalCount === 'number' ? data.totalCount : (data.courses?.length || 0));
-            setServerPageSize(typeof data.pageSize === 'number' ? data.pageSize : pageSize);
-            if (data.learnerScope) setLearnerScope(data.learnerScope);
-            if (data.activeMode) setActiveMode(data.activeMode);
-            if (Array.isArray(data.categories)) {
-              setAllCategories((data.categories as string[]).filter(Boolean).sort((a,b)=>a.localeCompare(b,'de')));
+        const res = await fetch(url, { signal: controller.signal, headers: { 'Accept':'application/json' } });
+        let data: any = null;
+        let parseError: any = null;
+        try {
+          const ct = res.headers.get('content-type') || '';
+            if (ct.includes('application/json')) {
+              data = await res.json();
+            } else {
+              // Fallback: Text lesen und versuchen zu parsen
+              const text = await res.text();
+              try { data = JSON.parse(text); } catch { data = { raw: text }; }
             }
-          } else {
-            setError(data.error || 'Fehler beim Laden');
-            setCourses([]); setTotalCount(0);
+        } catch (e) { parseError = e; }
+        if (cancelled) return;
+        if (res.ok && data && data.success) {
+          setCourses(data.courses || []);
+          setTotalCount(typeof data.totalCount === 'number' ? data.totalCount : (data.courses?.length || 0));
+          setServerPageSize(typeof data.pageSize === 'number' ? data.pageSize : pageSize);
+          if (data.learnerScope) setLearnerScope(data.learnerScope);
+          if (data.activeMode) setActiveMode(data.activeMode);
+          if (Array.isArray(data.categories)) {
+            setAllCategories((data.categories as string[]).filter(Boolean).sort((a,b)=>a.localeCompare(b,'de')));
           }
+        } else {
+          // Verbesserte Fehlermeldung
+          const baseMsg = res.status ? `Fehler (${res.status})` : 'Fehler';
+          let msg = (data && (data.error || data.message)) || (parseError ? 'Antwort unlesbar' : baseMsg);
+          if (parseError) {
+            console.warn('[lernen] JSON Parse Fehler /api/kurse', parseError);
+          }
+          setError(msg || 'Fehler beim Laden');
+          setCourses([]); setTotalCount(0);
         }
-      } catch {
-        if (!cancelled) { setError('Netzwerkfehler'); setCourses([]); setTotalCount(0); }
+      } catch (e: any) {
+        if (!cancelled && e?.name !== 'AbortError') {
+          console.warn('[lernen] Netzwerkfehler /api/kurse', e);
+          setError('Netzwerkfehler'); setCourses([]); setTotalCount(0);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     void load();
-    return () => { cancelled = true; };
-  }, [viewTab, activeMode, page, selectedCategory, searchText]);
+    return () => { cancelled = true; controller.abort(); };
+  }, [viewTab, activeMode, page, selectedCategory, searchText, reloadTick]);
 
   // Klassenliste laden (nur Lehrer) – unabhängig vom Tab, damit Auswahl immer verfügbar ist
   useEffect(() => {
@@ -354,7 +375,16 @@ function LernenPageInner() {
         </div>
       )}
       {loading && <div className="text-gray-500">Lade Kurse...</div>}
-      {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
+      {error && (
+        <div className="text-red-600 text-sm mb-4 flex items-center gap-3">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={()=> setReloadTick(t=>t+1)}
+            className="px-2 py-1 rounded border bg-white text-red-700 hover:bg-red-50 text-xs"
+          >Erneut laden</button>
+        </div>
+      )}
       {!loading && !error && courses.length === 0 && (
         <div className="text-gray-500">{isTeacher && viewTab==='class' ? 'Für diese Klasse sind keine Kurse freigeschaltet.' : 'Für dich sind aktuell keine Kurse freigeschaltet.'}</div>
       )}

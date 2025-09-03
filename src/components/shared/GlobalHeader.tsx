@@ -27,8 +27,7 @@ export default function GlobalHeader(){
 
   // Links kontextabhängig
   const leftLinks = [
-    { href: '/dashboard', label: 'Startseite' },
-  { href: '/arena', label: 'Arena' },
+    { href: '/arena', label: 'Arena' },
     { href: '/lernen', label: 'Kurse' },
     { href: '/ueben', label: 'Übungen' },
   ];
@@ -96,7 +95,7 @@ export default function GlobalHeader(){
               </span>
             )}
           </button>
-          <span className="font-semibold text-sm sm:text-base select-none">LernArena</span>
+          <Link href="/" className="font-semibold text-sm sm:text-base select-none hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">LernArena</Link>
           <nav className="hidden md:flex items-center gap-3 sm:gap-4 text-[13px] sm:text-sm">
           {[...leftLinks,
             ...(role==='teacher' ? teacherExtras: []),
