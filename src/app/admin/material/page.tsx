@@ -28,7 +28,12 @@ export default function AdminMaterialPage(){
       const r = await fetch('/api/shop/temp-files', { method:'POST', body: form });
       const d = await r.json();
       if(r.ok && d.success){
-        setPreUploads(p=> [...p, { key: d.temp.key, name: d.temp.name, size: d.temp.size }]);
+        const arr = Array.isArray(d.files)? d.files: (d.temp? [d.temp]: []);
+        if(arr.length){
+          setPreUploads(p=> [...p, ...arr.map((x:any)=> ({ key:x.key, name:x.name, size:x.size }))]);
+        } else {
+          alert('Kein Dateiobjekt im Response');
+        }
       } else {
         alert(d.error||'Upload fehlgeschlagen');
       }
