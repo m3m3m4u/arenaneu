@@ -38,7 +38,10 @@ export default function GlobalHeader(){
   { href: '/teacher/shop', label: 'Material-Shop' },
   ];
   const authorExtras = [ { href: '/autor', label: 'Autor' } ];
-  const adminExtras = [ { href: '/admin/users', label: 'Admin' } ];
+  const adminExtras = [
+    { href: '/admin/users', label: 'Admin' },
+    { href: '/admin/material', label: 'Material-Upload' }
+  ];
 
   const primaryLinks = [...leftLinks];
   const teacherLinks = role==='teacher' ? teacherExtras : undefined;

@@ -601,7 +601,7 @@ export default function LessonPage() {
   if (lesson && isSnake) {
   return (
   <div className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
-      {antiGuess.blocked && (lesson && (lesson.type==='single-choice' || lesson.type==='multiple-choice' || lesson.type==='matching')) && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} />}
+  {antiGuess.blocked && (lesson && (lesson.type==='single-choice' || lesson.type==='multiple-choice' || lesson.type==='matching')) && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} totalSec={antiGuess.cooldownSec} />}
     <button onClick={() => router.push(backHref)} className="text-blue-600 hover:underline mb-4">← {backHref === '/ueben' ? 'Zurück zu Übungen' : 'Zurück zum Kurs'}</button>
         <h1 className="text-2xl font-bold mb-6">{lesson.title}</h1>
         <SnakeGame lesson={lesson} courseId={courseId} completedLessons={completedLessons} setCompletedLessons={setCompletedLessons} />
@@ -633,6 +633,7 @@ export default function LessonPage() {
 
   return (
   <div className="max-w-6xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6">
+  {antiGuess.blocked && (lesson && (lesson.type==='single-choice' || lesson.type==='multiple-choice' || lesson.type==='matching')) && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} totalSec={antiGuess.cooldownSec} />}
       <div className="mb-6">
         <button onClick={() => router.push(backHref)} className="text-blue-600 hover:underline mb-4">← {backHref === '/ueben' ? 'Zurück zu Übungen' : 'Zurück zum Kurs'}</button>
         <h1 className="text-2xl font-bold mb-2">{lesson.title}</h1>

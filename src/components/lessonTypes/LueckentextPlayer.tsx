@@ -117,7 +117,7 @@ export default function LueckentextPlayer({ lesson, courseId, completedLessons, 
   };
 
   return <div className="bg-white rounded shadow p-6 relative">
-    {antiGuess.blocked && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} />}
+  {antiGuess.blocked && <AntiGuessingOverlay remainingSec={antiGuess.remainingSec} totalSec={antiGuess.cooldownSec} />}
   <div className="text-base leading-8 whitespace-pre-wrap">{parts.map(renderPart)}</div>
     {mode==='drag' && <div className="mt-6">
       <h3 className="font-semibold mb-2 text-base">Antworten</h3>

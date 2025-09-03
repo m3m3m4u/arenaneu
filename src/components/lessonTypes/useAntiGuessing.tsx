@@ -62,10 +62,13 @@ export function useAntiGuessing(cfg: AntiGuessingConfig = {}) {
   const remainingMs = blocked && until ? Math.max(0, until - Date.now()) : 0;
   const remainingSec = Math.ceil(remainingMs/1000);
 
-  return { blocked, remainingMs, remainingSec, registerAnswer };
+  const cooldownSec = Math.ceil(cooldownMs/1000);
+  return { blocked, remainingMs, remainingSec, cooldownSec, registerAnswer };
 }
 
-export function AntiGuessingOverlay({ remainingSec }: { remainingSec: number }) {
+export function AntiGuessingOverlay({ remainingSec, totalSec }: { remainingSec: number; totalSec: number }) {
+  const safeTotal = totalSec || remainingSec || 1;
+  const progressed = Math.min(100, Math.max(0, ((safeTotal - remainingSec)/safeTotal) * 100));
   return (
     <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-xl border border-amber-300 p-6 animate-[fadeIn_.25s_ease-out]">
@@ -73,7 +76,7 @@ export function AntiGuessingOverlay({ remainingSec }: { remainingSec: number }) 
         <p className="text-sm text-gray-700 leading-snug mb-3">Mehrere Antworten wurden sehr schnell falsch gewählt. Lies dir die Frage genau durch und überlege einen Moment, bevor du klickst.</p>
         <p className="text-xs text-gray-500">Weiter in <span className="font-semibold text-gray-700">{remainingSec}s</span> …</p>
         <div className="mt-4 h-2 bg-amber-100 rounded overflow-hidden">
-          <div className="h-full bg-amber-400 transition-all" style={{ width: `${Math.max(0, 100 - (remainingSec*100/ (remainingSec||1)))}%` }} />
+          <div className="h-full bg-amber-400 transition-all" style={{ width: `${progressed}%` }} />
         </div>
       </div>
       <style jsx global>{`

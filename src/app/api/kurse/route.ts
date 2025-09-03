@@ -32,6 +32,7 @@ export async function GET(req: any) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
     const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '10', 10)));
 
+  const debug = url.searchParams.get('debug') === '1';
   const normalizedCat = (() => {
       if (!rawCat) return undefined;
       const v = String(rawCat).trim();
@@ -104,7 +105,7 @@ export async function GET(req: any) {
       }
     }
 
-    if (role === 'learner' && username) {
+  if (role === 'learner' && username) {
       try {
         const me = await User.findOne({ username }, '_id class').lean();
         const classId = me?.class ? String(me.class) : null;
@@ -119,7 +120,9 @@ export async function GET(req: any) {
             const accesses = await ClassCourseAccess.find({ class: classId }).lean();
             const allowedCourseIds = accesses.map(a => String(a.course));
             if (allowedCourseIds.length === 0) {
-              return NextResponse.json({ success: true, courses: [], learnerScope, activeMode, page, pageSize: limit, totalCount: 0, categories: [] });
+              let publishedTotal = 0;
+              try { publishedTotal = await Course.countDocuments({ isPublished: true }); } catch {}
+              return NextResponse.json({ success: true, courses: [], learnerScope, activeMode, page, pageSize: limit, totalCount: 0, categories: [], reason: 'noClassCourses', debug: debug ? { classId, courseAccess: allowed, publishedTotal } : undefined });
             }
             const f: Record<string, unknown> = { ...baseFilter, _id: { $in: allowedCourseIds } };
             const totalCount = await Course.countDocuments(f);
@@ -132,7 +135,7 @@ export async function GET(req: any) {
               if (Array.isArray((baseFilter as any).$or)) (catFilter as any).$or = (baseFilter as any).$or;
               categories = await Course.distinct('category', catFilter as any);
             }
-            return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount, categories });
+            return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount, categories, debug: debug ? { classId, mode: effective, allowedCourseIds: allowedCourseIds.length } : undefined });
           } else {
             const totalCount = await Course.countDocuments(baseFilter);
             courses = await Course.find(baseFilter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
@@ -144,14 +147,16 @@ export async function GET(req: any) {
               if (Array.isArray((baseFilter as any).$or)) (categoryFilterAll as any).$or = (baseFilter as any).$or;
               categories = await Course.distinct('category', categoryFilterAll as any);
             }
-            return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount, categories });
+            return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount, categories, debug: debug ? { classId, mode: 'all', totalCount } : undefined });
           }
         } else {
-          return NextResponse.json({ success: true, courses: [], learnerScope: 'class', activeMode: 'class', page, pageSize: limit, totalCount: 0, categories: [] });
+          let publishedTotal = 0;
+          try { publishedTotal = await Course.countDocuments({ isPublished: true }); } catch {}
+          return NextResponse.json({ success: true, courses: [], learnerScope: 'class', activeMode: 'class', page, pageSize: limit, totalCount: 0, categories: [], reason: 'noClassAssigned', debug: debug ? { publishedTotal } : undefined });
         }
       } catch (e) {
         console.error('[kurse] learner branch error', e);
-        return NextResponse.json({ success: true, courses: [], learnerScope: 'class', activeMode: 'class', page, pageSize: limit, totalCount: 0, categories: [], debug: process.env.NODE_ENV!=='production'? String((e as any)?.message||e): undefined });
+        return NextResponse.json({ success: true, courses: [], learnerScope: 'class', activeMode: 'class', page, pageSize: limit, totalCount: 0, categories: [], reason: 'error', debug: debug ? { error: String((e as any)?.message||e) } : undefined });
       }
     } else {
       const totalCount = await Course.countDocuments(baseFilter);
