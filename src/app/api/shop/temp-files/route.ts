@@ -25,6 +25,7 @@ export async function POST(req: Request){
 			return NextResponse.json({ success:false, error:'Keine Dateien' }, { status:400 });
 		}
 		const created:any[] = [];
+		const errors: Array<{ name:string; message:string }> = [];
 		const user = session.user?.username || session.user?.email || 'user';
 		const useShop = isShopWebdavEnabled();
 		const useDav = useShop || isWebdavEnabled();
@@ -34,7 +35,12 @@ export async function POST(req: Request){
 			const buf = new Uint8Array(arrayBuf);
 			const safeName = f.name.replace(/[^a-zA-Z0-9._-]+/g,'_');
 			let rand = 'xxxx';
-			try { rand = randomBytes(4).toString('hex'); } catch {}
+			try {
+				let rb: any;
+				try { rb = (randomBytes as any)(4); } catch { rb = (randomBytes as any)(); }
+				const bytes: number[] = Array.from(new Uint8Array(rb)).slice(0,4);
+				rand = bytes.map(b=> b.toString(16).padStart(2,'0')).join('');
+			} catch {}
 			const key = `temp/${user}/${Date.now()}_${rand}_${safeName}`;
 			try {
 				if(useDav){
@@ -46,11 +52,15 @@ export async function POST(req: Request){
 				}
 				const doc = await TempShopFile.create({ key, name: f.name, size: buf.length, contentType: f.type||undefined, createdBy: user });
 				created.push({ key, name: f.name, size: buf.length, contentType: f.type||undefined, id: doc._id });
-			} catch(e){
+			} catch(e:any){
 				console.warn('Temp upload failed', e);
+				errors.push({ name: f.name, message: e?.message || 'Upload fehlgeschlagen' });
 			}
 		}
-		return NextResponse.json({ success:true, files: created, temp: created[0]||null });
+		if(!created.length){
+			return NextResponse.json({ success:false, error:'Kein Datei-Upload gelungen', errors }, { status:500 });
+		}
+		return NextResponse.json({ success:true, files: created, temp: created[0]||null, errors: errors.length? errors: undefined });
 	} catch(e){
 		console.error('temp-files POST error', e);
 		return NextResponse.json({ success:false, error:'Upload Fehler' }, { status:500 });
