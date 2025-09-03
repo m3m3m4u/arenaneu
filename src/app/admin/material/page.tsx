@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
+import { CATEGORIES } from '@/lib/categories';
 
 interface Product { _id:string; title:string; description?:string; category?:string; isPublished:boolean; files?: any[]; }
 
@@ -14,7 +15,7 @@ export default function AdminMaterialPage(){
   const [cat, setCat] = useState('');
   const [newCat, setNewCat] = useState('');
   const [filterCat, setFilterCat] = useState('');
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>(CATEGORIES as unknown as string[]);
   const [uploading, setUploading] = useState<string|null>(null);
 
   async function load(){
@@ -22,10 +23,15 @@ export default function AdminMaterialPage(){
     try {
       const r = await fetch('/api/shop/products');
       const d = await r.json();
-      if(r.ok && d.success){
-        setProducts(d.items||[]);
-        if(Array.isArray(d.categories)) setCategories(d.categories.filter((c:string)=>c && typeof c==='string'));
-      } else { setError(d.error||'Fehler'); }
+      if(r.ok && d.success){ setProducts(d.items||[]); } else { setError(d.error||'Fehler'); }
+      // Kurs-Kategorien nachladen (separat, nicht an Produkte Response gebunden)
+      try {
+        const rc = await fetch('/api/course-categories');
+        const dc = await rc.json();
+        if(rc.ok && dc.success && Array.isArray(dc.categories) && dc.categories.length){
+          setCategories(dc.categories);
+        }
+      } catch {}
     } catch { setError('Netzwerkfehler'); }
     setLoading(false);
   }
