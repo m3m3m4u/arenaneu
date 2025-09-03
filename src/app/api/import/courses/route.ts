@@ -203,17 +203,50 @@ function parseLesson(raw: string): ParsedLesson {
     const title = lines[idx] || 'Text-Antwort';
     const rawBlocks = lines.slice(idx+1).join('\n');
     const normRaw = rawBlocks.replace(/\r/g,'');
-    const blocks = normRaw.split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean).slice(0,50).map(block => {
-      const ls = block.split(/\n+/).map(l=>l.trim()).filter(Boolean);
-      if (!ls.length) return null;
-      let first = ls[0]; let media: string|undefined;
-      const m = first.match(/^(.+?)\s*\[(.+?)\]$/); if (m) { first = m[1].trim(); media = m[2].trim(); }
-      const answers = ls.slice(1).filter(a=>a.length>0);
-      if (!first || !answers.length) return null;
-      return { question:first, answers, media };
-    }).filter(Boolean) as Array<{question:string;answers:string[];media?:string}>;
+    const blocks = normRaw
+      .split(/\n\s*\n+/)
+      .map(b=>b.trim())
+      .filter(Boolean)
+      .slice(0,50)
+      .map(block => {
+        const ls = block.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+        if (!ls.length) return null;
+        let first = ls[0]; let media: string|undefined;
+        const m = first.match(/^(.+?)\s*\[(.+?)\]$/); if (m) { first = m[1].trim(); media = m[2].trim(); }
+        // Antworten sammeln: Support für ; oder | als Trenner innerhalb EINER Zeile, sowie Bullet-Prefix (- * •)
+        const answerLines = ls.slice(1).flatMap(a => {
+          const cleaned = a.replace(/^[-*•]\s*/,'').trim();
+          // Wenn mehrere Antworten in einer Zeile durch ; oder | getrennt
+          return cleaned.split(/[;|]/).map(s=>s.trim()).filter(s=>s.length>0);
+        });
+        if (!first || !answerLines.length) return null;
+        return { question:first, answers: answerLines, media };
+      })
+      .filter(Boolean) as Array<{question:string;answers:string[];media?:string}>;
+    // Heuristik: Falls nur EIN Block erkannt wurde aber offenbar mehrere Frage-Antwort-Paare (abwechselnde Zeilen ohne Trenner)
+    if (blocks.length === 1) {
+      const flatLines = normRaw.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+      // Muster: gerade Anzahl Zeilen, keine Leerblock-Trennung, aktuell wurde alles als eine Frage mit vielen Antworten interpretiert
+      if (flatLines.length >= 4 && flatLines.length % 2 === 0) {
+        // Prüfen ob keine Zeile Trenner ; oder | enthält (würde eher Synonyme bedeuten)
+        const hasInlineSeparators = flatLines.some(l=> /[;|]/.test(l));
+        if (!hasInlineSeparators) {
+          const pairBlocks = [] as Array<{question:string;answers:string[];media?:string}>;
+          for (let i=0;i<flatLines.length;i+=2) {
+            const q = flatLines[i];
+            const a = flatLines[i+1];
+            if (q && a) pairBlocks.push({ question:q, answers:[a] });
+          }
+            if (pairBlocks.length > 1) {
+              // ersetze ursprüngliche Interpretation
+              (blocks as any).splice(0, blocks.length, ...pairBlocks);
+            }
+        }
+      }
+    }
     if (!blocks.length) errors.push('Keine gültigen Fragenblöcke');
-    return { type, title, raw, content:{ raw: normRaw, blocks, question: blocks[0]?.question, answer: blocks[0]?.answers?.[0] }, errors };
+    // Standard Flags (können später per UI überschrieben werden)
+    return { type, title, raw, content:{ raw: normRaw, blocks, question: blocks[0]?.question, answer: blocks[0]?.answers?.[0], caseSensitive:false, allowReveal:true }, errors };
   }
   // Minigame (frei konfigurierbar): Titel + optionale Konfigurationszeilen
   if (type === 'minigame') {

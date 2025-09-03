@@ -583,17 +583,39 @@ export async function POST(
       const allowReveal = !!rawContent.allowReveal;
       const parseRawBlocks = (text:string)=>{
         const chunks = text.replace(/\r/g,'').split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean).slice(0,50);
-        return chunks.map(b=>{
+        const parsed = chunks.map(b=>{
           const lines = b.split(/\n+/).map(l=>l.trim()).filter(Boolean);
           if(!lines.length) return null;
           let first = lines[0]; let media: string|undefined;
           const m = first.match(/^(.+?)\s*\[(.+?)\]$/); if(m){ first=m[1].trim(); media=m[2].trim(); }
-          const answers = lines.slice(1).map(a=>a.trim()).filter(a=>a.length>0);
+          // Antworten: mehrere pro Zeile durch ; oder | möglich, Bullet-Prefix entfernen
+          let answers = lines.slice(1).flatMap(a => {
+            const cleaned = a.replace(/^[-*•]\s*/,'').trim();
+            return cleaned.split(/[;|]/).map(s=>s.trim()).filter(s=>s.length>0);
+          }).filter(a=>a.length>0);
           if(!first || !answers.length) return null;
           // Medienpfad normalisieren, falls es wie ein Dateiname aussieht
           const mediaResolved = media ? resolveMediaPath(media) : undefined;
           return { question:first, answers, media: mediaResolved };
         }).filter(Boolean) as Array<{question:string;answers:string[];media?:string}>;
+        // Heuristik: Falls nur ein Block aber offenbar viele Paar-Zeilen (Frage/Antwort abwechselnd)
+        if(parsed.length === 1){
+          const flatLines = text.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+          if(flatLines.length >= 4 && flatLines.length % 2 === 0){
+            const hasInline = flatLines.some(l=>/[;|]/.test(l));
+            if(!hasInline){
+              const pairBlocks: Array<{question:string;answers:string[];media?:string}> = [];
+              for(let i=0;i<flatLines.length;i+=2){
+                const q = flatLines[i]; const a = flatLines[i+1];
+                if(q && a) pairBlocks.push({ question:q, answers:[a] });
+              }
+              if(pairBlocks.length > 1){
+                return pairBlocks;
+              }
+            }
+          }
+        }
+        return parsed;
       };
       const blocks = Array.isArray(rawContent.blocks) ? rawContent.blocks : (raw ? parseRawBlocks(raw) : (() => {
         // Fallback: falls nur question/answer kam
