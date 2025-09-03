@@ -3,10 +3,11 @@ import dbConnect from '@/lib/db';
 import ShopProduct from '@/models/ShopProduct';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
-import { s3PublicUrl } from '@/lib/storage';
-import { isWebdavEnabled, webdavPublicUrl } from '@/lib/webdavClient';
+import { s3PublicUrl, s3Copy, s3Delete, isS3Enabled } from '@/lib/storage';
+import { isWebdavEnabled, webdavPublicUrl, davMove } from '@/lib/webdavClient';
 import { isShopWebdavEnabled, shopWebdavPublicUrl } from '@/lib/webdavShopClient';
 import { CATEGORIES, normalizeCategory } from '@/lib/categories';
+import TempShopFile from '@/models/TempShopFile';
 
 export async function GET(req: Request){
   try {
@@ -56,14 +57,35 @@ export async function POST(req: Request){
     if(!session || role !== 'admin'){
       return NextResponse.json({ success:false, error:'Kein Zugriff' }, { status:403 });
     }
-    const body = await req.json();
-    const { title, description='', category='', tags=[], isPublished=false } = body||{};
+  const body = await req.json();
+  const { title, description='', category='', tags=[], isPublished=false, tempKeys=[] } = body||{};
     if(!title){ return NextResponse.json({ success:false, error:'Titel erforderlich' }, { status:400 }); }
     const catNorm = normalizeCategory(category);
     if(category && !catNorm){
       return NextResponse.json({ success:false, error:'Ungültige Kategorie' }, { status:400 });
     }
     const doc = await ShopProduct.create({ title: String(title).trim(), description: String(description).trim(), category: catNorm, tags: Array.isArray(tags)?tags.map((t:any)=>String(t).trim()).filter(Boolean):[], isPublished: !!isPublished });
+    if(Array.isArray(tempKeys) && tempKeys.length){
+      const temps = await TempShopFile.find({ key: { $in: tempKeys } });
+      const prefix = (process.env.WEBDAV_SHOP_PREFIX || 'shop').replace(/^[\\/]+|[\\/]+$/g,'');
+      const useWebdav = isShopWebdavEnabled() || isWebdavEnabled();
+      for(const t of temps){
+        try {
+          const safeName = t.name.replace(/[^a-zA-Z0-9._-]+/g,'_');
+          const newKey = `${prefix}/${doc._id}/${Date.now()}_${safeName}`;
+          if(useWebdav){
+            try { await davMove(t.key, newKey); } catch{}
+          } else if(isS3Enabled()) {
+            await s3Copy(t.key, newKey); await s3Delete(t.key);
+          }
+          doc.files.push({ key: newKey, name: t.name, size: t.size, contentType: t.contentType });
+          await TempShopFile.deleteOne({ _id: t._id });
+        } catch(err){
+          console.warn('Temp Datei Übernahme fehlgeschlagen', t.key, err);
+        }
+      }
+      await doc.save();
+    }
     return NextResponse.json({ success:true, product: doc });
   } catch(e){
     console.error('ShopProduct POST error', e);

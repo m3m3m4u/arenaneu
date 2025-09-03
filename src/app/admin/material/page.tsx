@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { CATEGORIES } from '@/lib/categories';
 
 interface Product { _id:string; title:string; description?:string; category?:string; isPublished:boolean; files?: any[]; }
@@ -17,6 +17,24 @@ export default function AdminMaterialPage(){
   const [filterCat, setFilterCat] = useState('');
   const [categories, setCategories] = useState<string[]>(CATEGORIES as unknown as string[]);
   const [uploading, setUploading] = useState<string|null>(null);
+  const [preUploads, setPreUploads] = useState<Array<{ key:string; name:string; size:number }>>([]);
+  const [tempUploading, setTempUploading] = useState(false);
+  const [createError, setCreateError] = useState<string|null>(null);
+
+  const uploadTemp = useCallback(async (file: File)=>{
+    setTempUploading(true);
+    try {
+      const form = new FormData(); form.append('file', file);
+      const r = await fetch('/api/shop/temp-files', { method:'POST', body: form });
+      const d = await r.json();
+      if(r.ok && d.success){
+        setPreUploads(p=> [...p, { key: d.temp.key, name: d.temp.name, size: d.temp.size }]);
+      } else {
+        alert(d.error||'Upload fehlgeschlagen');
+      }
+    } catch { alert('Netzwerkfehler'); }
+    setTempUploading(false);
+  },[]);
 
   async function load(){
     setLoading(true); setError(null);
@@ -41,13 +59,15 @@ export default function AdminMaterialPage(){
     if(!title.trim()) return;
     const chosenCat = cat === '__new' ? newCat : cat;
     setCreating(true);
+    setCreateError(null);
     try {
       const payload: any = { title: title.trim(), description: desc.trim() };
       if(chosenCat && chosenCat.trim()) payload.category = chosenCat.trim();
+      if(preUploads.length) payload.tempKeys = preUploads.map(f=>f.key);
       const r = await fetch('/api/shop/products', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
       const d = await r.json();
-      if(!(r.ok && d.success)) setError(d.error||'Erstellen fehlgeschlagen');
-      else { setTitle(''); setDesc(''); setCat(''); setNewCat(''); await load(); }
+      if(!(r.ok && d.success)) setCreateError(d.error||'Erstellen fehlgeschlagen');
+      else { setTitle(''); setDesc(''); setCat(''); setNewCat(''); setPreUploads([]); await load(); }
     } catch { setError('Netzwerkfehler'); }
     setCreating(false);
   }
@@ -89,6 +109,29 @@ export default function AdminMaterialPage(){
             <button disabled={!title.trim()||creating|| (cat==='__new' && !newCat.trim())} onClick={createProduct} className="bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-40">Anlegen</button>
           </div>
           <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Beschreibung (optional)" className="border rounded px-3 py-2 text-sm w-full min-h-[70px] resize-y" />
+          <div className="border-t pt-3 space-y-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-xs cursor-pointer inline-block bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded border">
+                Datei vorab hochladen
+                <input type="file" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadTemp(f); e.target.value=''; }} />
+              </label>
+              {tempUploading && <span className="text-[11px] text-gray-500">Upload…</span>}
+              {preUploads.length>0 && <span className="text-[11px] text-gray-600">{preUploads.length} Datei(en) bereit</span>}
+            </div>
+            {preUploads.length>0 && (
+              <ul className="text-[11px] bg-gray-50 border rounded p-2 max-h-28 overflow-auto space-y-1">
+                {preUploads.map(f=> (
+                  <li key={f.key} className="flex items-center gap-2">
+                    <span className="truncate" title={f.name}>{f.name}</span>
+                    <span className="text-gray-400">{Math.round(f.size/1024)} KB</span>
+                    <button onClick={()=> setPreUploads(p=> p.filter(x=> x.key!==f.key))} className="text-red-500 hover:underline">x</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-[10px] text-gray-500">Vorab hochgeladene Dateien werden beim Anlegen verschoben.</p>
+            {createError && <div className="text-xs text-red-600">{createError}</div>}
+          </div>
         </div>
       </section>
 
