@@ -92,7 +92,7 @@ export default function AdminUsersPage(){
   }
 
   // Obere Abschnitte: aus kompletter Users-Liste
-  const pending = users.filter(u=>u.role==='pending-author');
+  const pending: any[] = [];
   // pending-teacher entfällt – alte Konten werden automatisch hochgestuft
   const teachers = users.filter(u=>u.role==='teacher');
   const authors = users.filter(u=>u.role==='author');
@@ -147,9 +147,8 @@ export default function AdminUsersPage(){
     { key:'email', header:'E-Mail', hideClassName:'hidden md:table-cell', tdClassName:'whitespace-nowrap' },
     { key:'__actions', header:'Aktion', stickyRight:true, thClassName:'bg-gray-50', tdClassName:'bg-white', render:(u:any)=> (
       <div className="flex items-center gap-2">
-        <select disabled={updating===u.username} value={u.role} onChange={(e)=>changeRole(u.username, e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+  <select disabled={updating===u.username} value={u.role} onChange={(e)=>changeRole(u.username, e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
           <option value="learner">learner</option>
-          <option value="pending-author">pending-author</option>
           <option value="author">author</option>
           <option value="teacher">teacher</option>
           <option value="admin">admin</option>
@@ -167,21 +166,7 @@ export default function AdminUsersPage(){
         <div />
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}
-  <section className="bg-white border rounded p-4">
-        <h2 className="font-semibold mb-3">Ausstehende Autor-Anfragen ({pending.length})</h2>
-        {pending.length===0 && <div className="text-xs text-gray-500">Keine.</div>}
-        <div className="divide-y">
-          {pending.map(p=> (
-            <div key={p.username} className="py-2 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
-              <div className="text-sm"><span className="font-medium">{p.username}</span>{p.email && <span className="text-gray-500"> • {p.email}</span>}{p.lastOnline && <span className="text-gray-400"> • zuletzt {new Date(p.lastOnline).toLocaleString('de-DE',{ dateStyle:'short', timeStyle:'short'})}</span>}</div>
-              <div className="flex gap-2">
-                <button disabled={updating===p.username} onClick={()=>changeRole(p.username,'author')} className="px-3 py-1 text-xs rounded bg-green-600 text-white disabled:opacity-50">Freischalten → Autor</button>
-                <button disabled={updating===p.username} onClick={()=>changeRole(p.username,'learner')} className="px-3 py-1 text-xs rounded bg-gray-600 text-white disabled:opacity-50">Ablehnen</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+  {/* Pending-Author Sektion entfernt */}
 
 
       <section className="bg-white border rounded p-4">

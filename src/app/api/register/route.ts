@@ -28,8 +28,8 @@ export async function POST(req: Request) {
 
   const hashedPassword = await hash(password, 10);
   let role: string = 'learner';
-  if (desiredRole === 'author') role = 'pending-author';
-  if (desiredRole === 'teacher') role = 'teacher'; // Automatische Freischaltung für Lehrpersonen
+  if (desiredRole === 'author') role = 'learner'; // Autorenrechte nicht mehr per Selbst-Registrierung
+  if (desiredRole === 'teacher') role = 'teacher'; // Lehrer direkt aktiv
 
   const newUser = new User({
     username,
@@ -41,5 +41,5 @@ export async function POST(req: Request) {
   });
   await newUser.save();
 
-  return NextResponse.json({ message: "Registrierung erfolgreich.", rolePending: role.startsWith('pending-') ? role : undefined }, { status: 201 });
+  return NextResponse.json({ message: "Registrierung erfolgreich.", role }, { status: 201 });
 }

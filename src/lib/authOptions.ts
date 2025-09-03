@@ -45,7 +45,6 @@ export const authOptions: NextAuthOptions = {
   const uDoc = user as unknown as IUser;
   const id = uDoc?._id ? String(uDoc._id) : (user.id ? String(user.id) : undefined);
   const rawRole = uDoc?.role ? String(uDoc.role) : 'learner';
-        // pending-author hat noch keine Rechte wie author
         return {
           id,
           name: uDoc?.name,
@@ -105,7 +104,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session?.user) {
-        const t = token as { id?: string; sub?: string; username?: string; name?: string; role?: 'learner' | 'author' | 'teacher' | 'admin' | 'pending-author' | 'pending-teacher'; invalidated?: boolean };
+  const t = token as { id?: string; sub?: string; username?: string; name?: string; role?: 'learner' | 'author' | 'teacher' | 'admin'; invalidated?: boolean };
         session.user = {
           ...session.user,
           ...(t.id ? { id: t.id } : (t.sub ? { id: String(t.sub) } : {})),

@@ -7,7 +7,7 @@ export interface IUser extends Document {
   email?: string;
   completedLessons: string[];
   stars: number;
-  role: 'learner' | 'author' | 'admin' | 'teacher' | 'pending-author' | 'pending-teacher';
+  role: 'learner' | 'author' | 'admin' | 'teacher';
   ownerTeacher?: mongoose.Types.ObjectId; // Lehrer, der diesen Lernenden angelegt hat
   class?: mongoose.Types.ObjectId; // Klasse (TeacherClass)
   createdAt: Date;
@@ -28,7 +28,7 @@ const UserSchema: Schema = new Schema({
   email: { type: String, trim: true },
   completedLessons: [{ type: String }],
   stars: { type: Number, default: 0 },
-  role: { type: String, enum: ['learner','author','admin','teacher','pending-author','pending-teacher'], default: 'learner', index: true },
+  role: { type: String, enum: ['learner','author','admin','teacher'], default: 'learner', index: true },
   ownerTeacher: { type: Schema.Types.ObjectId, ref: 'User', index: true },
   class: { type: Schema.Types.ObjectId, ref: 'TeacherClass', index: true },
   createdAt: { type: Date, default: Date.now },
