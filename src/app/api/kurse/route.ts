@@ -172,8 +172,9 @@ export async function GET(req: any) {
       return NextResponse.json(payload);
     }
   } catch (error: unknown) {
+    const dev = process.env.NODE_ENV !== 'production';
     console.error('Fehler beim Laden der Kurse:', error);
-    return NextResponse.json({ success: false, error: 'Fehler beim Laden der Kurse' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Fehler beim Laden der Kurse', message: dev ? String((error as any)?.message || error) : undefined, stack: dev ? (error as any)?.stack : undefined }, { status: 500 });
   }
 }
 
