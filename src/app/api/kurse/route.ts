@@ -105,53 +105,53 @@ export async function GET(req: any) {
     }
 
     if (role === 'learner' && username) {
-      const me = await User.findOne({ username }, '_id class').lean();
-      const classId = me?.class ? String(me.class) : null;
-      if (classId) {
-        const TeacherClass = (await import('@/models/TeacherClass')).default;
-        const cls = await TeacherClass.findById(classId).select('courseAccess').lean();
-        const allowed = (cls as any)?.courseAccess === 'all' ? 'all' : 'class';
-        learnerScope = allowed;
-        const effective = allowed === 'all' && requestedMode === 'all' ? 'all' : 'class';
-        activeMode = effective;
-        if (effective === 'class') {
-          const accesses = await ClassCourseAccess.find({ class: classId }).lean();
-          const allowedCourseIds = accesses.map(a => String(a.course));
-          if (allowedCourseIds.length === 0) {
-            courses = [];
-          } else {
+      try {
+        const me = await User.findOne({ username }, '_id class').lean();
+        const classId = me?.class ? String(me.class) : null;
+        if (classId) {
+          const TeacherClass = (await import('@/models/TeacherClass')).default;
+          const cls = await TeacherClass.findById(classId).select('courseAccess').lean();
+          const allowed = (cls as any)?.courseAccess === 'all' ? 'all' : 'class';
+          learnerScope = allowed;
+          const effective = allowed === 'all' && requestedMode === 'all' ? 'all' : 'class';
+            activeMode = effective;
+          if (effective === 'class') {
+            const accesses = await ClassCourseAccess.find({ class: classId }).lean();
+            const allowedCourseIds = accesses.map(a => String(a.course));
+            if (allowedCourseIds.length === 0) {
+              return NextResponse.json({ success: true, courses: [], learnerScope, activeMode, page, pageSize: limit, totalCount: 0, categories: [] });
+            }
             const f: Record<string, unknown> = { ...baseFilter, _id: { $in: allowedCourseIds } };
             const totalCount = await Course.countDocuments(f);
             courses = await Course.find(f).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
             const withMeta = await attachLessonCounts(courses);
             let categories: string[] | undefined;
             if (page === 1) {
-              // Alle Kategorien unabhängig vom gesetzten Kategorie-Filter laden
               const catFilter: Record<string, unknown> = { _id: { $in: allowedCourseIds } };
               if (typeof baseFilter.isPublished !== 'undefined') catFilter.isPublished = baseFilter.isPublished;
-              // KEIN catFilter.category, damit vollständige Liste erhalten bleibt
               if (Array.isArray((baseFilter as any).$or)) (catFilter as any).$or = (baseFilter as any).$or;
               categories = await Course.distinct('category', catFilter as any);
             }
             return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount, categories });
+          } else {
+            const totalCount = await Course.countDocuments(baseFilter);
+            courses = await Course.find(baseFilter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
+            const withMeta = await attachLessonCounts(courses);
+            let categories: string[] | undefined;
+            if (page === 1) {
+              const categoryFilterAll: Record<string, unknown> = {};
+              if (typeof baseFilter.isPublished !== 'undefined') categoryFilterAll.isPublished = baseFilter.isPublished;
+              if (Array.isArray((baseFilter as any).$or)) (categoryFilterAll as any).$or = (baseFilter as any).$or;
+              categories = await Course.distinct('category', categoryFilterAll as any);
+            }
+            return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount, categories });
           }
         } else {
-          const totalCount = await Course.countDocuments(baseFilter);
-          courses = await Course.find(baseFilter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
-          const withMeta = await attachLessonCounts(courses);
-          let categories: string[] | undefined;
-          if (page === 1) {
-            // Kategorien ohne category-Constraint ermitteln
-            const categoryFilterAll: Record<string, unknown> = {};
-            if (typeof baseFilter.isPublished !== 'undefined') categoryFilterAll.isPublished = baseFilter.isPublished;
-            if (Array.isArray((baseFilter as any).$or)) (categoryFilterAll as any).$or = (baseFilter as any).$or;
-            categories = await Course.distinct('category', categoryFilterAll as any);
-          }
-          return NextResponse.json({ success: true, courses: withMeta, learnerScope, activeMode, page, pageSize: limit, totalCount, categories });
+          return NextResponse.json({ success: true, courses: [], learnerScope: 'class', activeMode: 'class', page, pageSize: limit, totalCount: 0, categories: [] });
         }
-      } else {
-        courses = [];
-        return NextResponse.json({ success: true, courses: [], learnerScope: 'class', activeMode: 'class', page, pageSize: limit, totalCount: 0, categories: [] });
+      } catch (e) {
+        console.error('[kurse] learner branch error', e);
+        return NextResponse.json({ success: true, courses: [], learnerScope: 'class', activeMode: 'class', page, pageSize: limit, totalCount: 0, categories: [], debug: process.env.NODE_ENV!=='production'? String((e as any)?.message||e): undefined });
       }
     } else {
       const totalCount = await Course.countDocuments(baseFilter);
