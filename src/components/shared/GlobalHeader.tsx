@@ -35,7 +35,7 @@ export default function GlobalHeader(){
     { href: '/teacher', label: 'Klassenverwaltung' },
 	{ href: '/teacher/kurse', label: 'Kurse erstellen/zuordnen' },
     { href: '/teacher/statistik', label: 'Statistik' },
-    // Material-Shop vorerst entfernt
+  { href: '/teacher/download', label: 'Materialien' },
   ];
   const authorExtras = [ { href: '/autor', label: 'Autor' } ];
   const adminExtras = [
