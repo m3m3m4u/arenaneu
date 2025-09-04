@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from 'react';
 
-interface ProductFile { key:string; name:string; downloadUrl?:string; contentType?:string; }
+interface ProductFile { key:string; name:string; downloadUrl?:string; contentType?:string; previewImages?:string[]; }
 interface Product { _id:string; title:string; description?:string; price?:number; files?:ProductFile[]; category?:string; }
 
 export default function TeacherDownloadShop(){
@@ -13,6 +13,7 @@ export default function TeacherDownloadShop(){
   const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index der aktiven Datei (für Karussell)
   // Thumbnails für PDF (erste Seite) – key => dataURL | 'error'
   const [thumbs,setThumbs] = useState<Record<string,string>>({});
+  const savedRef = useRef<Record<string,boolean>>({});
   // Einfache Warteschlange, um gleichzeitige PDF-Decodes zu begrenzen
   const queueRef = useRef<string[]>([]);
   const busyRef = useRef(false);
@@ -25,6 +26,11 @@ export default function TeacherDownloadShop(){
       if(thumbs[k]) continue;
       const file = findFileByKey(k);
       if(!file || !file.downloadUrl) continue;
+      // Falls bereits vom Server vorhandene Preview (previewImages[0]) -> direkt übernehmen
+      if(file.previewImages && file.previewImages[0]){
+        setThumbs(t=> ({ ...t, [k]: file.previewImages![0] }));
+        continue;
+      }
       try {
         // Dynamischer Import: legacy Build für Browser-Kompatibilität
         let pdfjs: any;
@@ -71,6 +77,11 @@ export default function TeacherDownloadShop(){
   octx.drawImage(pageCanvas, dx, dy, drawW, drawH);
   const url = out.toDataURL('image/png');
   setThumbs(t=> ({ ...t, [k]: url }));
+  // Asynchron zum Server speichern (einmalig)
+  if(!savedRef.current[k]){
+    savedRef.current[k]=true;
+    void fetch('/api/shop/product-thumbnail', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ key: file.key, productId: findProductIdByFileKey(file.key), dataUrl: url }) }).catch(()=>{});
+  }
       } catch (e){
         console.warn('PDF Thumbnail Fehler', file?.name, e);
         setThumbs(t=> ({ ...t, [k]: 'error' }));
@@ -91,6 +102,12 @@ export default function TeacherDownloadShop(){
   function findFileByKey(k:string){
     for(const p of items){
       for(const f of (p.files||[])) if(f.key===k) return f;
+    }
+    return null;
+  }
+  function findProductIdByFileKey(k:string){
+    for(const p of items){
+      if((p.files||[]).some(f=> f.key===k)) return p._id;
     }
     return null;
   }
