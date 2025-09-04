@@ -19,6 +19,8 @@ export default function FussballLobbyPage(){
   const [title,setTitle] = useState('');
   const [lessonId,setLessonId] = useState('');
   const [lobby,setLobby] = useState<any>(null);
+  const [joining,setJoining] = useState(false);
+  const [ready,setReady] = useState(false);
   const [error,setError] = useState<string|undefined>();
 
   async function createLobby(){
@@ -30,6 +32,26 @@ export default function FussballLobbyPage(){
   loadList();
     } catch(e:any){ setError(String(e)); }
     finally { setCreating(false); }
+  }
+
+  async function join(id:string){
+    if(joining) return; setJoining(true); setError(undefined);
+    try { const r=await fetch(`/api/fussball/lobbies/${id}/join`, { method:'POST' }); const j=await r.json(); if(!j.success) setError(j.error||'Join fehlgeschlagen'); else setLobby(j.lobby); }
+    catch(e:any){ setError(String(e)); }
+    finally { setJoining(false); }
+  }
+
+  async function toggleReady(){
+    if(!lobby) return; setError(undefined);
+    try { const r=await fetch(`/api/fussball/lobbies/${lobby.id}/ready`,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ready: !ready }) }); const j=await r.json(); if(!j.success) setError(j.error||'Ready fehlgeschlagen'); else { setLobby(j.lobby); setReady(!ready); } }
+    catch(e:any){ setError(String(e)); }
+  }
+
+  async function leave(){
+    if(!lobby) return;
+    try { await fetch(`/api/fussball/lobbies/${lobby.id}/leave`, { method:'POST' }); }
+    finally { setLobby(null); setReady(false); }
+    loadList();
   }
 
   if(lobby){
@@ -49,9 +71,11 @@ export default function FussballLobbyPage(){
             {lobby.status==='waiting' && <div className="text-xs text-amber-600">Warte auf zweiten Spieler…</div>}
             {lobby.status==='active' && <div className="text-xs text-green-600">Spiel startet…</div>}
           </div>
-          <div className="flex gap-3">
-            <button onClick={()=> setLobby(null)} className="px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm">Zurück</button>
-            <button disabled className="px-3 py-1.5 rounded bg-indigo-500 text-white text-sm opacity-60 cursor-not-allowed">Start (kommt später)</button>
+          <div className="flex gap-3 flex-wrap items-center">
+            <button onClick={leave} className="px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm">Verlassen</button>
+            <button onClick={toggleReady} className={`px-3 py-1.5 rounded text-sm font-semibold ${ready? 'bg-green-600 text-white hover:bg-green-700':'bg-amber-500 text-black hover:bg-amber-400'}`}>{ready? 'Bereit ✓':'Bereit?'}</button>
+            <button disabled className="px-3 py-1.5 rounded bg-indigo-500 text-white text-sm opacity-60 cursor-not-allowed">Start (später automatisch)</button>
+            {error && <span className="text-xs text-red-600">{error}</span>}
           </div>
         </div>
       </main>
@@ -86,7 +110,7 @@ export default function FussballLobbyPage(){
                 <div className="font-semibold text-sm">{l.title}</div>
                 <div className="text-[11px] text-gray-500">Spieler: {l.players.map((p)=>p.username).join(', ')||'—'}</div>
               </div>
-              <button onClick={()=> setLobby(l)} className="px-3 py-1.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold">Beitreten (Mock)</button>
+              <button disabled={!session || joining} onClick={()=> join(l.id)} className="px-3 py-1.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">{joining? '…':'Beitreten'}</button>
             </div>
           )): <div className="text-xs text-gray-500">{loadingList? 'Lade…':'Keine offenen Lobbys'}</div>}
         </div>
