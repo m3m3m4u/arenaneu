@@ -7,6 +7,7 @@ import { isWebdavEnabled, davPut, webdavPublicUrl } from '@/lib/webdavClient';
 import { isS3Enabled, s3Put, s3PublicUrl } from '@/lib/storage';
 import * as XLSX from 'xlsx';
 import { normalizeCategory } from '@/lib/categories';
+import ShopRawFile from '@/models/ShopRawFile';
 
 export const runtime='nodejs';
 export const maxDuration=120;
@@ -55,21 +56,30 @@ export async function POST(req: Request){
 
     // Wir können hier keine Dateinamen->Key Zuordnung ohne Index kennen. Vereinfachung: wir versuchen, vorhandene Produkte nicht zu duplizieren (gleicher Titel).
     // Für Datei-Verknüpfungen: Admin lädt zuerst Dateien (Medien-ähnlich) in einen Ordner /shop/uploads/raw/<filename>. Wir suchen diese Keys.
-    const useShop = isShopWebdavEnabled(); const useWebdav = useShop || isWebdavEnabled(); const useS3 = !useWebdav && isS3Enabled();
-    // Listing existierender Dateien ist ohne WebDAV PROPFIND Rekursion schwer – wir erwarten daher, dass Excel-Dateinamen exakt bereits als KEY-Endung existieren.
-    // Optional: Könnte man später mit eigenem Index-Model lösen.
-    // Hier nur Erzeugung der Produkte (Dateien erst später manuell zuordenbar), wenn fileNames vorhanden -> wir speichern Platzhalter.
-    const created:any[]=[]; const skipped:any[]=[];
+    // RawFile Matching: vorhandene RawFile Namen werden per exact name zugeordnet
+    const allNames = [...new Set(materials.flatMap(m=> m.files))];
+    const rawFiles = await ShopRawFile.find({ name: { $in: allNames } }).lean();
+    const rawMap = new Map<string, any>(); rawFiles.forEach(r=> rawMap.set(r.name, r));
+    const created:any[]=[]; const skipped:any[]=[]; const unmatched:Set<string>=new Set();
     for(const m of materials){
       const existing = await ShopProduct.findOne({ title: m.title });
       if(existing){ skipped.push({ title:m.title, reason:'existiert' }); continue; }
-  const doc = await ShopProduct.create({ title: m.title, category: m.normalizedCategory, description: m.description, price: m.price, tags:[], isPublished:false, files: [] });
-      // Placeholder file entries (ohne Upload). Später per separatem Endpoint verknüpfen.
-      m.files.forEach(fn=>{ doc.files.push({ key:`placeholder:${fn}`, name:fn, size:0, contentType: undefined, createdAt:new Date() }); });
+      const doc = await ShopProduct.create({ title: m.title, category: m.normalizedCategory, description: m.description, price: m.price, tags:[], isPublished:false, files: [] });
+      let linked = 0; let placeholders = 0;
+      for(const fn of m.files){
+        const rf = rawMap.get(fn);
+        if(rf){
+          doc.files.push({ key: rf.key, name: rf.name, size: rf.size, contentType: rf.contentType, createdAt: new Date() });
+          linked++;
+        } else {
+          doc.files.push({ key:`placeholder:${fn}`, name:fn, size:0, contentType: undefined, createdAt:new Date() });
+          placeholders++; unmatched.add(fn);
+        }
+      }
       await doc.save();
-      created.push({ id: doc._id, title: doc.title, placeholders: m.files.length });
+      created.push({ id: doc._id, title: doc.title, linked, placeholders });
     }
-    return NextResponse.json({ success:true, created, skipped, count: created.length, totalInput: materials.length });
+    return NextResponse.json({ success:true, created, skipped, count: created.length, totalInput: materials.length, unmatched: Array.from(unmatched) });
   } catch(e:any){
     console.error('bulk-from-excel error', e);
     return NextResponse.json({ success:false, error:'Serverfehler', message:e?.message });

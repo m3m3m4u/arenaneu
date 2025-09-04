@@ -8,6 +8,7 @@ import { isWebdavEnabled, webdavPublicUrl, davMove } from '@/lib/webdavClient';
 import { isShopWebdavEnabled, shopWebdavPublicUrl, shopDavMove } from '@/lib/webdavShopClient';
 import { CATEGORIES, normalizeCategory } from '@/lib/categories';
 import TempShopFile from '@/models/TempShopFile';
+import ShopRawFile from '@/models/ShopRawFile';
 
 export async function GET(req: Request){
   try {
@@ -58,13 +59,23 @@ export async function POST(req: Request){
       return NextResponse.json({ success:false, error:'Kein Zugriff' }, { status:403 });
     }
   const body = await req.json();
-  const { title, description='', category='', tags=[], isPublished=false, tempKeys=[] } = body||{};
+  const { title, description='', category='', tags=[], isPublished=false, tempKeys=[], rawFileIds=[], price } = body||{};
     if(!title){ return NextResponse.json({ success:false, error:'Titel erforderlich' }, { status:400 }); }
     const catNorm = normalizeCategory(category);
     if(category && !catNorm){
       return NextResponse.json({ success:false, error:'Ungültige Kategorie' }, { status:400 });
     }
-    const doc = await ShopProduct.create({ title: String(title).trim(), description: String(description).trim(), category: catNorm, tags: Array.isArray(tags)?tags.map((t:any)=>String(t).trim()).filter(Boolean):[], isPublished: !!isPublished });
+    const doc = await ShopProduct.create({ title: String(title).trim(), description: String(description).trim(), category: catNorm, tags: Array.isArray(tags)?tags.map((t:any)=>String(t).trim()).filter(Boolean):[], isPublished: !!isPublished, price: typeof price === 'number' ? price : (price ? Number(price) || 0 : 0) });
+    // Direkte Verknüpfung vorhandener Raw-Dateien (werden NICHT verschoben, nur referenziert)
+    if(Array.isArray(rawFileIds) && rawFileIds.length){
+      const raws = await ShopRawFile.find({ _id: { $in: rawFileIds } });
+      for(const r of raws){
+        // Deduplikation falls gleiche key bereits vorhanden
+        if(!doc.files.find(f=> f.key === r.key)){
+          doc.files.push({ key: r.key, name: r.name, size: r.size, contentType: r.contentType, createdAt: new Date() });
+        }
+      }
+    }
   if(Array.isArray(tempKeys) && tempKeys.length){
       const temps = await TempShopFile.find({ key: { $in: tempKeys } });
       const prefix = (process.env.WEBDAV_SHOP_PREFIX || 'shop').replace(/^[\\/]+|[\\/]+$/g,'');
@@ -109,7 +120,7 @@ export async function POST(req: Request){
       }));
       return NextResponse.json({ success:true, product: productOut, movedCount, warning: movedCount===0 ? 'Keine Datei übernommen' : undefined });
     }
-    return NextResponse.json({ success:true, product: doc, movedCount: 0 });
+  return NextResponse.json({ success:true, product: doc, movedCount: 0, rawLinked: Array.isArray(rawFileIds)? rawFileIds.length : 0 });
   } catch(e){
     console.error('ShopProduct POST error', e);
     return NextResponse.json({ success:false, error:'Fehler beim Erstellen' }, { status:500 });
