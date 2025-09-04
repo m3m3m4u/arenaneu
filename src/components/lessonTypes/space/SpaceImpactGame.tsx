@@ -32,8 +32,9 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
   const [isFullscreen,setIsFullscreen]=useState(false);
   const [gamePixelWidth,setGamePixelWidth]=useState<number|undefined>(undefined);
   // Touch handling refs
-  const touchStateRef=useRef<{dragging:boolean;startY:number;shipStartY:number;holdTimer?:number;shooting:boolean;touchId:number|null;moved:boolean;startTime:number}>(
-    {dragging:false,startY:0,shipStartY:0,holdTimer:undefined,shooting:false,touchId:null,moved:false,startTime:0}
+  // Touch Move State: nur Bewegung (kein Auto-Shoot mehr über Hold). Schießen erfolgt über separaten Feuer-Button.
+  const touchStateRef=useRef<{dragging:boolean;startY:number;shipStartY:number;touchId:number|null;moved:boolean;startTime:number}>(
+    {dragging:false,startY:0,shipStartY:0,touchId:null,moved:false,startTime:0}
   );
 
   const blocks=buildQuestionBlocks(lesson);
@@ -104,15 +105,13 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
     return ()=> document.removeEventListener('touchmove',prevent);
   },[isFullscreen]);
 
-  // Touch Steuerung: Drag vertikal bewegt Schiff; kurzer Tap = Einzelschuss; Halten = Dauerfeuer
+  // Touch Steuerung: Drag vertikal bewegt Schiff (kein Schießen mehr per Tap/Hold)
   useEffect(()=>{
     const canvas=canvasRef.current; if(!canvas) return;
     const onTouchStart=(ev:TouchEvent)=>{
       if(!running || paused || gameOver || finished) return; const t=ev.changedTouches[0]; if(!t) return;
       const state=touchStateRef.current; if(state.touchId!=null) return; state.touchId=t.identifier; state.dragging=true; state.moved=false; state.startTime=performance.now();
-      const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; state.startY=y; state.shipStartY=shipRef.current.y; state.shooting=false;
-      // Hold Timer für Dauerfeuer
-      state.holdTimer=window.setTimeout(()=>{ state.shooting=true; inputRef.current.shoot=true; },170); // ~0.17s Schwelle
+      const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; state.startY=y; state.shipStartY=shipRef.current.y;
     };
     const onTouchMove=(ev:TouchEvent)=>{
       const state=touchStateRef.current; if(state.touchId==null||!state.dragging) return; for(const t of Array.from(ev.changedTouches)){
@@ -120,17 +119,7 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
     };
     const finishInteraction=(ev:TouchEvent)=>{
       const state=touchStateRef.current; if(state.touchId==null) return; for(const t of Array.from(ev.changedTouches)){
-        if(t.identifier!==state.touchId) continue; const duration=performance.now()-state.startTime; const wasShooting=state.shooting; if(state.holdTimer){ clearTimeout(state.holdTimer); state.holdTimer=undefined; }
-        if(!wasShooting){
-          // Kurzer Tap -> Einzelschuss (wenn nicht deutlich bewegt)
-            if(!state.moved && duration<200){
-              if(shootCooldownRef.current<=0){ shoot(); shootCooldownRef.current=0.25; }
-            }
-        } else {
-          // Dauerfeuer stoppen
-          inputRef.current.shoot=false;
-        }
-        state.touchId=null; state.dragging=false; state.shooting=false; break; }
+        if(t.identifier!==state.touchId) continue; state.touchId=null; state.dragging=false; break; }
     };
     canvas.addEventListener('touchstart',onTouchStart,{passive:true});
     canvas.addEventListener('touchmove',onTouchMove,{passive:false});
@@ -333,10 +322,25 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
       {/* Spielfeld */}
   <div className="relative w-full flex-1 flex items-center justify-center" style={{width: gamePixelWidth? gamePixelWidth: '100%'}}>
   <canvas ref={canvasRef} width={W} height={H} className={isFullscreen? 'block mx-auto rounded border-2 border-[#2c3e50] bg-black':'block mx-auto rounded-[10px] border-2 border-[#2c3e50] shadow bg-black'} style={!isFullscreen? {width:'100%',aspectRatio:`${W}/${H}`}:{maxWidth:'100%',maxHeight:'100%',objectFit:'contain'}} />
+        {/* Touch Feuer Button */}
+        {running && !paused && !gameOver && !finished && (
+          <div className="absolute bottom-2 right-2 flex flex-col items-end gap-2 select-none">
+            <button
+              className="active:scale-95 transition rounded-full shadow-lg border-2 border-indigo-400 bg-indigo-500/90 backdrop-blur text-white font-bold tracking-wider"
+              style={{width:isFullscreen?90:70,height:isFullscreen?90:70,fontSize:isFullscreen? '1.05rem':'0.85rem',display:'flex',alignItems:'center',justifyContent:'center'}}
+              onTouchStart={(e)=>{ e.preventDefault(); inputRef.current.shoot=true; }}
+              onTouchEnd={(e)=>{ e.preventDefault(); inputRef.current.shoot=false; shootCooldownRef.current = Math.min(shootCooldownRef.current, 0.1); }}
+              onTouchCancel={(e)=>{ e.preventDefault(); inputRef.current.shoot=false; }}
+              onMouseDown={(e)=>{ if('ontouchstart' in window) return; inputRef.current.shoot=true; }}
+              onMouseUp={()=>{ inputRef.current.shoot=false; }}
+              onMouseLeave={()=>{ inputRef.current.shoot=false; }}
+            >FEUER</button>
+          </div>
+        )}
         {!running && !gameOver && !finished && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-4 p-4 text-center">
             <h2 className="text-2xl font-bold">🛸 Space Impact</h2>
-            <p className="text-xs max-w-xs">Tastatur: ↑ / ↓ bewegen, Leertaste schießt. Touch: Finger ziehen bewegt, Tippen schießt einmal, Halten = Dauerfeuer. Triff die richtige Antwort-Kugel.</p>
+            <p className="text-xs max-w-xs">Tastatur: ↑ / ↓ bewegen, Leertaste schießt. Touch: Ziehen = bewegen, Feuer-Button rechts unten zum Schießen (halten = Dauerfeuer). Triff die richtige Antwort-Kugel.</p>
             <button onClick={start} className="px-6 py-2 rounded bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold">Start (Enter)</button>
             <p className="text-[10px] opacity-70">Ziel: {targetScore} Punkte</p>
           </div>
@@ -360,7 +364,7 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
         )}
         {marking && (<div className="absolute bottom-2 left-2 text-[11px] px-2 py-1 rounded bg-white/70 text-gray-700">Speichere Abschluss…</div>)}
       </div>
-  <div ref={bottomInfoRef} className="text-[0.6rem] opacity-60 text-center text-white mt-1 pb-1">Tastatur: Pfeile/W-S bewegen, Space schießen • Touch: Ziehen = bewegen, Tippen = Schuss, Halten = Dauerfeuer • Pause: Button oder P • Ziel: richtige Farbe treffen!</div>
+  <div ref={bottomInfoRef} className="text-[0.6rem] opacity-60 text-center text-white mt-1 pb-1">Tastatur: Pfeile/W-S bewegen, Space schießen • Touch: Ziehen = bewegen, Feuer-Button = Schießen (halten = Dauerfeuer) • Pause: Button oder P • Ziel: richtige Farbe treffen!</div>
     </div>
   );
 }
