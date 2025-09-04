@@ -31,6 +31,10 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
   const [marking,setMarking]=useState(false);
   const [isFullscreen,setIsFullscreen]=useState(false);
   const [gamePixelWidth,setGamePixelWidth]=useState<number|undefined>(undefined);
+  // Touch handling refs
+  const touchStateRef=useRef<{dragging:boolean;startY:number;shipStartY:number;holdTimer?:number;shooting:boolean;touchId:number|null;moved:boolean;startTime:number}>(
+    {dragging:false,startY:0,shipStartY:0,holdTimer:undefined,shooting:false,touchId:null,moved:false,startTime:0}
+  );
 
   const blocks=buildQuestionBlocks(lesson);
   const targetScore=Number((lesson.content as LessonContent | undefined)?.targetScore)||DEFAULT_TARGET_SCORE;
@@ -86,6 +90,59 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
   useEffect(()=>{ const h=()=>setIsFullscreen(!!document.fullscreenElement); document.addEventListener('fullscreenchange',h); return ()=> document.removeEventListener('fullscreenchange',h); },[]);
 
   useEffect(()=>{ const kd=(e:KeyboardEvent)=>{ if(e.code==='ArrowUp'||e.code==='KeyW'){inputRef.current.up=true; e.preventDefault();} if(e.code==='ArrowDown'||e.code==='KeyS'){inputRef.current.down=true; e.preventDefault();} if(e.code==='Space'){inputRef.current.shoot=true; e.preventDefault();} if(e.code==='KeyP'){ setPaused(p=>!p);} if(!running && e.code==='Enter'){ start(); } if(gameOver && e.code==='Enter'){ restart(); } }; const ku=(e:KeyboardEvent)=>{ if(e.code==='ArrowUp'||e.code==='KeyW') inputRef.current.up=false; if(e.code==='ArrowDown'||e.code==='KeyS') inputRef.current.down=false; if(e.code==='Space') inputRef.current.shoot=false; }; window.addEventListener('keydown',kd); window.addEventListener('keyup',ku); return ()=>{ window.removeEventListener('keydown',kd); window.removeEventListener('keyup',ku); }; },[running,gameOver]);
+
+  // Fullscreen Wisch-Schutz (iOS: verhindert ungewolltes Beenden beim vertikal wischen)
+  useEffect(()=>{
+    if(!isFullscreen) return; // nur im Vollbild aktiv
+    const prevent=(e:TouchEvent)=>{
+      if(document.fullscreenElement){
+        // Verhindert Scroll/Bounce die Fullscreen beendet
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('touchmove',prevent,{passive:false});
+    return ()=> document.removeEventListener('touchmove',prevent);
+  },[isFullscreen]);
+
+  // Touch Steuerung: Drag vertikal bewegt Schiff; kurzer Tap = Einzelschuss; Halten = Dauerfeuer
+  useEffect(()=>{
+    const canvas=canvasRef.current; if(!canvas) return;
+    const onTouchStart=(ev:TouchEvent)=>{
+      if(!running || paused || gameOver || finished) return; const t=ev.changedTouches[0]; if(!t) return;
+      const state=touchStateRef.current; if(state.touchId!=null) return; state.touchId=t.identifier; state.dragging=true; state.moved=false; state.startTime=performance.now();
+      const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; state.startY=y; state.shipStartY=shipRef.current.y; state.shooting=false;
+      // Hold Timer für Dauerfeuer
+      state.holdTimer=window.setTimeout(()=>{ state.shooting=true; inputRef.current.shoot=true; },170); // ~0.17s Schwelle
+    };
+    const onTouchMove=(ev:TouchEvent)=>{
+      const state=touchStateRef.current; if(state.touchId==null||!state.dragging) return; for(const t of Array.from(ev.changedTouches)){
+        if(t.identifier!==state.touchId) continue; const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; const dy=y-state.startY; if(Math.abs(dy)>4) state.moved=true; shipRef.current.y=Math.max(shipRef.current.r,Math.min(H-shipRef.current.r,state.shipStartY+dy)); ev.preventDefault(); break; }
+    };
+    const finishInteraction=(ev:TouchEvent)=>{
+      const state=touchStateRef.current; if(state.touchId==null) return; for(const t of Array.from(ev.changedTouches)){
+        if(t.identifier!==state.touchId) continue; const duration=performance.now()-state.startTime; const wasShooting=state.shooting; if(state.holdTimer){ clearTimeout(state.holdTimer); state.holdTimer=undefined; }
+        if(!wasShooting){
+          // Kurzer Tap -> Einzelschuss (wenn nicht deutlich bewegt)
+            if(!state.moved && duration<200){
+              if(shootCooldownRef.current<=0){ shoot(); shootCooldownRef.current=0.25; }
+            }
+        } else {
+          // Dauerfeuer stoppen
+          inputRef.current.shoot=false;
+        }
+        state.touchId=null; state.dragging=false; state.shooting=false; break; }
+    };
+    canvas.addEventListener('touchstart',onTouchStart,{passive:true});
+    canvas.addEventListener('touchmove',onTouchMove,{passive:false});
+    canvas.addEventListener('touchend',finishInteraction,{passive:false});
+    canvas.addEventListener('touchcancel',finishInteraction,{passive:false});
+    return ()=>{
+      canvas.removeEventListener('touchstart',onTouchStart);
+      canvas.removeEventListener('touchmove',onTouchMove as any);
+      canvas.removeEventListener('touchend',finishInteraction as any);
+      canvas.removeEventListener('touchcancel',finishInteraction as any);
+    };
+  },[running,paused,gameOver,finished]);
 
   useEffect(()=>{ const canvas=canvasRef.current; if(!canvas) return; const ctx=canvas.getContext('2d'); if(!ctx) return; const sys=window.devicePixelRatio||1; const dpr=Math.max(sys,FORCE_MIN_DPR); canvas.width=W*dpr; canvas.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.imageSmoothingEnabled=true; (ctx as unknown as { imageSmoothingQuality?: string }).imageSmoothingQuality='high'; },[]);
 
@@ -279,7 +336,7 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
         {!running && !gameOver && !finished && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-4 p-4 text-center">
             <h2 className="text-2xl font-bold">🛸 Space Impact</h2>
-            <p className="text-xs max-w-xs">Steuere mit ↑ / ↓. Leertaste schießt. Triff die richtige Antwort-Kugel.</p>
+            <p className="text-xs max-w-xs">Tastatur: ↑ / ↓ bewegen, Leertaste schießt. Touch: Finger ziehen bewegt, Tippen schießt einmal, Halten = Dauerfeuer. Triff die richtige Antwort-Kugel.</p>
             <button onClick={start} className="px-6 py-2 rounded bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold">Start (Enter)</button>
             <p className="text-[10px] opacity-70">Ziel: {targetScore} Punkte</p>
           </div>
@@ -303,7 +360,7 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
         )}
         {marking && (<div className="absolute bottom-2 left-2 text-[11px] px-2 py-1 rounded bg-white/70 text-gray-700">Speichere Abschluss…</div>)}
       </div>
-  <div ref={bottomInfoRef} className="text-[0.6rem] opacity-60 text-center text-white mt-1 pb-1">Pfeile / W-S bewegen • Space schießen • Pause: Button oder P • Ziel: richtige Farbe treffen!</div>
+  <div ref={bottomInfoRef} className="text-[0.6rem] opacity-60 text-center text-white mt-1 pb-1">Tastatur: Pfeile/W-S bewegen, Space schießen • Touch: Ziehen = bewegen, Tippen = Schuss, Halten = Dauerfeuer • Pause: Button oder P • Ziel: richtige Farbe treffen!</div>
     </div>
   );
 }

@@ -43,9 +43,23 @@ export async function shopDavPut(key: string, body: Uint8Array | ArrayBuffer | B
   // Elternordner sicherstellen (einfache rekursive Anlage)
   await ensureParentDir(key, c.url, c.auth);
   const target = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
-  const res = await fetch(target, { method:'PUT', headers: { Authorization: c.auth, ...(contentType? { 'Content-Type': contentType }: {}) }, body: blobBody });
+  let res: Response | null = null;
+  try {
+    res = await fetch(target, { method:'PUT', headers: { Authorization: c.auth, ...(contentType? { 'Content-Type': contentType }: {}) }, body: blobBody });
+  } catch(e:any){
+    console.warn('[shopDavPut] Netzwerk/Fetch Fehler', { target, err: e?.message });
+    throw new Error('SHOP WebDAV PUT failed: fetch-error');
+  }
   if(!res.ok){
-    throw new Error('SHOP WebDAV PUT failed: '+res.status);
+    let snippet = '';
+    try { snippet = (await res.text()).slice(0,300); } catch {}
+    console.warn('[shopDavPut] PUT nicht ok', { status: res.status, target, snippet });
+    // Fallback: falls 401 aber generischer WebDAV konfiguriert -> einmal versuchen
+    if(res.status === 401 && baseEnabled()){
+      console.warn('[shopDavPut] 401 – versuche generischen WebDAV Fallback');
+      return basePut(key, body as any, contentType);
+    }
+    throw new Error('SHOP WebDAV PUT failed: '+res.status + (snippet? ' body:"'+snippet.replace(/"/g,'\"')+'"':'') );
   }
   return { url: shopWebdavPublicUrl(key), key };
 }
@@ -99,9 +113,13 @@ async function ensureParentDir(key: string, baseUrl: string, auth: string){
   for(const part of parts){
     acc += (acc?'/':'') + part;
     const uri = `${baseUrl}/${encodeURIComponent(acc).replace(/%2F/g,'/')}`;
-    const pf = await fetch(uri, { method:'PROPFIND', headers: { Authorization: auth, Depth: '0' } });
-    if(!pf.ok){
-      await fetch(uri, { method:'MKCOL', headers: { Authorization: auth } }).catch(()=>undefined);
+    let pf: Response | null = null;
+    try { pf = await fetch(uri, { method:'PROPFIND', headers: { Authorization: auth, Depth: '0' } }); } catch(e:any){ console.warn('[shopDav ensureParentDir] PROPFIND Fehler', { uri, err:e?.message }); }
+    if(!pf || !pf.ok){
+      const mk = await fetch(uri, { method:'MKCOL', headers: { Authorization: auth } }).catch(e=>{ console.warn('[shopDav ensureParentDir] MKCOL Fehler', { uri, err:e?.message }); return null; });
+      if(mk && !mk.ok && mk.status !== 405){ // 405 = already exists
+        console.warn('[shopDav ensureParentDir] MKCOL nicht ok', { uri, status: mk.status });
+      }
     }
   }
 }

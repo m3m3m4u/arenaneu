@@ -98,6 +98,8 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Layout mode for touch controls in fullscreen: 'sides' (left/right) or 'bottom'
   const [layoutMode, setLayoutMode] = useState<'sides'|'bottom'>('sides');
+  // Dynamische Breite des Spielfelds (Skalierung wenn wenig vertikaler Platz – z.B. iPad Tastatur)
+  const [boardWidthPx, setBoardWidthPx] = useState<number>(COLS * CELL);
 
   // Fullscreen API Handler
   const enterFullscreen = useCallback(()=>{
@@ -135,6 +137,44 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
     window.addEventListener('resize', recompute);
     return ()=> window.removeEventListener('resize', recompute);
   },[isFullscreen, localControlA, localControlB]);
+
+  // iPad / iOS Erkennung (vereinfachte Heuristik)
+  const isiOS = useMemo(()=> typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent), []);
+
+  // Dynamische Skalierung bei Fullscreen damit Canvas oberhalb virtueller Tastatur bleibt.
+  useEffect(()=>{
+    if(!isFullscreen){ setBoardWidthPx(COLS*CELL); return; }
+    let raf:number|undefined;
+    const baseW = COLS * CELL;
+    const baseH = ROWS * CELL;
+    const recompute = () => {
+      const vvH = (window.visualViewport?.height || window.innerHeight);
+      const vvW = (window.visualViewport?.width || window.innerWidth);
+      // Reserve Platz für Bottom-Controls wenn im bottom Layout (Schätzung)
+      const controlsReserve = layoutMode === 'bottom' ? 230 : 40; // px
+      // Wenn iOS & virtuelle Tastatur sichtbar: visualViewport.height deutlich kleiner als innerHeight
+      const keyboardLikely = isiOS && (window.innerHeight - vvH) > 140; // Heuristik
+      const availableH = vvH - controlsReserve - 8; // etwas Puffer
+      let scale = Math.min(1, availableH / baseH);
+      if(keyboardLikely){
+        // etwas stärker schrumpfen, damit nichts verdeckt wird
+        scale *= 0.95;
+      }
+      // Falls sehr breites Querformat, Skala zusätzlich auf Breite begrenzen
+      const byWidth = (vvW - (layoutMode==='sides'? (localControlA?140:0)+(localControlB?140:0):0) - 32) / baseW;
+      scale = Math.min(scale, byWidth);
+      // Untergrenze, damit Buttons noch bedienbar: 0.6
+      scale = Math.max(0.6, Math.min(1, scale));
+      const targetW = Math.round(baseW * scale);
+      if(targetW !== boardWidthPx) setBoardWidthPx(targetW);
+      raf = undefined;
+    };
+    const schedule = () => { if(raf==null) raf = requestAnimationFrame(recompute); };
+    schedule();
+    window.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('resize', schedule);
+    return ()=>{ window.removeEventListener('resize', schedule); window.visualViewport?.removeEventListener('resize', schedule); if(raf) cancelAnimationFrame(raf); };
+  },[isFullscreen, layoutMode, isiOS, localControlA, localControlB, boardWidthPx]);
   // ESC Hinweis optional – bereits durch fullscreenchange erfasst
 
   const questionIdRef = useRef(0);
@@ -493,7 +533,13 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
                 <div className="hidden md:block">Pfeile / WASD · Space = Start/Pause</div>
               </div>
             )}
-            <canvas ref={canvasRef} width={COLS*CELL} height={ROWS*CELL} className="border rounded bg-white block mx-auto" style={{ aspectRatio:'1/1', width:'100%', maxWidth: COLS*CELL }} />
+            <canvas
+              ref={canvasRef}
+              width={COLS*CELL}
+              height={ROWS*CELL}
+              className="border rounded bg-white block mx-auto transition-[width] duration-150"
+              style={{ aspectRatio:'1/1', width:'100%', maxWidth: boardWidthPx }}
+            />
             {/* Vollbild-Button jetzt im Start-Overlay integriert */}
             {isFullscreen && !finished && (
               <button onClick={exitFullscreen} className="absolute top-2 right-2 px-2 py-1 text-[11px] rounded bg-white/90 backdrop-blur border shadow hover:bg-white">Beenden</button>

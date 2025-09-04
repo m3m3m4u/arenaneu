@@ -67,14 +67,28 @@ export async function POST(req: Request){
 				attempts.push({ name: originalName, status:'ok', key });
 				console.log('[temp-files] attempt success', { originalName, key });
 			} catch(e:any){
-				console.warn('Temp upload failed', e);
+				console.warn('Temp upload failed', e?.message, { originalName, key });
+				// Expliziter Fallback: Wenn Shop 401 liefert und generischer WebDAV aktiv ist und es noch nicht versucht wurde
+				if(useShop && isWebdavEnabled() && /401/.test(e?.message||'')){
+					try {
+						console.warn('[temp-files] 401 Shop – versuche generischen WebDAV Fallback für', originalName);
+						await davPut(key, buf, f.type||undefined);
+						const doc = await TempShopFile.create({ key, name: originalName, size: buf.length, contentType: f.type||undefined, createdBy: user });
+						created.push({ key, name: originalName, size: buf.length, contentType: f.type||undefined, id: doc._id });
+						attempts.push({ name: originalName, status:'ok-fallback', key, fallback:'generic-webdav' });
+						console.log('[temp-files] fallback success (generic webdav)', { originalName, key });
+						continue; // nächste Datei
+					} catch(fbErr:any){
+						console.warn('[temp-files] Fallback generic WebDAV fehlgeschlagen', fbErr?.message);
+					}
+				}
 				errors.push({ name: originalName, message: e?.message || 'Upload fehlgeschlagen' });
 				attempts.push({ name: originalName, status:'error', message: e?.message });
 			}
 		}
 		if(!created.length){
-			console.warn('[temp-files] Keine Datei erfolgreich gespeichert. Errors:', errors);
-			return NextResponse.json({ success:false, error:'Kein Datei-Upload gelungen', errors, received: files.length, storage:{ shopWebdav:useShop, webdav: isWebdavEnabled(), s3: useS3 }, user }, { status:500 });
+			console.warn('[temp-files] Keine Datei erfolgreich gespeichert. Errors:', errors, { attempts });
+			return NextResponse.json({ success:false, error:'Kein Datei-Upload gelungen', errors, attempts, received: files.length, storage:{ shopWebdav:useShop, webdav: isWebdavEnabled(), s3: useS3 }, user }, { status:500 });
 		}
 		console.log('[temp-files] Upload erfolgreich', { count: created.length, user });
 		return NextResponse.json({ success:true, files: created, temp: created[0]||null, errors: errors.length? errors: undefined, received: files.length, attempts, storage:{ shopWebdav:useShop, webdav: isWebdavEnabled(), s3: useS3 }, user });

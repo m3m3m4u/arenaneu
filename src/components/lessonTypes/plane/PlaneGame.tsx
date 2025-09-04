@@ -48,6 +48,15 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
   const [marking, setMarking] = useState(false);
   const [finished, setFinished] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Vollbild Swipe-Schutz (iOS Safari) – blockiert 1-Finger Scroll/PullDown Gesten
+  useEffect(()=>{
+    if(!isFullscreen) return;
+    const prevent=(e:TouchEvent)=>{ if(e.touches.length===1){ try{ e.preventDefault(); }catch{} } };
+    document.addEventListener('touchmove', prevent, { passive:false, capture:true });
+    const prev = document.documentElement.style.overscrollBehavior;
+    document.documentElement.style.overscrollBehavior='none';
+    return ()=>{ document.removeEventListener('touchmove', prevent, { capture:true } as any); document.documentElement.style.overscrollBehavior=prev; };
+  },[isFullscreen]);
 
   // Zahl -> deutsches Wort (Basis für kleine Zahlen)
   const numWord = (n:number):string => {
@@ -459,13 +468,14 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
       ref={wrapperRef}
       className={isFullscreen ? 'w-screen h-screen bg-black relative overflow-hidden' : 'w-full py-4'}
       onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current={ x:t.clientX, y:t.clientY, time: performance.now() }; }}
+      onTouchMove={(e)=>{ if(!touchStartRef.current) return; if(!isFullscreen) return; const t=e.touches[0]; const dy=t.clientY - touchStartRef.current.y; if(dy>25){ try{ e.preventDefault(); }catch{} } }}
       onTouchEnd={(e)=>{ const s=touchStartRef.current; if(!s) return; const t=(e.changedTouches&&e.changedTouches[0])? e.changedTouches[0] : (e.touches[0]||null); if(!t){ touchStartRef.current=null; return; } const dx=t.clientX-s.x; const dy=t.clientY-s.y; const adx=Math.abs(dx), ady=Math.abs(dy); if(ady>36 && ady>adx){ if(dy<0){ // nach oben wischen
             keysRef.current.ArrowUp = true; keysRef.current.ArrowDown = false; setTimeout(()=>{ keysRef.current.ArrowUp=false; }, 140);
-          } else { // nach unten wischen
+          } else { // nach unten wischen (kein Fullscreen Exit, nur Move)
             keysRef.current.ArrowDown = true; keysRef.current.ArrowUp = false; setTimeout(()=>{ keysRef.current.ArrowDown=false; }, 140);
           } }
           touchStartRef.current=null; }}
-      style={{touchAction:'none'}}
+      style={{touchAction: isFullscreen ? 'none' : 'manipulation'}}
     >
       <div className={isFullscreen ? 'relative w-full h-full' : 'mx-auto w-full'} style={ isFullscreen ? {width:'100%', height:'100%'} : {width:'100%'} }>
         {isFullscreen && (
