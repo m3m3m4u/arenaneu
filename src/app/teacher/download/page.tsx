@@ -25,9 +25,12 @@ export default function TeacherDownloadShop(){
       if(!file || !file.downloadUrl) continue;
       try {
         // Dynamischer Import (kein SSR Bundle Blow-Up)
-  const pdfjs: any = await import('pdfjs-dist');
-        try { (pdfjs as any).GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js'; } catch {}
-  const task = pdfjs.getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false });
+        const pdfjs: any = await import('pdfjs-dist');
+        try {
+          const ver = (pdfjs as any).version || '5.4.149';
+          (pdfjs as any).GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${ver}/build/pdf.worker.min.js`;
+        } catch(e){ console.warn('pdfjs worker set fehlgeschlagen', e); }
+        const task = pdfjs.getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false });
   const pdf = await task.promise;
   const page = await pdf.getPage(1);
   // Erst mit moderatem Scale rendern (Qualität ausreichend für 320x240 Ziel)
@@ -51,6 +54,7 @@ export default function TeacherDownloadShop(){
   const url = out.toDataURL('image/png');
   setThumbs(t=> ({ ...t, [k]: url }));
       } catch (e){
+        console.warn('PDF Thumbnail Fehler', file?.name, e);
         setThumbs(t=> ({ ...t, [k]: 'error' }));
       }
     }
