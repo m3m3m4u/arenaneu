@@ -12,6 +12,18 @@ import ShopRawFile from '@/models/ShopRawFile';
 export const runtime='nodejs';
 export const maxDuration=120;
 
+// Dateiname normalisieren für Matching (case-insensitive, Leerzeichen/ Sonderzeichen vereinheitlichen)
+function normalizeFileNameForMatch(name:string){
+  return name
+    .toLowerCase()
+    .normalize('NFKD') // Umlaute trennen
+    .replace(/[\u0300-\u036f]/g,'') // kombinierende Zeichen entfernen
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
+    .replace(/[^a-z0-9_.-]+/g,'-') // alles Nicht-Erlaubte zu '-'
+    .replace(/-+/g,'-')
+    .replace(/^[-_.]+|[-_.]+$/g,'');
+}
+
 // Erwartet multipart/form-data mit field "file" (Excel: .xlsx / .xls / .csv)
 // Struktur: Jede Spalte = ein Material
 // Row1: Titel, Row2: Kategorie, Row3: Beschreibung, Row4: Preis (Zahl / optional), Rows5+: Dateinamen
@@ -41,10 +53,15 @@ export async function POST(req: Request){
       const cached = previewCache.get(token);
       if(!cached) return NextResponse.json({ success:false, error:'Preview abgelaufen oder Token ungültig' }, { status:400 });
       const { materials } = cached;
-      // Commit Logik (kopiert aus unten stehender ursprünglicher Commit-Phase)
+      // Commit Logik mit erweitertem Dateinamen-Matching
       const allNames = [...new Set(materials.flatMap(m=> m.files))];
       const rawFiles = await ShopRawFile.find({ name: { $in: allNames } }).lean();
-      const rawMap = new Map<string, any>(); rawFiles.forEach(r=> rawMap.set(r.name, r));
+      const rawMapExact = new Map<string, any>();
+      const rawMapNorm = new Map<string, any>();
+      rawFiles.forEach(r=>{
+        rawMapExact.set(r.name, r);
+        rawMapNorm.set(normalizeFileNameForMatch(r.name), r);
+      });
       const created:any[]=[]; const skipped:any[]=[]; const unmatched:Set<string>=new Set();
       for(const m of materials){
         const existing = await ShopProduct.findOne({ title: m.title });
@@ -52,7 +69,10 @@ export async function POST(req: Request){
         const doc = await ShopProduct.create({ title: m.title, category: m.normalizedCategory, description: m.description, price: m.price, tags:[], isPublished:false, files: [] });
         let linked = 0; let placeholders = 0;
         for(const fn of m.files){
-          const rf = rawMap.get(fn);
+          let rf = rawMapExact.get(fn);
+          if(!rf){
+            rf = rawMapNorm.get(normalizeFileNameForMatch(fn));
+          }
           if(rf){
             doc.files.push({ key: rf.key, name: rf.name, size: rf.size, contentType: rf.contentType, createdAt: new Date() }); linked++;
           } else {
@@ -141,10 +161,15 @@ export async function POST(req: Request){
 
     // Wir können hier keine Dateinamen->Key Zuordnung ohne Index kennen. Vereinfachung: wir versuchen, vorhandene Produkte nicht zu duplizieren (gleicher Titel).
     // Für Datei-Verknüpfungen: Admin lädt zuerst Dateien (Medien-ähnlich) in einen Ordner /shop/uploads/raw/<filename>. Wir suchen diese Keys.
-    // RawFile Matching: vorhandene RawFile Namen werden per exact name zugeordnet
+    // RawFile Matching: erweitert (exact + normalisiert)
     const allNames = [...new Set(materials.flatMap(m=> m.files))];
     const rawFiles = await ShopRawFile.find({ name: { $in: allNames } }).lean();
-    const rawMap = new Map<string, any>(); rawFiles.forEach(r=> rawMap.set(r.name, r));
+    const rawMapExact = new Map<string, any>();
+    const rawMapNorm = new Map<string, any>();
+    rawFiles.forEach(r=>{
+      rawMapExact.set(r.name, r);
+      rawMapNorm.set(normalizeFileNameForMatch(r.name), r);
+    });
     const created:any[]=[]; const skipped:any[]=[]; const unmatched:Set<string>=new Set();
     for(const m of materials){
       const existing = await ShopProduct.findOne({ title: m.title });
@@ -152,7 +177,10 @@ export async function POST(req: Request){
       const doc = await ShopProduct.create({ title: m.title, category: m.normalizedCategory, description: m.description, price: m.price, tags:[], isPublished:false, files: [] });
       let linked = 0; let placeholders = 0;
       for(const fn of m.files){
-        const rf = rawMap.get(fn);
+        let rf = rawMapExact.get(fn);
+        if(!rf){
+          rf = rawMapNorm.get(normalizeFileNameForMatch(fn));
+        }
         if(rf){
           doc.files.push({ key: rf.key, name: rf.name, size: rf.size, contentType: rf.contentType, createdAt: new Date() });
           linked++;
