@@ -1,0 +1,93 @@
+"use client";
+import { useEffect, useState } from 'react';
+
+interface ProductFile { key:string; name:string; downloadUrl?:string; contentType?:string; }
+interface Product { _id:string; title:string; description?:string; price?:number; files?:ProductFile[]; category?:string; }
+
+export default function TeacherDownloadShop(){
+  const [items,setItems] = useState<Product[]>([]);
+  const [loading,setLoading] = useState(true);
+  const [error,setError] = useState<string|null>(null);
+  const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index der aktiven Datei (für Karussell)
+
+  async function load(){
+    setLoading(true); setError(null);
+    try {
+      const r = await fetch('/api/shop/products?all=1');
+      const d = await r.json();
+      if(r.ok && d.success){ setItems(d.items||[]); } else setError(d.error||'Fehler');
+    } catch { setError('Netzwerkfehler'); }
+    setLoading(false);
+  }
+  useEffect(()=>{ void load(); },[]);
+
+  function carouselFiles(p:Product){
+    // Wir verwenden PDF zuerst (wenn vorhanden), sonst erste echte Datei ohne placeholder
+    const real = (p.files||[]).filter(f=> !f.key?.startsWith('placeholder:'));
+    if(!real.length) return [] as ProductFile[];
+    // PDFs nach vorne
+    return [...real.filter(f=> /pdf$/i.test(f.name)), ...real.filter(f=> !/pdf$/i.test(f.name))];
+  }
+
+  function setActive(pId:string, dir:number){
+    setActiveIdx(prev=>{ const cur = prev[pId]||0; const files = carouselFiles(items.find(i=> i._id===pId)!); if(!files.length) return prev; const next = ( (cur+dir)%files.length + files.length ) % files.length; return { ...prev, [pId]: next }; });
+  }
+
+  function downloadFile(f:ProductFile){ if(!f.downloadUrl) return; try{ const a=document.createElement('a'); a.href=f.downloadUrl; a.download=f.name||'download'; a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch { window.open(f.downloadUrl,'_blank'); } }
+
+  return (
+    <main className="max-w-6xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-6">Material-Downloads</h1>
+      {loading && <div className="text-sm text-gray-500">Lade…</div>}
+      {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
+      {!loading && !error && items.length===0 && <div className="text-sm text-gray-500">Keine Produkte vorhanden.</div>}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        {items.map(p=>{
+          const files = carouselFiles(p);
+          const idx = activeIdx[p._id]||0;
+          const current = files[idx];
+          const hasPdf = current && /pdf$/i.test(current.name);
+          return (
+            <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
+              <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2">
+                {/* Bildbereich / PDF-Thumbnails */}
+                {hasPdf && current?.downloadUrl ? (
+                  <div className="w-full h-full overflow-auto p-2">
+                    {/* leichtes Grid für mehrere Seiten-Thumbnails */}
+                    {/* @ts-ignore */}
+                    {require('react').createElement(require('@/components/media/PdfThumbs').default, { url: current.downloadUrl })}
+                  </div>
+                ) : current ? (
+                  <div className="text-[11px] text-gray-500 text-center px-2">
+                    <div className="mb-1 font-medium truncate" title={current.name}>{current.name}</div>
+                    <button onClick={()=> downloadFile(current)} className="inline-block px-2 py-1 text-[10px] border rounded bg-white hover:bg-gray-100">Datei herunterladen</button>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-gray-400">Keine Dateien</div>
+                )}
+                {files.length>1 && (
+                  <>
+                    <button onClick={()=>setActive(p._id,-1)} className="absolute left-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">‹</button>
+                    <button onClick={()=>setActive(p._id,1)} className="absolute right-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">›</button>
+                    <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
+                      {files.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex-1 flex flex-col p-4 gap-2">
+                <h3 className="font-semibold text-base leading-tight line-clamp-2" title={p.title}>{p.title}</h3>
+                {p.description && <p className="text-xs text-gray-600 whitespace-pre-line line-clamp-4">{p.description}</p>}
+                <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-500">
+                  {typeof p.price==='number' && <span className="font-medium text-gray-700">{p.price.toFixed(2)} €</span>}
+                  <span>{files.length} Datei{files.length!==1?'en':''}</span>
+                </div>
+                {current && <button onClick={()=> downloadFile(current)} className="mt-2 w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">Download</button>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </main>
+  );
+}
