@@ -1,5 +1,6 @@
 "use client";
 import React, { useRef, useState, useEffect } from 'react';
+import useFullscreenTouchLock from '@/lib/useFullscreenTouchLock';
 import type { Lesson, LessonContent } from '../types';
 import { useSession } from 'next-auth/react';
 import { finalizeLesson } from '../../../lib/lessonCompletion';
@@ -92,18 +93,8 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
 
   useEffect(()=>{ const kd=(e:KeyboardEvent)=>{ if(e.code==='ArrowUp'||e.code==='KeyW'){inputRef.current.up=true; e.preventDefault();} if(e.code==='ArrowDown'||e.code==='KeyS'){inputRef.current.down=true; e.preventDefault();} if(e.code==='Space'){inputRef.current.shoot=true; e.preventDefault();} if(e.code==='KeyP'){ setPaused(p=>!p);} if(!running && e.code==='Enter'){ start(); } if(gameOver && e.code==='Enter'){ restart(); } }; const ku=(e:KeyboardEvent)=>{ if(e.code==='ArrowUp'||e.code==='KeyW') inputRef.current.up=false; if(e.code==='ArrowDown'||e.code==='KeyS') inputRef.current.down=false; if(e.code==='Space') inputRef.current.shoot=false; }; window.addEventListener('keydown',kd); window.addEventListener('keyup',ku); return ()=>{ window.removeEventListener('keydown',kd); window.removeEventListener('keyup',ku); }; },[running,gameOver]);
 
-  // Fullscreen Wisch-Schutz (iOS: verhindert ungewolltes Beenden beim vertikal wischen)
-  useEffect(()=>{
-    if(!isFullscreen) return; // nur im Vollbild aktiv
-    const prevent=(e:TouchEvent)=>{
-      if(document.fullscreenElement){
-        // Verhindert Scroll/Bounce die Fullscreen beendet
-        e.preventDefault();
-      }
-    };
-    document.addEventListener('touchmove',prevent,{passive:false});
-    return ()=> document.removeEventListener('touchmove',prevent);
-  },[isFullscreen]);
+  // Vereinheitlichter starker Fullscreen Swipe Schutz (inkl. Edge Gesten)
+  useFullscreenTouchLock(isFullscreen);
 
   // Touch Steuerung: Drag vertikal bewegt Schiff (kein Schießen mehr per Tap/Hold)
   useEffect(()=>{

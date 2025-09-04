@@ -1,5 +1,6 @@
 "use client";
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import useFullscreenTouchLock from '@/lib/useFullscreenTouchLock';
 import type { Lesson } from '../types';
 import { useSession } from 'next-auth/react';
 import { finalizeLesson } from '../../../lib/lessonCompletion';
@@ -36,14 +37,8 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   const [score,setScore]=useState(0); const [lives,setLives]=useState(MAX_LIVES);
   const [paused,setPaused]=useState(false); const [gameOver,setGameOver]=useState(false); const [finished,setFinished]=useState(false);
   const [isFullscreen,setIsFullscreen]=useState(false); const [gamePixelWidth,setGamePixelWidth]=useState<number>();
-  // Vollbild Gesten-Schutz (iOS). Pacman nutzt evtl. später noch echten Vollbildmodus; hier schon vorbereiten.
-  useEffect(()=>{
-    if(!isFullscreen) return; // wenn später Fullscreen implementiert wird
-    const prevent=(e:TouchEvent)=>{ if(e.touches.length===1){ try{ e.preventDefault(); }catch{} } };
-    document.addEventListener('touchmove', prevent, { passive:false, capture:true });
-    const prev=document.documentElement.style.overscrollBehavior; document.documentElement.style.overscrollBehavior='none';
-    return ()=>{ document.removeEventListener('touchmove', prevent, { capture:true } as any); document.documentElement.style.overscrollBehavior=prev; };
-  },[isFullscreen]);
+  // Vereinheitlichter starker Fullscreen Swipe Schutz
+  useFullscreenTouchLock(isFullscreen);
 
   const targetScore=Number((lesson as any)?.content?.targetScore)||DEFAULT_TARGET_SCORE;
   const blocks=buildQuestionBlocks(lesson); // gleiche Frage-Extraktion wie andere Spiele
