@@ -6,7 +6,7 @@ import TempShopFile from '@/models/TempShopFile';
 import { randomBytes } from 'crypto';
 import { isShopWebdavEnabled, shopDavPut } from '@/lib/webdavShopClient';
 import { isWebdavEnabled, davPut } from '@/lib/webdavClient';
-import { isS3Enabled, s3Put, s3PublicUrl } from '@/lib/storage';
+import { isS3Enabled, s3Put } from '@/lib/storage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,6 +29,7 @@ export async function POST(req: Request){
 		const user = session.user?.username || session.user?.email || 'user';
 		const useShop = isShopWebdavEnabled();
 		const useDav = useShop || isWebdavEnabled();
+		const useS3 = !useDav && isS3Enabled();
 		console.log('[temp-files] erhaltene FormData file-Einträge:', files.map(f=> ({ type: typeof f, name: (f as any)?.name, hasArrayBuffer: !!(f as any)?.arrayBuffer })));
 		for(const raw of files){
 			const f: any = raw; // Kann File, Blob oder unbekannt sein
@@ -66,10 +67,10 @@ export async function POST(req: Request){
 		}
 		if(!created.length){
 			console.warn('[temp-files] Keine Datei erfolgreich gespeichert. Errors:', errors);
-			return NextResponse.json({ success:false, error:'Kein Datei-Upload gelungen', errors, received: files.length }, { status:500 });
+			return NextResponse.json({ success:false, error:'Kein Datei-Upload gelungen', errors, received: files.length, storage:{ shopWebdav:useShop, webdav: isWebdavEnabled(), s3: useS3 }, user }, { status:500 });
 		}
-		console.log('[temp-files] Upload erfolgreich', { count: created.length });
-		return NextResponse.json({ success:true, files: created, temp: created[0]||null, errors: errors.length? errors: undefined, received: files.length });
+		console.log('[temp-files] Upload erfolgreich', { count: created.length, user });
+		return NextResponse.json({ success:true, files: created, temp: created[0]||null, errors: errors.length? errors: undefined, received: files.length, storage:{ shopWebdav:useShop, webdav: isWebdavEnabled(), s3: useS3 }, user });
 	} catch(e){
 		console.error('temp-files POST error', e);
 		return NextResponse.json({ success:false, error:'Upload Fehler' }, { status:500 });
@@ -85,8 +86,17 @@ export async function GET(req: Request){
 			return NextResponse.json({ success:false, error:'Nicht eingeloggt' }, { status:401 });
 		}
 		const user = session.user?.username || session.user?.email || 'user';
-		const docs = await TempShopFile.find({ createdBy: user }).sort({ createdAt: -1 }).limit(50).lean();
-		return NextResponse.json({ success:true, files: docs.map(d=> ({ key: d.key, name: d.name, size: d.size, contentType: d.contentType, createdAt: d.createdAt })) });
+		const url = new URL(req.url);
+		const debug = url.searchParams.get('debug') === '1';
+		const query = { createdBy: user } as any;
+		const docs = await TempShopFile.find(query).sort({ createdAt: -1 }).limit(50).lean();
+		const filesOut = docs.map(d=> ({ key: d.key, name: d.name, size: d.size, contentType: d.contentType, createdAt: d.createdAt }));
+		if(debug){
+			const totalUser = await TempShopFile.countDocuments({ createdBy: user });
+			const totalAll = await TempShopFile.estimatedDocumentCount();
+			return NextResponse.json({ success:true, files: filesOut, user, counts:{ user: totalUser, all: totalAll }, storage:{ shopWebdav: isShopWebdavEnabled(), webdav: isWebdavEnabled(), s3: isS3Enabled() } });
+		}
+		return NextResponse.json({ success:true, files: filesOut });
 	} catch(e){
 		console.error('temp-files GET error', e);
 		return NextResponse.json({ success:false, error:'Fehler' }, { status:500 });
