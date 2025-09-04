@@ -19,6 +19,26 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsMaxPx, setFsMaxPx] = useState<number | null>(null);
   const touchStartRef = useRef<{x:number;y:number;time:number}|null>(null);
+  const lastTouchMoveRef = useRef<{x:number;y:number}|null>(null);
+  // iOS Safari Workaround: global touchmove blocker während Vollbild um Pull-Down / UI-Reveal zu minimieren
+  useEffect(()=>{
+    if(!isFullscreen) return;
+    const prevent = (e: TouchEvent)=>{
+      // Nur Single-Finger Gesten blocken (Scroll / Navigation). Multi-touch (Pinch) bleibt erlaubt.
+      if(e.touches.length === 1){
+        try { e.preventDefault(); } catch {}
+      }
+    };
+    // capture + passive:false nötig, sonst keine Wirkung in iOS
+    document.addEventListener('touchmove', prevent, { passive:false, capture:true });
+    // overscroll Verhalten einschränken
+    const prevOverscroll = document.documentElement.style.overscrollBehavior;
+    document.documentElement.style.overscrollBehavior = 'none';
+    return ()=> {
+      document.removeEventListener('touchmove', prevent, { capture:true } as any);
+      document.documentElement.style.overscrollBehavior = prevOverscroll;
+    };
+  },[isFullscreen]);
   // Debug Hotkeys: 1..5 oder A für Auto (hilft falls Button gecached fehlt)
   useEffect(()=>{
     const handler = (e:KeyboardEvent)=>{
@@ -176,6 +196,10 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
         ref={wrapperRef}
         className={"w-full flex flex-col lg:flex-row gap-6 " + (isFullscreen ? "border-2 border-gray-300 rounded-xl p-3 bg-white" : "")}
         onDoubleClick={()=>{ if(document.fullscreenElement){ exitFullscreen(); } else { enterFullscreen(); } }}
+        onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current = { x:t.clientX, y:t.clientY, time: performance.now() }; lastTouchMoveRef.current={ x:t.clientX, y:t.clientY }; }}
+        onTouchMove={(e)=>{ if(!isFullscreen) return; if(!touchStartRef.current) return; const t=e.touches[0]; const dy=t.clientY - touchStartRef.current.y; if(dy>25){ try{ e.preventDefault(); }catch{} } lastTouchMoveRef.current={ x:t.clientX, y:t.clientY }; }}
+        onTouchEnd={()=>{ touchStartRef.current=null; lastTouchMoveRef.current=null; }}
+        style={{ touchAction: isFullscreen ? 'none' : 'manipulation' }}
       >
   <div className={(isFullscreen ? "lg:w-[420px] p-5 text-[0.95rem]" : "lg:w-80 p-4") + " w-full lg:w-auto flex-shrink-0 bg-white border rounded space-y-4 h-fit min-h-[420px]"}>
           <div className="flex items-center gap-2">
@@ -244,6 +268,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
           <div
             className="inline-block relative w-full"
             onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current = { x:t.clientX, y:t.clientY, time: performance.now() }; }}
+            onTouchMove={(e)=>{ if(isFullscreen){ try { e.preventDefault(); } catch {}; } }}
             onTouchEnd={(e)=>{ const s=touchStartRef.current; if(!s) return; const t=(e.changedTouches&&e.changedTouches[0])? e.changedTouches[0] : (e.touches[0]||null); if(!t){ touchStartRef.current=null; return;} const dx=t.clientX - s.x; const dy=t.clientY - s.y; const adx=Math.abs(dx), ady=Math.abs(dy); const TH=32; if(running && !finished && !gameOver){ if(adx>TH || ady>TH){ if(adx>ady){ if(dx>0) setDirection('right'); else setDirection('left'); } else { if(dy>0) setDirection('down'); else setDirection('up'); } } } touchStartRef.current=null; }}
             style={{touchAction:'none'}}
           >
