@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
 interface LobbyListItem { id:string; title:string; lessonId?:string; players:{userId:string;username:string;side:string;ready:boolean}[]; createdAt:number; }
@@ -24,6 +25,7 @@ export default function FussballLobbyPage(){
   const [joining,setJoining] = useState(false);
   const [ready,setReady] = useState(false);
   const [error,setError] = useState<string|undefined>();
+  const router = useRouter();
 
   // Load exercises (reuse /api/exercises like snake-live)
   useEffect(()=>{
@@ -70,6 +72,13 @@ export default function FussballLobbyPage(){
     const iv=setInterval(tick, 4000); tick(); return ()=>{ alive=false; clearInterval(iv); };
   },[lobby?.id]);
 
+  // Redirect if lobby active (beide ready) -> Spielseite
+  useEffect(()=>{
+    if(lobby?.status==='active'){
+      router.push(`/arena/fussball-live/${lobby.id}`);
+    }
+  },[lobby?.status, lobby?.id, router]);
+
   if(lobby){
     return (
       <main className="max-w-3xl mx-auto p-4 flex flex-col gap-6">
@@ -92,6 +101,10 @@ export default function FussballLobbyPage(){
             </ul>
             {lobby.status==='waiting' && <div className="text-xs text-amber-600">Warte auf zweiten Spieler…</div>}
             {lobby.status==='active' && <div className="text-xs text-green-600">Spiel startet…</div>}
+            <div className="text-[10px] text-gray-500 mt-1">Lobby ID: <span className="font-mono select-all">{lobby.id}</span></div>
+            {lobby.status==='active' && (
+              <a href={`/arena/fussball-live/${lobby.id}`} className="inline-block mt-1 px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700">Zum Spiel »</a>
+            )}
           </div>
           <div className="flex gap-3 flex-wrap items-center">
             <button onClick={leave} className="px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm">Verlassen</button>
