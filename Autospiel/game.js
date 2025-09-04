@@ -40,7 +40,7 @@ let desiredLane = carLane;
 
 function loadCar() {
   const img = new Image();
-  img.src = 'auto2.png?v=1';
+  img.src = 'auto2.png?v=2';
   img.onload = () => {
     const targetWidth = LANE_WIDTH * 0.7;
     const aspect = (img.naturalHeight / img.naturalWidth) || 1.5;
