@@ -55,7 +55,7 @@ export default function ArenaPage() {
       </div>
       
       <a href="/dashboard" className="bg-gray-600 text-white py-2 px-4 rounded font-semibold hover:bg-gray-700 transition">
-        ← Zurück zur Startseite
+  {/* Zurück-Link entfernt */}
       </a>
     </main>
   );

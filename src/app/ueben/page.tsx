@@ -158,7 +158,7 @@ function UebenInner() {
         )
       )}
       <div className="mt-10">
-  <a href="/dashboard" className="text-blue-600 hover:underline text-sm">← Zurück zur Startseite</a>
+  {/* Zurück-Link entfernt */}
       </div>
     </main>
   );

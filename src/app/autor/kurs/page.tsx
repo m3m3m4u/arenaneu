@@ -93,7 +93,7 @@ export default function CourseOverviewPage() {
                 onClick={() => router.push('/autor')}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 flex items-center gap-2"
               >
-                ← Zurück zur Startseite
+                {/* Zurück-Link entfernt */}
               </button>
               <button
                 onClick={() => router.push('/autor/kurs/neu')}

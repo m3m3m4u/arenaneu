@@ -29,11 +29,17 @@ export async function POST(req: Request){
 		const user = session.user?.username || session.user?.email || 'user';
 		const useShop = isShopWebdavEnabled();
 		const useDav = useShop || isWebdavEnabled();
-		for(const f of files){
-			if(!(f instanceof File)) continue;
+		for(const raw of files){
+			const f: any = raw; // Kann File, Blob oder unbekannt sein
+			if(!f || typeof f.arrayBuffer !== 'function'){
+				errors.push({ name: 'unbekannt', message: 'Kein gültiges Dateiobjekt (arrayBuffer fehlt)' });
+				continue;
+			}
+			// Name ermitteln
+			const originalName = typeof f.name === 'string' && f.name.trim() ? f.name : 'upload.bin';
 			const arrayBuf = await f.arrayBuffer();
 			const buf = new Uint8Array(arrayBuf);
-			const safeName = f.name.replace(/[^a-zA-Z0-9._-]+/g,'_');
+			const safeName = originalName.replace(/[^a-zA-Z0-9._-]+/g,'_');
 			let rand = 'xxxx';
 			try {
 				let rb: any;
@@ -50,17 +56,17 @@ export async function POST(req: Request){
 				} else {
 					return NextResponse.json({ success:false, error:'Kein Storage konfiguriert' }, { status:500 });
 				}
-				const doc = await TempShopFile.create({ key, name: f.name, size: buf.length, contentType: f.type||undefined, createdBy: user });
-				created.push({ key, name: f.name, size: buf.length, contentType: f.type||undefined, id: doc._id });
+				const doc = await TempShopFile.create({ key, name: originalName, size: buf.length, contentType: f.type||undefined, createdBy: user });
+				created.push({ key, name: originalName, size: buf.length, contentType: f.type||undefined, id: doc._id });
 			} catch(e:any){
 				console.warn('Temp upload failed', e);
-				errors.push({ name: f.name, message: e?.message || 'Upload fehlgeschlagen' });
+				errors.push({ name: originalName, message: e?.message || 'Upload fehlgeschlagen' });
 			}
 		}
 		if(!created.length){
-			return NextResponse.json({ success:false, error:'Kein Datei-Upload gelungen', errors }, { status:500 });
+			return NextResponse.json({ success:false, error:'Kein Datei-Upload gelungen', errors, received: files.length }, { status:500 });
 		}
-		return NextResponse.json({ success:true, files: created, temp: created[0]||null, errors: errors.length? errors: undefined });
+		return NextResponse.json({ success:true, files: created, temp: created[0]||null, errors: errors.length? errors: undefined, received: files.length });
 	} catch(e){
 		console.error('temp-files POST error', e);
 		return NextResponse.json({ success:false, error:'Upload Fehler' }, { status:500 });

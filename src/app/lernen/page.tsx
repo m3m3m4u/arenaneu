@@ -508,7 +508,7 @@ function LernenPageInner() {
           </div>
         );
       })()}
-  <a href="/dashboard" className="inline-block mt-8 bg-gray-600 text-white py-2 px-4 rounded font-semibold hover:bg-gray-700 transition">← Zurück zur Startseite</a>
+  {/* Zurück-Link entfernt: Header bietet Navigation */}
     </main>
   );
 }

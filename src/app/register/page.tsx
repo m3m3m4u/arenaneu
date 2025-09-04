@@ -79,8 +79,8 @@ export default function RegisterPage() {
           className="w-full p-2 border rounded"
         >
           <option value="">Lernende/r (Standard)</option>
-          <option value="author">Autor (Freischaltung nötig)</option>
-          <option value="teacher">Lehrperson (Freischaltung nötig)</option>
+          <option value="author">Autor (interne Vergabe)</option>
+          <option value="teacher">Lehrperson</option>
         </select>
         <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded font-semibold">Registrieren</button>
   <p className="text-center text-xs text-gray-600">Schon registriert? <a href="/login" className="text-blue-600 underline">Zum Login</a></p>
@@ -93,7 +93,7 @@ export default function RegisterPage() {
           <a href="/login" className="text-blue-600 underline">Jetzt einloggen</a>
         </div>
       )}
-  <p className="mt-6 text-xs text-gray-500 leading-relaxed">Standard ist Lernende/r. Wenn du Autor oder Lehrperson auswählst, startest du als pending und musst freigeschaltet werden.</p>
+  <p className="mt-6 text-xs text-gray-500 leading-relaxed">Lehrpersonen werden sofort aktiv. Autorenrechte vergibt ein Admin später bei Bedarf.</p>
     </div>
   );
 }
