@@ -40,11 +40,10 @@ let desiredLane = carLane;
 
 function loadCar() {
   const candidates = [
-    '/uploads/auto2.png?v=1', // gewünschter neuer Pfad im public/uploads
+    '/uploads/auto2.png?v=3', // bevorzugt: neues Bild im public/uploads
     '/uploads/auto2.png',
-    'auto2.png?v=2',          // lokaler Ordner (Fallback)
-    'auto2.png',
-    'auto.png'                // ganz alter Fallback
+    'auto2.png?v=3',          // lokaler Ordner (nur falls wirklich kein Upload vorhanden)
+    'auto2.png'               // letzter Versuch
   ];
   let attempt = 0;
   const img = new Image();
@@ -53,8 +52,9 @@ function loadCar() {
       console.warn('Kein Auto-Bild gefunden – verwende Platzhalter-Rechteck');
       return;
     }
-    const src = candidates[attempt++];
-    img.src = src;
+  const src = candidates[attempt++];
+  console.debug('[Autospiel] Lade Auto Bild Versuch', attempt, src);
+  img.src = src;
   };
   img.onload = () => {
     const targetWidth = LANE_WIDTH * 0.7;
@@ -65,7 +65,7 @@ function loadCar() {
     // Erfolg -> keine weiteren Versuche
   };
   img.onerror = () => {
-    console.warn('Autospiel: Bild konnte nicht geladen werden, versuche nächsten Fallback');
+    console.warn('[Autospiel] Bild fehlgeschlagen, nächster Fallback');
     tryNext();
   };
   tryNext();
