@@ -39,16 +39,36 @@ let carY = CAR_TARGET_Y;
 let desiredLane = carLane;
 
 function loadCar() {
+  const candidates = [
+    '/uploads/auto2.png?v=1', // gewünschter neuer Pfad im public/uploads
+    '/uploads/auto2.png',
+    'auto2.png?v=2',          // lokaler Ordner (Fallback)
+    'auto2.png',
+    'auto.png'                // ganz alter Fallback
+  ];
+  let attempt = 0;
   const img = new Image();
-  img.src = 'auto2.png?v=2';
+  const tryNext = () => {
+    if(attempt >= candidates.length){
+      console.warn('Kein Auto-Bild gefunden – verwende Platzhalter-Rechteck');
+      return;
+    }
+    const src = candidates[attempt++];
+    img.src = src;
+  };
   img.onload = () => {
     const targetWidth = LANE_WIDTH * 0.7;
     const aspect = (img.naturalHeight / img.naturalWidth) || 1.5;
     CAR_WIDTH = targetWidth;
     CAR_HEIGHT = targetWidth * aspect;
     carImage = beautifyCar(img, Math.ceil(window.devicePixelRatio||1)+1);
+    // Erfolg -> keine weiteren Versuche
   };
-  img.onerror = () => { console.warn('auto2.png konnte nicht geladen werden – verwende Platzhalter-Rechteck'); };
+  img.onerror = () => {
+    console.warn('Autospiel: Bild konnte nicht geladen werden, versuche nächsten Fallback');
+    tryNext();
+  };
+  tryNext();
 }
 
 // Entfernt weißen / hellen Rand (Fringing) und erstellt hochauflösendes Canvas-Sprite
