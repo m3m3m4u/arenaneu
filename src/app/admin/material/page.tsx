@@ -319,7 +319,28 @@ export default function AdminMaterialPage(){
               <div className="flex flex-col gap-1 mt-auto">
                 <div className="flex flex-wrap gap-1">
                   {(p.files||[]).slice(0,4).map(f=> (
-                    <button key={f.key} onClick={()=>{ if(f.downloadUrl){ if(f.name.toLowerCase().endsWith('.pdf')) setPdfUrl(f.downloadUrl); else window.open(f.downloadUrl,'_blank'); } }} className={`px-1 py-0.5 border rounded text-[10px] ${f.key.startsWith('placeholder:')?'border-orange-300 text-orange-600':'border-gray-200 text-gray-600 hover:bg-gray-50'}`} title={f.name}>{f.name.slice(0,18)}</button>
+                    <button
+                      key={f.key}
+                      onClick={()=>{
+                        if(!f.downloadUrl) return;
+                        try {
+                          const a = document.createElement('a');
+                          a.href = f.downloadUrl;
+                          // Dateiname ohne Platzhalter-Prefix
+                          const baseName = f.name || 'download';
+                          a.setAttribute('download', baseName);
+                          a.rel = 'noopener';
+                          document.body.appendChild(a);
+                          a.click();
+                          setTimeout(()=> a.remove(), 0);
+                        } catch {
+                          // Fallback: normales Öffnen falls download Attribute nicht greift
+                          window.open(f.downloadUrl,'_blank');
+                        }
+                      }}
+                      className={`px-1 py-0.5 border rounded text-[10px] ${f.key.startsWith('placeholder:')?'border-orange-300 text-orange-600':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                      title={f.name}
+                    >{f.name.slice(0,18)}</button>
                   ))}
                   {p.files && p.files.length>4 && <span className="text-[10px] text-gray-400">+{p.files.length-4}</span>}
                 </div>
