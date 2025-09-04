@@ -123,42 +123,7 @@ export default function GlobalHeader(){
           })}
           </nav>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-sm flex-shrink-0">
-          <span className="hidden md:inline text-gray-600">Eingeloggt als</span>
-          <span className="px-1.5 py-0.5 bg-gray-100 rounded font-mono max-w-[120px] truncate" title={String(username)}>{String(username)}</span>
-          <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded uppercase text-[10px] sm:text-xs tracking-wide">{String(role)}</span>
-          {isGuest && (
-            <>
-              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs" title="Gastmodus: Daten werden nur lokal gespeichert">Nur lokal</span>
-              <button
-                onClick={() => {
-                  try { localStorage.removeItem('guest:active'); } catch {}
-                  try {
-                    const url = new URL(window.location.href);
-                    url.searchParams.delete('guest');
-                    const q = url.searchParams.toString();
-                    const newUrl = url.pathname + (q ? `?${q}` : '') + url.hash;
-                    window.history.replaceState({}, '', newUrl);
-                  } catch {}
-                  if (window.location.pathname.startsWith('/guest')) {
-                    window.location.href = '/dashboard';
-                    return;
-                  }
-                  setIsGuest(false);
-                }}
-                className="ml-1 sm:ml-2 px-2 py-1 border rounded hover:bg-gray-50 text-[11px] sm:text-xs"
-                title="Gastmodus beenden und URL bereinigen"
-              >
-                Gastmodus beenden
-              </button>
-            </>
-          )}
-          {session ? (
-            <button onClick={()=>signOut({ callbackUrl: '/login', redirect: true })} className="ml-1 sm:ml-2 px-2 py-1 border rounded hover:bg-gray-50 text-[11px] sm:text-xs">Logout</button>
-          ) : (
-            <Link href="/login" className="ml-1 sm:ml-2 px-2 py-1 border rounded hover:bg-gray-50 text-[11px] sm:text-xs">Login</Link>
-          )}
-        </div>
+  {/* Benutzerinfo & Logout in Footer verschoben */}
         <MobileDrawer
           open={mobileOpen}
           onClose={()=>setMobileOpen(false)}

@@ -1,7 +1,7 @@
 "use client";
 import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 
 export default function GlobalFooter(){
   const { data: session } = useSession();
@@ -40,9 +40,12 @@ export default function GlobalFooter(){
       if(res.ok){ setSupportDone(true); setSupportBody(''); }
     } finally { setSupportBusy(false); }
   }
+  const username = session?.user?.username || session?.user?.name || session?.user?.email || 'Gast';
+  const isGuest = role === 'guest';
   return (
     <footer className="mt-16 border-t bg-gray-50 text-sm text-gray-600">
-      <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
           <Link href="/impressum" className="hover:text-gray-900">Impressum</Link>
           <Link href="/datenschutz" className="hover:text-gray-900">Datenschutz</Link>
@@ -62,6 +65,18 @@ export default function GlobalFooter(){
             aria-label="Cookie-Einstellungen öffnen"
           >Cookies</button>
         </nav>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] md:justify-end">
+          <span className="text-gray-600">Eingeloggt als</span>
+          <span className="px-1.5 py-0.5 bg-gray-100 rounded font-mono max-w-[140px] truncate" title={username}>{username}</span>
+          <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded uppercase text-[10px] tracking-wide">{role||'?'}</span>
+          {isGuest && <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs" title="Gastmodus – lokal">Nur lokal</span>}
+          {session ? (
+            <button onClick={()=>signOut({ callbackUrl:'/login', redirect:true })} className="px-2 py-1 border rounded text-[11px] hover:bg-gray-50">Logout</button>
+          ) : (
+            <Link href="/login" className="px-2 py-1 border rounded text-[11px] hover:bg-gray-50">Login</Link>
+          )}
+        </div>
+        </div>
         <span className="text-[10px] text-gray-400">© {new Date().getFullYear()} LernArena.org</span>
       </div>
       {showSupport && (
