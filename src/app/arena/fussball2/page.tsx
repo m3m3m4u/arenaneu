@@ -40,7 +40,14 @@ export default function FussballLobbyPage(){
     try {
       const res = await fetch('/api/fussball/lobbies',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, lessonId }) });
       const j = await res.json();
-      if(!j.success){ setError(j.error||'Fehler'); } else { setLobby(j.lobby); }
+      if(!j.success){ setError(j.error||'Fehler'); } else {
+        setLobby(j.lobby);
+        // Host automatisch bereit (Server setzt ready=true)
+        const meId = (session as any)?.user?.id || (session as any)?.user?._id;
+        if(meId && j.lobby.players?.find((p:any)=> p.userId===String(meId) && p.ready)){
+          setReady(true);
+        }
+      }
   loadList();
     } catch(e:any){ setError(String(e)); }
     finally { setCreating(false); }

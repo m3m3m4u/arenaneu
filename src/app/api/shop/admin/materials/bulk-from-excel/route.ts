@@ -136,10 +136,28 @@ export async function POST(req: Request){
         const normalizedCategory = categoryRaw ? normalizeCategory(categoryRaw) || undefined : undefined;
         const category = categoryRaw;
         const description = cellVal(range.s.r+2) || undefined;
-        const priceRaw = cellVal(range.s.r+3);
-        const price = priceRaw? Number(priceRaw.replace(',','.'))||0 : 0;
+  // Zeile 4 (index +3) kann entweder den Preis ODER bereits die erste Datei enthalten.
+  // Bisher wurde hier strikt ein Preis erwartet. Damit Fälle wie:
+  // Titel | Kategorie | Beschreibung | Datei1 | Datei2 | ...
+  // funktionieren, erkennen wir nun eine Dateiendung und behandeln den Wert als erste Datei.
+  const priceOrFirstFileRaw = cellVal(range.s.r+3);
+        let price = 0;
         const fileNames: string[] = [];
-        for(let r2=range.s.r+4; r2<=range.e.r; r2++){
+        let filesStartRow = range.s.r+4; // Standard: Dateien ab der 5. Zeile
+        if(priceOrFirstFileRaw){
+          const numericMatch = /^[0-9]+([.,][0-9]+)?$/; // z.B. 12 oder 12,50
+          const fileLike = /\.[a-z0-9]{2,5}$/i; // einfache Dateiendung
+            if(numericMatch.test(priceOrFirstFileRaw)){
+              price = Number(priceOrFirstFileRaw.replace(',','.')) || 0;
+            } else if(fileLike.test(priceOrFirstFileRaw)) {
+              // Kein Preis sondern erste Datei -> als Datei behandeln
+              fileNames.push(priceOrFirstFileRaw);
+              // Dateien beginnen bereits eine Zeile früher (Zeile 4 statt 5), StartRow bleibt aber +4 für die Schleife darunter
+            } else {
+              // Weder klarer Preis noch Dateiname -> ignorieren, Preis bleibt 0
+            }
+        }
+        for(let r2=filesStartRow; r2<=range.e.r; r2++){
           const name = cellVal(r2);
           if(name){
             // Filter: rein numerische Werte ohne Punkt nicht als Datei interpretieren

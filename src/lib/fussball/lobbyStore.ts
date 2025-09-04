@@ -18,7 +18,8 @@ export function createLobby(hostUserId: string, username: string, title: string,
     createdAt: Date.now(),
     hostUserId,
     status: 'waiting',
-    players: [ { userId: hostUserId, username, joinedAt: Date.now(), side: 'left', ready: false, score:0 } ],
+  // Host ist automatisch bereit
+  players: [ { userId: hostUserId, username, joinedAt: Date.now(), side: 'left', ready: true, score:0 } ],
     lastActivity: Date.now()
   };
   lobbies.set(id, rec);

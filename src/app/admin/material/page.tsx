@@ -38,6 +38,8 @@ export default function AdminMaterialPage(){
   const [excelLoading, setExcelLoading] = useState(false);
   const [excelResult, setExcelResult] = useState<any|null>(null);
   const [excelToken, setExcelToken] = useState<string|null>(null);
+  // PDF Preview
+  const [pdfUrl,setPdfUrl] = useState<string|null>(null);
 
   const toggleRaw = (id:string)=> setSelectedRawIds(ids=> ids.includes(id)? ids.filter(x=>x!==id): [...ids,id]);
 
@@ -264,6 +266,13 @@ export default function AdminMaterialPage(){
                 <span className="text-gray-500">{Math.round(f.size/1024)} KB</span>
                 <span className="text-gray-400">{new Date(f.createdAt).toLocaleDateString()}</span>
                 {usedByProduct && <span className="text-[10px] text-emerald-700">in Produkt</span>}
+                <div className="flex gap-1 flex-wrap mt-1">
+                  <a href={f.url} target="_blank" onClick={e=> e.stopPropagation()} className="px-1 py-0.5 border rounded text-[10px] hover:bg-white bg-gray-100">Öffnen</a>
+                  {f.contentType?.includes('pdf') && (
+                    <button onClick={(e)=>{ e.stopPropagation(); setPdfUrl(f.url); }} className="px-1 py-0.5 border rounded text-[10px] bg-indigo-50 hover:bg-indigo-100">Vorschau</button>
+                  )}
+                  <a href={f.url} download onClick={e=> e.stopPropagation()} className="px-1 py-0.5 border rounded text-[10px] bg-gray-50 hover:bg-gray-100">Download</a>
+                </div>
               </div>
             );
           })}
@@ -349,14 +358,32 @@ export default function AdminMaterialPage(){
               {p.category && <div className="text-[11px] text-indigo-700">{p.category}</div>}
               <div className="text-[11px] text-gray-500">{p.files?.filter(f=>!f.key?.startsWith('placeholder:')).length || 0} echte Dateien / {p.files?.length||0} gesamt</div>
               {p.description && <p className="text-[11px] text-gray-600 line-clamp-3 whitespace-pre-line">{p.description}</p>}
-              <div className="flex flex-wrap gap-1 mt-auto">
-                {(p.files||[]).slice(0,4).map(f=> <span key={f.key} className={`px-1 py-0.5 border rounded text-[10px] ${f.key.startsWith('placeholder:')?'border-orange-300 text-orange-600':'border-gray-200 text-gray-600'}`}>{f.name.slice(0,18)}</span>)}
-                {p.files && p.files.length>4 && <span className="text-[10px] text-gray-400">+{p.files.length-4}</span>}
+              <div className="flex flex-col gap-1 mt-auto">
+                <div className="flex flex-wrap gap-1">
+                  {(p.files||[]).slice(0,4).map(f=> (
+                    <button key={f.key} onClick={()=>{ if(f.downloadUrl){ if(f.name.toLowerCase().endsWith('.pdf')) setPdfUrl(f.downloadUrl); else window.open(f.downloadUrl,'_blank'); } }} className={`px-1 py-0.5 border rounded text-[10px] ${f.key.startsWith('placeholder:')?'border-orange-300 text-orange-600':'border-gray-200 text-gray-600 hover:bg-gray-50'}`} title={f.name}>{f.name.slice(0,18)}</button>
+                  ))}
+                  {p.files && p.files.length>4 && <span className="text-[10px] text-gray-400">+{p.files.length-4}</span>}
+                </div>
+                {(p.files||[]).some(f=>f.downloadUrl) && (
+                  <div className="flex gap-1 flex-wrap">
+                    {(p.files||[]).filter(f=>f.downloadUrl).slice(0,3).map(f=> (
+                      <a key={f.key+':dl'} href={f.downloadUrl} download className="text-[10px] underline text-blue-600 hover:text-blue-800">DL {f.name.slice(0,10)}</a>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </div>
       </section>}
+      {pdfUrl && (
+        <div className="fixed inset-0 z-50">
+          {/** Lazy import über dynamic wäre möglich; direkte Einbindung hier */}
+          {/* @ts-ignore */}
+          {require('react').createElement(require('@/components/media/PdfPreview').default, { url: pdfUrl, onClose: ()=> setPdfUrl(null) })}
+        </div>
+      )}
     </main>
   );
 }
