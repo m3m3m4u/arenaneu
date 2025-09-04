@@ -65,7 +65,7 @@ export async function POST(req: Request){
       return NextResponse.json({ success:false, error:'Ungültige Kategorie' }, { status:400 });
     }
     const doc = await ShopProduct.create({ title: String(title).trim(), description: String(description).trim(), category: catNorm, tags: Array.isArray(tags)?tags.map((t:any)=>String(t).trim()).filter(Boolean):[], isPublished: !!isPublished });
-    if(Array.isArray(tempKeys) && tempKeys.length){
+  if(Array.isArray(tempKeys) && tempKeys.length){
       const temps = await TempShopFile.find({ key: { $in: tempKeys } });
       const prefix = (process.env.WEBDAV_SHOP_PREFIX || 'shop').replace(/^[\\/]+|[\\/]+$/g,'');
       const useWebdav = isShopWebdavEnabled() || isWebdavEnabled();
@@ -99,8 +99,17 @@ export async function POST(req: Request){
       if(movedCount === 0){
         console.warn('Kein tempKey erfolgreich verschoben', { tempKeys, useWebdav, isShop: isShopWebdavEnabled(), isGeneric: isWebdavEnabled(), s3: isS3Enabled() });
       }
+      // Produkt-Ausgabe inkl. downloadUrl und movedCount
+      const useShopWebdav = isShopWebdavEnabled();
+      const anyWebdav = useShopWebdav || isWebdavEnabled();
+      const productOut: any = doc.toObject ? doc.toObject() : JSON.parse(JSON.stringify(doc));
+      productOut.files = (productOut.files||[]).map((f: any)=>({
+        ...f,
+        downloadUrl: f.key ? (anyWebdav ? (useShopWebdav ? shopWebdavPublicUrl(f.key) : webdavPublicUrl(f.key)) : s3PublicUrl(f.key)) : undefined
+      }));
+      return NextResponse.json({ success:true, product: productOut, movedCount, warning: movedCount===0 ? 'Keine Datei übernommen' : undefined });
     }
-    return NextResponse.json({ success:true, product: doc });
+    return NextResponse.json({ success:true, product: doc, movedCount: 0 });
   } catch(e){
     console.error('ShopProduct POST error', e);
     return NextResponse.json({ success:false, error:'Fehler beim Erstellen' }, { status:500 });

@@ -15,7 +15,8 @@ const TempShopFileSchema = new Schema<ITempShopFile>({
   size: { type: Number, required: true },
   contentType: { type: String },
   createdBy: { type: String },
-  createdAt: { type: Date, default: Date.now, index: { expires: '24h' } },
+  // TTL korrekt über expires (nicht verschachtelt unter index), löscht nach 24h automatisch
+  createdAt: { type: Date, default: Date.now, expires: '24h' },
 });
 
 export default (mongoose.models.TempShopFile as mongoose.Model<ITempShopFile>) || mongoose.model<ITempShopFile>('TempShopFile', TempShopFileSchema);
