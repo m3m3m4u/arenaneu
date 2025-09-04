@@ -96,8 +96,8 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Layout mode for touch controls in fullscreen: 'sides' (left/right) or 'bottom'
-  const [layoutMode, setLayoutMode] = useState<'sides'|'bottom'>('sides');
+  // Vereinheitlichtes Layout: immer Seiten-Controls (Laptop & iPad identisch)
+  const layoutMode: 'sides' = 'sides';
   // Dynamische Breite des Spielfelds (Skalierung wenn wenig vertikaler Platz – z.B. iPad Tastatur)
   const [boardWidthPx, setBoardWidthPx] = useState<number>(COLS * CELL);
 
@@ -115,28 +115,7 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
     document.addEventListener('fullscreenchange', handler);
     return ()=> document.removeEventListener('fullscreenchange', handler);
   },[]);
-  // Recompute control layout on resize / fullscreen changes (avoid overlap on tablets)
-  useEffect(()=>{
-    const CONTROL_BLOCKS = (localControlA?1:0) + (localControlB?1:0);
-    if(!isFullscreen || CONTROL_BLOCKS===0){ setLayoutMode('sides'); return; }
-    const recompute = () => {
-      try {
-        // Board pixel width: constant grid (COLS*CELL)
-        const boardWidth = COLS * CELL;
-        // Estimated width each control panel needs when at side (3 buttons * 5rem + gaps + margins) ≈ 260px
-        const controlWidth = 260;
-        const needed = boardWidth + (CONTROL_BLOCKS===2 ? controlWidth*2 : controlWidth) + 64; // some breathing space
-        if(window.innerWidth < needed){
-          setLayoutMode('bottom');
-        } else {
-          setLayoutMode('sides');
-        }
-      } catch { /* noop */ }
-    };
-    recompute();
-    window.addEventListener('resize', recompute);
-    return ()=> window.removeEventListener('resize', recompute);
-  },[isFullscreen, localControlA, localControlB]);
+  // Kein Layout-Wechsel mehr nötig – Seiten-Layout erzwingen.
 
   // iPad / iOS Erkennung (vereinfachte Heuristik)
   const isiOS = useMemo(()=> typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent), []);
@@ -151,7 +130,7 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
       const vvH = (window.visualViewport?.height || window.innerHeight);
       const vvW = (window.visualViewport?.width || window.innerWidth);
       // Reserve Platz für Bottom-Controls wenn im bottom Layout (Schätzung)
-      const controlsReserve = layoutMode === 'bottom' ? 230 : 40; // px
+    const controlsReserve = 40; // Seitenlayout: nur etwas Padding
       // Wenn iOS & virtuelle Tastatur sichtbar: visualViewport.height deutlich kleiner als innerHeight
       const keyboardLikely = isiOS && (window.innerHeight - vvH) > 140; // Heuristik
       const availableH = vvH - controlsReserve - 8; // etwas Puffer
@@ -161,7 +140,9 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
         scale *= 0.95;
       }
       // Falls sehr breites Querformat, Skala zusätzlich auf Breite begrenzen
-      const byWidth = (vvW - (layoutMode==='sides'? (localControlA?140:0)+(localControlB?140:0):0) - 32) / baseW;
+  // Verfügbare Breite abzüglich geschätzter Control-Breite links/rechts
+  const sideControlsW = (localControlA?160:0) + (localControlB?160:0) + 48; // inkl. Puffer
+  const byWidth = (vvW - sideControlsW) / baseW;
       scale = Math.min(scale, byWidth);
       // Untergrenze, damit Buttons noch bedienbar: 0.6
       scale = Math.max(0.6, Math.min(1, scale));
@@ -570,9 +551,8 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
           </div>
           {marking && <div className="mt-2 text-xs text-gray-500">Speichere Abschluss…</div>}
           {/* Vollbild Touch-Steuerungen */}
-          {isFullscreen && !finished && running && (
-            layoutMode === 'sides' ? (
-              <>
+      {isFullscreen && !finished && running && (
+        <>
                 {localControlA && (
                   <div className="fixed left-6 bottom-6 z-[70] select-none">
                     <div className="text-[11px] text-gray-600 mb-2 font-semibold">A</div>
@@ -605,47 +585,8 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
                     </div>
                   </div>
                 )}
-              </>
-            ) : (
-              <div className="fixed left-0 right-0 bottom-4 z-[70] flex flex-col items-center gap-4 px-4">
-                <div className="flex gap-10 flex-wrap justify-center">
-                  {localControlA && (
-                    <div className="select-none flex flex-col items-center">
-                      <div className="text-[11px] text-gray-600 mb-2 font-semibold">A</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div />
-                        <button aria-label="A hoch" onClick={()=> setDirA(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↑</button>
-                        <div />
-                        <button aria-label="A links" onClick={()=> setDirA(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">←</button>
-                        <div />
-                        <button aria-label="A rechts" onClick={()=> setDirA(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">→</button>
-                        <div />
-                        <button aria-label="A runter" onClick={()=> setDirA(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↓</button>
-                        <div />
-                      </div>
-                    </div>
-                  )}
-                  {localControlB && (
-                    <div className="select-none flex flex-col items-center">
-                      <div className="text-[11px] text-gray-600 mb-2 font-semibold">B</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div />
-                        <button aria-label="B hoch" onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">W</button>
-                        <div />
-                        <button aria-label="B links" onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">A</button>
-                        <div />
-                        <button aria-label="B rechts" onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">D</button>
-                        <div />
-                        <button aria-label="B runter" onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">S</button>
-                        <div />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="text-[10px] text-gray-500 bg-white/70 px-2 py-1 rounded shadow">Automatische Tablet-Ansicht</div>
-              </div>
-            )
-          )}
+        </>
+      )}
         </div>
       </div>
     </div>
