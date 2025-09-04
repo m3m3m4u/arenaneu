@@ -33,6 +33,8 @@ export async function GET(req: Request, ctx: { params: { id: string }} ){
     const zip = new JSZip();
     const useShopWebdav = isShopWebdavEnabled();
     const anyWebdav = useShopWebdav || isWebdavEnabled();
+    let added = 0;
+    const usedNames = new Set<string>();
     for(const f of files){
       let url: string | undefined;
       if(anyWebdav){
@@ -41,10 +43,25 @@ export async function GET(req: Request, ctx: { params: { id: string }} ){
         url = s3PublicUrl(f.key);
       }
       if(!url) continue;
+      // Relative Pfade ("/medien/...") in absolute URLs umwandeln
+      if(url.startsWith('/')){
+        try { const origin = new URL(req.url).origin; url = origin + url; } catch {}
+      }
       try {
         const data = await fetchArrayBuffer(url);
-        const safeName = f.name || f.key.split('/').pop() || 'datei';
-        zip.file(safeName, data);
+        let baseName = f.name || f.key.split('/').pop() || 'datei';
+        baseName = baseName.replace(/[^a-zA-Z0-9._-]+/g,'_');
+        if(!baseName) baseName='datei';
+        let finalName = baseName;
+        let c = 1;
+        while(usedNames.has(finalName)){
+          const dot = baseName.lastIndexOf('.');
+          if(dot>0){ finalName = baseName.slice(0,dot)+`_${c}`+baseName.slice(dot); } else { finalName = baseName + `_${c}`; }
+          c++;
+        }
+        usedNames.add(finalName);
+        zip.file(finalName, data);
+        added++;
       } catch(err){
         console.warn('ZIP fetch Fehler', f.key, (err as any)?.message);
       }
@@ -54,6 +71,9 @@ export async function GET(req: Request, ctx: { params: { id: string }} ){
   const copy = new Uint8Array(content.byteLength);
   copy.set(content);
   const blob = new Blob([copy], { type: 'application/zip' });
+  if(added === 0){
+      return NextResponse.json({ success:false, error:'Keine Dateien abrufbar (ZIP leer)', files: files.length }, { status:502 });
+    }
   return new Response(blob, { status:200, headers:{
       'Content-Type':'application/zip',
       'Content-Disposition':`attachment; filename="${filename}"`,
