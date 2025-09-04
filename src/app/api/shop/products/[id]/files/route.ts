@@ -62,7 +62,7 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
       finalUrl = up?.url;
     }
 
-    doc.files.push({ key, name: file.name, size: bytes.length, contentType: file.type });
+  doc.files.push({ key, name: file.name, size: bytes.length, contentType: file.type, createdAt: new Date() });
     await doc.save();
     return NextResponse.json({ success:true, file: { key, url: finalUrl } });
   } catch(e){

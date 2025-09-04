@@ -7,6 +7,7 @@ export interface IShopProductFile {
   contentType?: string;  // MIME
   pages?: number;        // Für PDF (optional Vorabscan)
   previewImages?: string[]; // Generierte Seiten-Thumbnails URLs
+  createdAt?: Date;      // Zeitstempel des Uploads
 }
 
 export interface IShopProduct extends Document {
@@ -26,7 +27,8 @@ const FileSchema = new Schema<IShopProductFile>({
   size: { type: Number, required: true },
   contentType: { type: String },
   pages: { type: Number },
-  previewImages: [{ type: String }]
+  previewImages: [{ type: String }],
+  createdAt: { type: Date, default: Date.now }
 }, { _id: false });
 
 const ShopProductSchema = new Schema<IShopProduct>({

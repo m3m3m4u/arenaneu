@@ -85,7 +85,7 @@ export async function POST(req: Request){
             await s3Copy(t.key, newKey); await s3Delete(t.key); moved = true;
           }
           if(moved){
-            doc.files.push({ key: newKey, name: t.name, size: t.size, contentType: t.contentType });
+            doc.files.push({ key: newKey, name: t.name, size: t.size, contentType: t.contentType, createdAt: new Date() });
             await TempShopFile.deleteOne({ _id: t._id });
             movedCount++;
           } else {
