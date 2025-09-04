@@ -17,6 +17,7 @@ export interface IShopProduct extends Document {
   category?: string;
   files: IShopProductFile[];
   isPublished: boolean;
+  price?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +39,7 @@ const ShopProductSchema = new Schema<IShopProduct>({
   category: { type: String, index: true },
   files: { type: [FileSchema], default: [] },
   isPublished: { type: Boolean, default: false, index: true },
+  price: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
