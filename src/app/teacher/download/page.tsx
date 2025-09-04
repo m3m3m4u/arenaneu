@@ -33,19 +33,18 @@ export default function TeacherDownloadShop(){
           console.warn('pdfjs getDocument fehlt', pdfjs);
           throw new Error('pdfjs getDocument nicht verfügbar');
         }
-  // Kein externes Worker-Script wegen CSP: wir schalten Worker explizit aus
-  // (Schnell genug für 1 Seite Thumbnail)
-  try { (pdfjs as any).GlobalWorkerOptions.workerSrc = undefined; } catch {}
+  // Lokaler Worker (gleiche Origin) um CSP einzuhalten
+  try { (pdfjs as any).GlobalWorkerOptions.workerSrc = '/api/pdf-worker'; } catch {}
         let pdf: any;
         try {
           // Primär: direkt über URL
-          pdf = await (pdfjs as any).getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false, disableWorker: true }).promise;
+          pdf = await (pdfjs as any).getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false }).promise;
         } catch(err){
           console.warn('Direkter PDF Laden fehlgeschlagen, versuche Blob', file.name, err);
           try {
             const resp = await fetch(file.downloadUrl);
             const ab = await resp.arrayBuffer();
-            pdf = await (pdfjs as any).getDocument({ data: new Uint8Array(ab), disableWorker: true }).promise;
+            pdf = await (pdfjs as any).getDocument({ data: new Uint8Array(ab) }).promise;
           } catch(blobErr){
             console.warn('Blob Fallback fehlgeschlagen', file.name, blobErr);
             throw blobErr;
