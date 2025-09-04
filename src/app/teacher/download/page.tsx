@@ -27,17 +27,29 @@ export default function TeacherDownloadShop(){
         // Dynamischer Import (kein SSR Bundle Blow-Up)
   const pdfjs: any = await import('pdfjs-dist');
         try { (pdfjs as any).GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js'; } catch {}
-        const task = pdfjs.getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false });
-        const pdf = await task.promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 0.28 });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        if(!ctx) throw new Error('CanvasContext fehlgeschlagen');
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        const url = canvas.toDataURL('image/png');
-        setThumbs(t=> ({ ...t, [k]: url }));
+  const task = pdfjs.getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false });
+  const pdf = await task.promise;
+  const page = await pdf.getPage(1);
+  // Erst mit moderatem Scale rendern (Qualität ausreichend für 320x240 Ziel)
+  const baseViewport = page.getViewport({ scale: 0.7 });
+  const pageCanvas = document.createElement('canvas');
+  pageCanvas.width = Math.ceil(baseViewport.width);
+  pageCanvas.height = Math.ceil(baseViewport.height);
+  const pctx = pageCanvas.getContext('2d');
+  if(!pctx) throw new Error('CanvasContext fehlgeschlagen');
+  await page.render({ canvasContext: pctx, viewport: baseViewport }).promise;
+  // Normiere auf festes 4:3 Thumbnail (letterboxed)
+  const TARGET_W = 320; const TARGET_H = 240; // 4:3
+  const out = document.createElement('canvas'); out.width = TARGET_W; out.height = TARGET_H;
+  const octx = out.getContext('2d'); if(!octx) throw new Error('OutContext fehlgeschlagen');
+  octx.fillStyle = '#ffffff'; octx.fillRect(0,0,TARGET_W,TARGET_H);
+  const scale = Math.min(TARGET_W / pageCanvas.width, TARGET_H / pageCanvas.height);
+  const drawW = pageCanvas.width * scale; const drawH = pageCanvas.height * scale;
+  const dx = (TARGET_W - drawW)/2; const dy = (TARGET_H - drawH)/2;
+  octx.imageSmoothingEnabled = true; (octx as any).imageSmoothingQuality='high';
+  octx.drawImage(pageCanvas, dx, dy, drawW, drawH);
+  const url = out.toDataURL('image/png');
+  setThumbs(t=> ({ ...t, [k]: url }));
       } catch (e){
         setThumbs(t=> ({ ...t, [k]: 'error' }));
       }
