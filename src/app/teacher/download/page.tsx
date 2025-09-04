@@ -26,15 +26,33 @@ export default function TeacherDownloadShop(){
       const file = findFileByKey(k);
       if(!file || !file.downloadUrl) continue;
       try {
-        // Dynamischer Import (kein SSR Bundle Blow-Up)
-        const pdfjs: any = await import('pdfjs-dist');
+        // Dynamischer Import: legacy Build für Browser-Kompatibilität
+        let pdfjs: any;
+  pdfjs = await import('pdfjs-dist');
+        if(!(pdfjs as any).getDocument){
+          console.warn('pdfjs getDocument fehlt', pdfjs);
+          throw new Error('pdfjs getDocument nicht verfügbar');
+        }
         try {
           const ver = (pdfjs as any).version || '5.4.149';
           (pdfjs as any).GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${ver}/build/pdf.worker.min.js`;
         } catch(e){ console.warn('pdfjs worker set fehlgeschlagen', e); }
-        const task = pdfjs.getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false });
-  const pdf = await task.promise;
-  const page = await pdf.getPage(1);
+        let pdf: any;
+        try {
+          // Primär: direkt über URL
+          pdf = await (pdfjs as any).getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false }).promise;
+        } catch(err){
+          console.warn('Direkter PDF Laden fehlgeschlagen, versuche Blob', file.name, err);
+          try {
+            const resp = await fetch(file.downloadUrl);
+            const ab = await resp.arrayBuffer();
+            pdf = await (pdfjs as any).getDocument({ data: new Uint8Array(ab) }).promise;
+          } catch(blobErr){
+            console.warn('Blob Fallback fehlgeschlagen', file.name, blobErr);
+            throw blobErr;
+          }
+        }
+        const page = await pdf.getPage(1);
   // Erst mit moderatem Scale rendern (Qualität ausreichend für 320x240 Ziel)
   const baseViewport = page.getViewport({ scale: 0.7 });
   const pageCanvas = document.createElement('canvas');
