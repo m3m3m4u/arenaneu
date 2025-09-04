@@ -161,6 +161,26 @@ window.addEventListener('keyup', e=>{
   if(e.code === 'Space') input.shoot=false;
 });
 
+// Zusätzliche Swipe / Drag Steuerung direkt auf dem Canvas für Touch
+;(function enableTouchAim(){
+  if(!('ontouchstart' in window) && navigator.maxTouchPoints===0) return;
+  let lastY=null; let dragging=false; let tapStartTime=0; let tapMoved=false;
+  const MOVE_FACTOR = 1; // direktes Mapping
+  canvas.style.touchAction = 'none';
+  canvas.addEventListener('touchstart', e=>{
+    if(e.touches.length!==1) return; const t=e.touches[0]; lastY=t.clientY; dragging=true; tapStartTime=performance.now(); tapMoved=false; input.shoot=true; // Beginne sofort mit Schießen beim Halten
+  }, {passive:false});
+  canvas.addEventListener('touchmove', e=>{
+    if(!dragging) return; const t=e.touches[0]; const dy=t.clientY-lastY; if(Math.abs(dy)>4) tapMoved=true; ship.y += dy*MOVE_FACTOR; lastY=t.clientY; ship.y=Math.max(ship.r,Math.min(canvas.height-ship.r,ship.y));
+  }, {passive:false});
+  canvas.addEventListener('touchend', e=>{
+    dragging=false; input.shoot=false; // Loslassen stoppt Schießen
+    const dt=performance.now()-tapStartTime; if(!tapMoved && dt<180){ // kurzer Tap als einzelner Schuss
+      input.shoot=true; setTimeout(()=>{ input.shoot=false; }, 120);
+    }
+  });
+})();
+
 function togglePause(){
   if(gameOver) return; // kein Pause im GameOver Screen
   isPaused = !isPaused;

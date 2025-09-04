@@ -54,10 +54,10 @@ export default function Home() {
             <h2 className="text-xl font-semibold mb-4">Login</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <input name="username" value={form.username} onChange={handleChange} placeholder="Benutzername" className="w-full p-2 border rounded focus:outline-none focus:ring focus:ring-indigo-300" required />
+                <input name="username" value={form.username} onChange={handleChange} placeholder="Benutzername" className="w-full p-2 border rounded focus:outline-none focus:ring focus:ring-indigo-300" required autoComplete="username" />
               </div>
               <div>
-                <input type="password" name="password" value={form.password} onChange={handleChange} placeholder="Passwort" className="w-full p-2 border rounded focus:outline-none focus:ring focus:ring-indigo-300" required />
+                <input type="password" name="password" value={form.password} onChange={handleChange} placeholder="Passwort" className="w-full p-2 border rounded focus:outline-none focus:ring focus:ring-indigo-300" required autoComplete="current-password" />
               </div>
               {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{error}</p>}
               <button disabled={loading} className="w-full py-2.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">

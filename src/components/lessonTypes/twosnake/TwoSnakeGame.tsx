@@ -96,6 +96,8 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Layout mode for touch controls in fullscreen: 'sides' (left/right) or 'bottom'
+  const [layoutMode, setLayoutMode] = useState<'sides'|'bottom'>('sides');
 
   // Fullscreen API Handler
   const enterFullscreen = useCallback(()=>{
@@ -111,6 +113,28 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
     document.addEventListener('fullscreenchange', handler);
     return ()=> document.removeEventListener('fullscreenchange', handler);
   },[]);
+  // Recompute control layout on resize / fullscreen changes (avoid overlap on tablets)
+  useEffect(()=>{
+    const CONTROL_BLOCKS = (localControlA?1:0) + (localControlB?1:0);
+    if(!isFullscreen || CONTROL_BLOCKS===0){ setLayoutMode('sides'); return; }
+    const recompute = () => {
+      try {
+        // Board pixel width: constant grid (COLS*CELL)
+        const boardWidth = COLS * CELL;
+        // Estimated width each control panel needs when at side (3 buttons * 5rem + gaps + margins) ≈ 260px
+        const controlWidth = 260;
+        const needed = boardWidth + (CONTROL_BLOCKS===2 ? controlWidth*2 : controlWidth) + 64; // some breathing space
+        if(window.innerWidth < needed){
+          setLayoutMode('bottom');
+        } else {
+          setLayoutMode('sides');
+        }
+      } catch { /* noop */ }
+    };
+    recompute();
+    window.addEventListener('resize', recompute);
+    return ()=> window.removeEventListener('resize', recompute);
+  },[isFullscreen, localControlA, localControlB]);
   // ESC Hinweis optional – bereits durch fullscreenchange erfasst
 
   const questionIdRef = useRef(0);
@@ -501,40 +525,80 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
           {marking && <div className="mt-2 text-xs text-gray-500">Speichere Abschluss…</div>}
           {/* Vollbild Touch-Steuerungen */}
           {isFullscreen && !finished && running && (
-            <>
-              {localControlA && (
-                <div className="fixed left-6 bottom-6 z-[70] select-none">
-                  <div className="text-[11px] text-gray-600 mb-2 font-semibold">A</div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div />
-                    <button aria-label="A hoch" onClick={()=> setDirA(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↑</button>
-                    <div />
-                    <button aria-label="A links" onClick={()=> setDirA(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">←</button>
-                    <div />
-                    <button aria-label="A rechts" onClick={()=> setDirA(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">→</button>
-                    <div />
-                    <button aria-label="A runter" onClick={()=> setDirA(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↓</button>
-                    <div />
+            layoutMode === 'sides' ? (
+              <>
+                {localControlA && (
+                  <div className="fixed left-6 bottom-6 z-[70] select-none">
+                    <div className="text-[11px] text-gray-600 mb-2 font-semibold">A</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div />
+                      <button aria-label="A hoch" onClick={()=> setDirA(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↑</button>
+                      <div />
+                      <button aria-label="A links" onClick={()=> setDirA(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">←</button>
+                      <div />
+                      <button aria-label="A rechts" onClick={()=> setDirA(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">→</button>
+                      <div />
+                      <button aria-label="A runter" onClick={()=> setDirA(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↓</button>
+                      <div />
+                    </div>
                   </div>
-                </div>
-              )}
-              {localControlB && (
-                <div className="fixed right-6 bottom-6 z-[70] select-none">
-                  <div className="text-[11px] text-gray-600 mb-2 font-semibold text-right">B</div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div />
-                    <button aria-label="B hoch" onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">W</button>
-                    <div />
-                    <button aria-label="B links" onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">A</button>
-                    <div />
-                    <button aria-label="B rechts" onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">D</button>
-                    <div />
-                    <button aria-label="B runter" onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">S</button>
-                    <div />
+                )}
+                {localControlB && (
+                  <div className="fixed right-6 bottom-6 z-[70] select-none">
+                    <div className="text-[11px] text-gray-600 mb-2 font-semibold text-right">B</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div />
+                      <button aria-label="B hoch" onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">W</button>
+                      <div />
+                      <button aria-label="B links" onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">A</button>
+                      <div />
+                      <button aria-label="B rechts" onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">D</button>
+                      <div />
+                      <button aria-label="B runter" onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-20 h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">S</button>
+                      <div />
+                    </div>
                   </div>
+                )}
+              </>
+            ) : (
+              <div className="fixed left-0 right-0 bottom-4 z-[70] flex flex-col items-center gap-4 px-4">
+                <div className="flex gap-10 flex-wrap justify-center">
+                  {localControlA && (
+                    <div className="select-none flex flex-col items-center">
+                      <div className="text-[11px] text-gray-600 mb-2 font-semibold">A</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div />
+                        <button aria-label="A hoch" onClick={()=> setDirA(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↑</button>
+                        <div />
+                        <button aria-label="A links" onClick={()=> setDirA(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">←</button>
+                        <div />
+                        <button aria-label="A rechts" onClick={()=> setDirA(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">→</button>
+                        <div />
+                        <button aria-label="A runter" onClick={()=> setDirA(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">↓</button>
+                        <div />
+                      </div>
+                    </div>
+                  )}
+                  {localControlB && (
+                    <div className="select-none flex flex-col items-center">
+                      <div className="text-[11px] text-gray-600 mb-2 font-semibold">B</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div />
+                        <button aria-label="B hoch" onClick={()=> setDirB(d=> (d.y!==1?{x:0,y:-1}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">W</button>
+                        <div />
+                        <button aria-label="B links" onClick={()=> setDirB(d=> (d.x!==1?{x:-1,y:0}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">A</button>
+                        <div />
+                        <button aria-label="B rechts" onClick={()=> setDirB(d=> (d.x!==-1?{x:1,y:0}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">D</button>
+                        <div />
+                        <button aria-label="B runter" onClick={()=> setDirB(d=> (d.y!==-1?{x:0,y:1}:d))} className="w-16 h-16 md:w-20 md:h-20 text-lg font-medium rounded-xl border bg-white/85 backdrop-blur hover:bg-white active:scale-95 shadow">S</button>
+                        <div />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </>
+                <div className="text-[10px] text-gray-500 bg-white/70 px-2 py-1 rounded shadow">Automatische Tablet-Ansicht</div>
+              </div>
+            )
           )}
         </div>
       </div>

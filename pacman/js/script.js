@@ -382,6 +382,14 @@ bindControlButton('btnDown',  {x:0,y: 1});
 bindControlButton('btnLeft',  {x:-1,y:0});
 bindControlButton('btnRight', {x:1,y: 0});
 
+// Touch-Wischsteuerung direkt auf dem Canvas (optional zusätzlich zu Buttons)
+;(function enableSwipe(){
+    let startX=null,startY=null, moved=false; const TH=18; // Schwelle in px
+    canvas.addEventListener('touchstart', e=>{ if(e.touches.length!==1) return; startX=e.touches[0].clientX; startY=e.touches[0].clientY; moved=false; }, {passive:true});
+    canvas.addEventListener('touchmove', e=>{ if(startX==null) return; const dx=e.touches[0].clientX-startX; const dy=e.touches[0].clientY-startY; if(Math.abs(dx)>TH || Math.abs(dy)>TH){ moved=true; if(Math.abs(dx)>Math.abs(dy)){ if(dx>0) player.nextDir={x:1,y:0}; else player.nextDir={x:-1,y:0}; } else { if(dy>0) player.nextDir={x:0,y:1}; else player.nextDir={x:0,y:-1}; } startX=null; startY=null; } }, {passive:true});
+    canvas.addEventListener('touchend', ()=>{ startX=null; startY=null; }, {passive:true});
+})();
+
 function update(){
     if(paused) return; // Spielzustand einfrieren
     const EPS=0.001;

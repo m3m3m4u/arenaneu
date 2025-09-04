@@ -39,6 +39,7 @@ export default function LoginPage() {
           value={form.username}
           onChange={handleChange}
           className="w-full p-2 border rounded"
+          autoComplete="username"
           required
         />
         <input
@@ -48,6 +49,7 @@ export default function LoginPage() {
           value={form.password}
           onChange={handleChange}
           className="w-full p-2 border rounded"
+          autoComplete="current-password"
           required
         />
   <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded font-semibold">Login</button>

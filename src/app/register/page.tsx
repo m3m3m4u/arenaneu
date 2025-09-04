@@ -44,6 +44,7 @@ export default function RegisterPage() {
           value={form.username}
           onChange={handleChange}
           className="w-full p-2 border rounded"
+          autoComplete="username"
           required
         />
         <input
@@ -53,6 +54,7 @@ export default function RegisterPage() {
           value={form.email}
           onChange={handleChange}
           className="w-full p-2 border rounded"
+          autoComplete="email"
         />
         <input
           type="text"
@@ -61,6 +63,7 @@ export default function RegisterPage() {
           value={form.name}
           onChange={handleChange}
           className="w-full p-2 border rounded"
+          autoComplete="name"
           required
         />
         <input
@@ -70,6 +73,7 @@ export default function RegisterPage() {
           value={form.password}
           onChange={handleChange}
           className="w-full p-2 border rounded"
+          autoComplete="new-password"
           required
         />
         <select
