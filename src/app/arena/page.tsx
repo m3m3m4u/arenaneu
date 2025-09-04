@@ -52,6 +52,15 @@ export default function ArenaPage() {
             </div>
           </div>
         </a>
+        <a href="/arena/fussball" className="block border rounded p-4 hover:bg-gray-50 transition">
+          <div className="flex items-center gap-3">
+            <img src="/media/ball.png" onError={(e)=>{ (e.currentTarget as HTMLImageElement).style.display='none'; }} alt="Fußball" className="w-10 h-10 object-contain" />
+            <div>
+              <div className="font-semibold">Fußball (Proto)</div>
+              <div className="text-sm text-gray-600">In Arbeit – Basis Physik</div>
+            </div>
+          </div>
+        </a>
       </div>
       
   {/* Dashboard-Button entfernt, da Navigation über Header vorhanden */}

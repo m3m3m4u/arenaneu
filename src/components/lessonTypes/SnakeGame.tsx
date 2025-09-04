@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Lesson } from './types';
 import { CELL, COLS, ROWS } from './snake/constants';
+import useFullscreenTouchLock from '../../lib/useFullscreenTouchLock';
 import { useSnakeRendering } from './snake/useSnakeRendering';
 import { useSnakeLogic } from './snake/useSnakeLogic';
 import { useSession } from 'next-auth/react';
@@ -23,22 +24,26 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
   // iOS Safari Workaround: global touchmove blocker während Vollbild um Pull-Down / UI-Reveal zu minimieren
   useEffect(()=>{
     if(!isFullscreen) return;
-    const prevent = (e: TouchEvent)=>{
-      // Nur Single-Finger Gesten blocken (Scroll / Navigation). Multi-touch (Pinch) bleibt erlaubt.
-      if(e.touches.length === 1){
-        try { e.preventDefault(); } catch {}
-      }
+    const preventMove = (e: TouchEvent)=>{
+      if(e.touches.length===1){ try { e.preventDefault(); } catch {} }
     };
-    // capture + passive:false nötig, sonst keine Wirkung in iOS
-    document.addEventListener('touchmove', prevent, { passive:false, capture:true });
-    // overscroll Verhalten einschränken
+    const preventStart = (e: TouchEvent)=>{
+      // Verhindert Swipe-Back Gesten am linken Rand im Vollbild (Heuristik: Start-X < 30px)
+      const t = e.touches[0];
+      if(t && t.clientX < 30){ try { e.preventDefault(); } catch {} }
+    };
     const prevOverscroll = document.documentElement.style.overscrollBehavior;
-    document.documentElement.style.overscrollBehavior = 'none';
+    document.documentElement.style.overscrollBehavior='none';
+    document.addEventListener('touchmove', preventMove, { passive:false, capture:true });
+    document.addEventListener('touchstart', preventStart, { passive:false, capture:true });
     return ()=> {
-      document.removeEventListener('touchmove', prevent, { capture:true } as any);
-      document.documentElement.style.overscrollBehavior = prevOverscroll;
+      document.removeEventListener('touchmove', preventMove, { capture:true } as any);
+      document.removeEventListener('touchstart', preventStart, { capture:true } as any);
+      document.documentElement.style.overscrollBehavior=prevOverscroll;
     };
   },[isFullscreen]);
+  // Vereinheitlichte Sperre (künftig nur Hook nutzen – der Block oben bleibt als Übergang / wird später entfernt)
+  useFullscreenTouchLock(isFullscreen);
   // Debug Hotkeys: 1..5 oder A für Auto (hilft falls Button gecached fehlt)
   useEffect(()=>{
     const handler = (e:KeyboardEvent)=>{

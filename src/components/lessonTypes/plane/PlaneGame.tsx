@@ -48,14 +48,16 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
   const [marking, setMarking] = useState(false);
   const [finished, setFinished] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Vollbild Swipe-Schutz (iOS Safari) – blockiert 1-Finger Scroll/PullDown Gesten
+  // Vollbild Swipe-Schutz (iOS Safari) – stärkerer Block, inkl. Edge-Swipe & PullDown
   useEffect(()=>{
     if(!isFullscreen) return;
-    const prevent=(e:TouchEvent)=>{ if(e.touches.length===1){ try{ e.preventDefault(); }catch{} } };
-    document.addEventListener('touchmove', prevent, { passive:false, capture:true });
+    const preventMove=(e:TouchEvent)=>{ if(e.touches.length===1){ try{ e.preventDefault(); }catch{} } };
+    const preventStart=(e:TouchEvent)=>{ const t=e.touches[0]; if(!t) return; if(t.clientX<30 || t.clientY<30){ try{ e.preventDefault(); }catch{} } };
+    document.addEventListener('touchmove', preventMove, { passive:false, capture:true });
+    document.addEventListener('touchstart', preventStart, { passive:false, capture:true });
     const prev = document.documentElement.style.overscrollBehavior;
     document.documentElement.style.overscrollBehavior='none';
-    return ()=>{ document.removeEventListener('touchmove', prevent, { capture:true } as any); document.documentElement.style.overscrollBehavior=prev; };
+    return ()=>{ document.removeEventListener('touchmove', preventMove, { capture:true } as any); document.removeEventListener('touchstart', preventStart, { capture:true } as any); document.documentElement.style.overscrollBehavior=prev; };
   },[isFullscreen]);
 
   // Zahl -> deutsches Wort (Basis für kleine Zahlen)
