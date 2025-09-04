@@ -88,9 +88,9 @@ export default function FussballLobbyPage(){
 
   if(lobby){
     return (
-      <main className="max-w-3xl mx-auto p-4 flex flex-col gap-6">
+      <main className="w-full px-4 md:px-8 py-4 flex flex-col gap-6">
         <h1 className="text-2xl font-bold">⚽ Fußball Lobby</h1>
-        <div className="rounded border bg-white shadow p-4 flex flex-col gap-4">
+        <div className="rounded border bg-white shadow p-4 flex flex-col gap-4 max-w-5xl">
           <div>
             <div className="text-sm font-semibold text-gray-600">Spiel Titel</div>
             <div className="text-lg font-bold">{lobby.title}</div>
@@ -125,9 +125,9 @@ export default function FussballLobbyPage(){
   }
 
   return (
-    <main className="max-w-4xl mx-auto p-4 flex flex-col gap-8">
+    <main className="w-full px-4 md:px-8 py-4 flex flex-col gap-8">
       <h1 className="text-2xl font-bold flex items-center gap-3">⚽ Fußball Matchmaking <span className="text-sm font-normal text-gray-500">(Prototyp)</span></h1>
-      <section className="rounded border bg-white shadow p-4 flex flex-col gap-4">
+      <section className="rounded border bg-white shadow p-4 flex flex-col gap-4 max-w-5xl">
         <h2 className="text-lg font-semibold">Neues Spiel erstellen</h2>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-sm col-span-1">Titel
@@ -157,7 +157,7 @@ export default function FussballLobbyPage(){
           {error && <span className="text-xs text-red-600">{error}</span>}
         </div>
       </section>
-      <section className="rounded border bg-white shadow p-4 flex flex-col gap-4">
+      <section className="rounded border bg-white shadow p-4 flex flex-col gap-4 max-w-5xl">
         <h2 className="text-lg font-semibold">Offene Lobbys</h2>
         <div className="flex flex-col gap-3">
           {list.length? list.map((l:LobbyListItem)=>(
