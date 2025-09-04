@@ -124,6 +124,16 @@ export default function GlobalHeader(){
           </nav>
         </div>
   {/* Benutzerinfo & Logout in Footer verschoben */}
+        <div className="hidden md:flex items-center gap-2 text-[11px] sm:text-xs">
+          {session ? (
+            <button
+              onClick={()=>signOut({ callbackUrl: '/login', redirect: true })}
+              className="px-2 py-1 border rounded hover:bg-gray-50"
+            >Logout</button>
+          ) : (
+            <Link href="/login" className="px-2 py-1 border rounded hover:bg-gray-50">Login</Link>
+          )}
+        </div>
         <MobileDrawer
           open={mobileOpen}
           onClose={()=>setMobileOpen(false)}
