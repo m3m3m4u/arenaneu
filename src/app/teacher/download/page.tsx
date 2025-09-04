@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface ProductFile { key:string; name:string; downloadUrl?:string; contentType?:string; }
 interface Product { _id:string; title:string; description?:string; price?:number; files?:ProductFile[]; category?:string; }
@@ -9,6 +9,57 @@ export default function TeacherDownloadShop(){
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState<string|null>(null);
   const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index der aktiven Datei (für Karussell)
+  // Thumbnails für PDF (erste Seite) – key => dataURL | 'error'
+  const [thumbs,setThumbs] = useState<Record<string,string>>({});
+  // Einfache Warteschlange, um gleichzeitige PDF-Decodes zu begrenzen
+  const queueRef = useRef<string[]>([]);
+  const busyRef = useRef(false);
+
+  async function processQueue(){
+    if(busyRef.current) return; busyRef.current=true;
+    while(queueRef.current.length){
+      const k = queueRef.current.shift()!;
+      // Falls inzwischen vorhanden (oder Fehler gesetzt) überspringen
+      if(thumbs[k]) continue;
+      const file = findFileByKey(k);
+      if(!file || !file.downloadUrl) continue;
+      try {
+        // Dynamischer Import (kein SSR Bundle Blow-Up)
+  const pdfjs: any = await import('pdfjs-dist');
+        try { (pdfjs as any).GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js'; } catch {}
+        const task = pdfjs.getDocument({ url: file.downloadUrl, useSystemFonts: true, enableXfa: false });
+        const pdf = await task.promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 0.28 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        if(!ctx) throw new Error('CanvasContext fehlgeschlagen');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const url = canvas.toDataURL('image/png');
+        setThumbs(t=> ({ ...t, [k]: url }));
+      } catch (e){
+        setThumbs(t=> ({ ...t, [k]: 'error' }));
+      }
+    }
+    busyRef.current=false;
+  }
+
+  function enqueueThumb(f: ProductFile){
+    const k = f.key || f.downloadUrl!;
+    if(thumbs[k]) return; // schon vorhanden oder Fehler
+    if(!queueRef.current.includes(k)){
+      queueRef.current.push(k);
+      processQueue();
+    }
+  }
+
+  function findFileByKey(k:string){
+    for(const p of items){
+      for(const f of (p.files||[])) if(f.key===k) return f;
+    }
+    return null;
+  }
 
   async function load(){
     setLoading(true); setError(null);
@@ -47,15 +98,20 @@ export default function TeacherDownloadShop(){
           const idx = activeIdx[p._id]||0;
           const current = files[idx];
           const hasPdf = current && /pdf$/i.test(current.name);
+          // Thumbnail bei Bedarf anstoßen
+          if(hasPdf && current) enqueueThumb(current);
+          const thumbKey = current?.key || '';
           return (
             <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
               <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2">
-                {/* Bildbereich / PDF-Thumbnails */}
+                {/* PDF Thumbnail (erste Seite) oder generische Dateiinfo */}
                 {hasPdf && current?.downloadUrl ? (
-                  <div className="w-full h-full overflow-auto p-2">
-                    {/* leichtes Grid für mehrere Seiten-Thumbnails */}
-                    {/* @ts-ignore */}
-                    {require('react').createElement(require('@/components/media/PdfThumbs').default, { url: current.downloadUrl })}
+                  <div className="w-full h-full flex items-center justify-center">
+                    {thumbs[thumbKey] && thumbs[thumbKey] !== 'error' && (
+                      <img src={thumbs[thumbKey]} alt={current.name} className="max-w-full max-h-full object-contain rounded shadow-sm" />
+                    )}
+                    {!thumbs[thumbKey] && <span className="text-[11px] text-gray-500">Lade Vorschau…</span>}
+                    {thumbs[thumbKey] === 'error' && <span className="text-[11px] text-red-500">Keine Vorschau</span>}
                   </div>
                 ) : current ? (
                   <div className="text-[11px] text-gray-500 text-center px-2">
