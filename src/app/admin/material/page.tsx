@@ -365,13 +365,7 @@ export default function AdminMaterialPage(){
                   ))}
                   {p.files && p.files.length>4 && <span className="text-[10px] text-gray-400">+{p.files.length-4}</span>}
                 </div>
-                {(p.files||[]).some(f=>f.downloadUrl) && (
-                  <div className="flex gap-1 flex-wrap">
-                    {(p.files||[]).filter(f=>f.downloadUrl).slice(0,3).map(f=> (
-                      <a key={f.key+':dl'} href={f.downloadUrl} download className="text-[10px] underline text-blue-600 hover:text-blue-800">DL {f.name.slice(0,10)}</a>
-                    ))}
-                  </div>
-                )}
+                {(()=>{ const pdfFile = (p.files||[]).find(f=> f.downloadUrl && f.name.toLowerCase().endsWith('.pdf')); if(!pdfFile) return null; return require('react').createElement(require('@/components/media/PdfThumbs').default, { url: pdfFile.downloadUrl, onOpen: ()=> setPdfUrl(pdfFile.downloadUrl) }); })()}
               </div>
             </div>
           ))}
