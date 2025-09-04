@@ -18,7 +18,10 @@ interface Props { lesson: Lesson; courseId: string; completedLessons: string[]; 
 // Konstanten jetzt in types.ts
 const FORCE_MIN_DPR = 2;
 const PLANE_DISPLAY_WIDTH = 126;
-const PLANE_MIRRORED = true;
+// Horizontale Spiegelung (links/rechts). Aktuell aus.
+const PLANE_MIRRORED = false;
+// Vertikale Spiegelung (oben/unten) – neu hinzugefügt.
+const PLANE_VERTICAL_FLIP = true;
 const BG_SCROLL_SPEED = 60;
 const MAX_LIVES = 3;
 // Kann über lesson.content.planeScale (0.2 - 1.0) überschrieben werden
@@ -185,9 +188,11 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
         const mh = Math.round(planeRef.current.h);
         const off = document.createElement('canvas'); off.width = mw; off.height = mh; const octx = off.getContext('2d');
         if(octx){
-          if(PLANE_MIRRORED){
+          // Einheitlicher Transform für horizontale / vertikale Spiegelung
+          if(PLANE_MIRRORED || PLANE_VERTICAL_FLIP){
             octx.save();
-            octx.translate(mw,0); octx.scale(-1,1);
+            octx.translate(PLANE_MIRRORED? mw:0, PLANE_VERTICAL_FLIP? mh:0);
+            octx.scale(PLANE_MIRRORED? -1:1, PLANE_VERTICAL_FLIP? -1:1);
             octx.drawImage(planeImg,0,0,mw,mh);
             octx.restore();
           } else {
@@ -199,13 +204,13 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
         }
   } catch(err){ console.warn('Plane mask build failed', err); }
     }; 
-    planeImg.onerror = ()=> { 
+  planeImg.onerror = ()=> { 
       console.warn('PlaneGame: /media/kopernikusflieger.png konnte nicht geladen – fallback auf /media/flugzeug.svg');
       // Fallback auf altes SVG
       planeImg.src='/media/flugzeug.svg';
     };
     console.debug('PlaneGame: lade neues Flugzeug /media/kopernikusflieger.png');
-    planeImg.src='/media/kopernikusflieger.png'; planeImgRef.current=planeImg;
+  planeImg.src='/media/kopernikusflieger.png'; planeImgRef.current=planeImg;
     const bgImg = new Image(); bgImg.onload=()=>{ bgReadyRef.current=true; }; bgImg.onerror=()=> console.warn('PlaneGame: /media/hintergrundbild.png konnte nicht geladen werden'); bgImg.src='/media/hintergrundbild.png'; bgImgRef.current=bgImg;
   },[]);
 
@@ -345,7 +350,7 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
         ctx.font='20px system-ui'; ctx.fillText('P oder Space zum Fortsetzen', LOGICAL_WIDTH/2, LOGICAL_HEIGHT/2 + 40);
       }
     };
-  const drawPlane = (ctx:CanvasRenderingContext2D)=>{ const plane=planeRef.current; ctx.save(); ctx.translate(plane.x, plane.y); ctx.rotate(plane.angle * Math.PI/180); if(planeReadyRef.current && planeImgRef.current){ ctx.imageSmoothingEnabled=true; (ctx as any).imageSmoothingQuality='high'; if(PLANE_MIRRORED) ctx.scale(-1,1); ctx.drawImage(planeImgRef.current, -plane.w/2, -plane.h/2, plane.w, plane.h); } else { ctx.fillStyle='#f33'; ctx.fillRect(-plane.w/2, -plane.h/2, plane.w, plane.h); } ctx.restore(); };
+  const drawPlane = (ctx:CanvasRenderingContext2D)=>{ const plane=planeRef.current; ctx.save(); ctx.translate(plane.x, plane.y); ctx.rotate(plane.angle * Math.PI/180); if(planeReadyRef.current && planeImgRef.current){ ctx.imageSmoothingEnabled=true; (ctx as any).imageSmoothingQuality='high'; if(PLANE_MIRRORED || PLANE_VERTICAL_FLIP){ ctx.scale(PLANE_MIRRORED? -1:1, PLANE_VERTICAL_FLIP? -1:1); } ctx.drawImage(planeImgRef.current, -plane.w/2, -plane.h/2, plane.w, plane.h); } else { ctx.fillStyle='#f33'; ctx.fillRect(-plane.w/2, -plane.h/2, plane.w, plane.h); } ctx.restore(); };
   const drawScrollingBackground = (ctx:CanvasRenderingContext2D)=>{ if(bgReadyRef.current && bgImgRef.current){ const iw=bgImgRef.current.naturalWidth || bgImgRef.current.width; const ih=bgImgRef.current.naturalHeight || bgImgRef.current.height; if(iw>0 && ih>0){ const scale = LOGICAL_HEIGHT / ih; const tileW = iw*scale; const tileH=LOGICAL_HEIGHT; bgOffsetRef.current -= BG_SCROLL_SPEED * lastFrameDtRef.current; if(bgOffsetRef.current <= -tileW){ bgOffsetRef.current = bgOffsetRef.current % tileW; } let startX = bgOffsetRef.current; while(startX > 0) startX -= tileW; for(let x=startX; x<LOGICAL_WIDTH; x+=tileW){ ctx.drawImage(bgImgRef.current,x,0,tileW,tileH); } ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(0,0,LOGICAL_WIDTH,LOGICAL_HEIGHT); } else { ctx.fillStyle='#4c9be2'; ctx.fillRect(0,0,LOGICAL_WIDTH,LOGICAL_HEIGHT);} } else { const grad=ctx.createLinearGradient(0,0,0,LOGICAL_HEIGHT); grad.addColorStop(0,'#4c9be2'); grad.addColorStop(1,'#b5ddff'); ctx.fillStyle=grad; ctx.fillRect(0,0,LOGICAL_WIDTH,LOGICAL_HEIGHT); } };
     const drawCloud = (ctx:CanvasRenderingContext2D, c:Cloud)=>{
       ctx.save();
