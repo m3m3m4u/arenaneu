@@ -52,7 +52,7 @@ export default function AdminMaterialPage(){
   async function load(){
     setLoading(true); setError(null);
     try {
-      const r = await fetch('/api/shop/products');
+  const r = await fetch('/api/shop/products?all=1');
       const d = await r.json();
       if(r.ok && d.success){ setProducts(d.items||[]); } else { setError(d.error||'Fehler'); }
       // Kurs-Kategorien nachladen (separat, nicht an Produkte Response gebunden)
@@ -131,6 +131,18 @@ export default function AdminMaterialPage(){
     setRawDeletingId(null);
   }
 
+  async function deleteSelectedRaw(){
+    if(!selectedRawIds.length) return;
+    if(!confirm(`${selectedRawIds.length} ausgewählte Roh-Datei(en) wirklich löschen?`)) return;
+    for(const id of [...selectedRawIds]){
+      try {
+        await fetch('/api/shop/raw-files?id='+encodeURIComponent(id), { method:'DELETE' });
+      } catch {/* ignore */}
+    }
+    setSelectedRawIds([]);
+    loadRaw(1);
+  }
+
   async function handleExcel(file: File){
     setExcelLoading(true); setExcelResult(null); setExcelUnmatched([]);
     try {
@@ -151,7 +163,23 @@ export default function AdminMaterialPage(){
       const r = await fetch(`/api/shop/admin/materials/bulk-from-excel?token=${encodeURIComponent(excelToken)}`, { method:'POST' });
       const d = await r.json();
       if(!(r.ok && d.success)){ alert(d.error||'Commit Fehler'); }
-      else { setExcelResult(d); setExcelUnmatched(d.unmatched||[]); setExcelToken(null); load(); }
+      else {
+        setExcelResult(d);
+        setExcelUnmatched(d.unmatched||[]);
+        setExcelToken(null);
+        // Optimistisch neue Produkte (rudimentär) ergänzen bis Reload fertig
+        if(Array.isArray(d.created) && d.created.length){
+          setProducts(prev=>{
+            const existingIds = new Set(prev.map(p=>p._id));
+            const injected = d.created.filter((c:any)=> !existingIds.has(String(c.id))).map((c:any)=> ({ _id:String(c.id), title:c.title, description:'', category: undefined, isPublished:false, files:[], price: undefined } as Product));
+            return [...injected, ...prev];
+          });
+        }
+        // Nachladen kompletter Daten
+        load();
+        // Direkt zur Vorschau wechseln
+        setTab('preview');
+      }
     } catch { alert('Netzwerkfehler'); }
     setExcelLoading(false);
   }
@@ -214,6 +242,9 @@ export default function AdminMaterialPage(){
               + Upload
               <input type="file" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadRawFile(f); e.target.value=''; }} />
             </label>
+            {selectedRawIds.length>0 && (
+              <button onClick={deleteSelectedRaw} className="px-2 py-1 border rounded bg-red-50 hover:bg-red-100 text-red-700" title="Ausgewählte löschen">Löschen ({selectedRawIds.length})</button>
+            )}
             {rawUploading && <span>Upload…</span>}
           </div>
         </div>
