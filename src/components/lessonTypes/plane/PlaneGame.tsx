@@ -19,9 +19,9 @@ interface Props { lesson: Lesson; courseId: string; completedLessons: string[]; 
 const FORCE_MIN_DPR = 2;
 const PLANE_DISPLAY_WIDTH = 126;
 // Horizontale Spiegelung (links/rechts). Aktuell aus.
-const PLANE_MIRRORED = false;
-// Vertikale Spiegelung (oben/unten) – neu hinzugefügt.
-const PLANE_VERTICAL_FLIP = true;
+// Spiegelungen anpassen: Beide aktiv (horizontal + vertikal)
+const PLANE_MIRRORED = true;        // Horizontal (links/rechts)
+const PLANE_VERTICAL_FLIP = true;   // Vertikal (oben/unten)
 const BG_SCROLL_SPEED = 60;
 const MAX_LIVES = 3;
 // Kann über lesson.content.planeScale (0.2 - 1.0) überschrieben werden

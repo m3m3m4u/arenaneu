@@ -20,7 +20,8 @@ export async function GET(req: Request){
     const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit')||'12',10)));
     const search = (url.searchParams.get('q')||'').trim();
     const cat = (url.searchParams.get('cat')||'').trim();
-    const showAll = url.searchParams.get('all') === '1' && role === 'admin';
+  // Lehrer sollen im Download-Bereich ebenfalls unveröffentlichte Materialien sehen können
+  const showAll = url.searchParams.get('all') === '1' && (role === 'admin' || role === 'teacher');
     const filter: any = showAll ? {} : { isPublished: true };
     if (search){
       filter.$or = [
