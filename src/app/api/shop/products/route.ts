@@ -5,7 +5,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import { s3PublicUrl, s3Copy, s3Delete, isS3Enabled } from '@/lib/storage';
 import { isWebdavEnabled, webdavPublicUrl, davMove } from '@/lib/webdavClient';
-import { isShopWebdavEnabled, shopWebdavPublicUrl } from '@/lib/webdavShopClient';
+import { isShopWebdavEnabled, shopWebdavPublicUrl, shopDavMove } from '@/lib/webdavShopClient';
 import { CATEGORIES, normalizeCategory } from '@/lib/categories';
 import TempShopFile from '@/models/TempShopFile';
 
@@ -73,13 +73,22 @@ export async function POST(req: Request){
         try {
           const safeName = t.name.replace(/[^a-zA-Z0-9._-]+/g,'_');
           const newKey = `${prefix}/${doc._id}/${Date.now()}_${safeName}`;
+          let moved = false;
           if(useWebdav){
-            try { await davMove(t.key, newKey); } catch{}
+            if(isShopWebdavEnabled()){
+              try { await shopDavMove(t.key, newKey); moved = true; } catch(err){ console.warn('shopDavMove fehlgeschlagen', t.key, err); }
+            } else {
+              try { await davMove(t.key, newKey); moved = true; } catch(err){ console.warn('davMove fehlgeschlagen', t.key, err); }
+            }
           } else if(isS3Enabled()) {
-            await s3Copy(t.key, newKey); await s3Delete(t.key);
+            await s3Copy(t.key, newKey); await s3Delete(t.key); moved = true;
           }
-          doc.files.push({ key: newKey, name: t.name, size: t.size, contentType: t.contentType });
-          await TempShopFile.deleteOne({ _id: t._id });
+          if(moved){
+            doc.files.push({ key: newKey, name: t.name, size: t.size, contentType: t.contentType });
+            await TempShopFile.deleteOne({ _id: t._id });
+          } else {
+            console.warn('Temp Datei konnte nicht übernommen werden (Move fehlgeschlagen):', t.key);
+          }
         } catch(err){
           console.warn('Temp Datei Übernahme fehlgeschlagen', t.key, err);
         }

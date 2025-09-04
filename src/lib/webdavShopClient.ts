@@ -62,6 +62,34 @@ export async function shopDavDelete(key: string){
   }
 }
 
+export async function shopDavMove(oldKey: string, newKey: string){
+  const c = conf();
+  if(!c){
+    // Fallback: generischer Client falls vorhanden
+    return null; // Caller kann dann generische davMove versuchen
+  }
+  // Ziel-Verzeichnis anlegen
+  await ensureParentDir(newKey, c.url, c.auth);
+  const src = `${c.url}/${encodeURIComponent(oldKey).replace(/%2F/g,'/')}`;
+  const dst = `${c.url}/${encodeURIComponent(newKey).replace(/%2F/g,'/')}`;
+  let res: Response | null = null;
+  try {
+    res = await fetch(src, { method:'MOVE', headers: { Authorization: c.auth, Destination: dst, Overwrite: 'F' } });
+  } catch {}
+  if(res && (res.status === 201 || res.status === 204)){
+    return { url: shopWebdavPublicUrl(newKey), key: newKey };
+  }
+  // Fallback: GET + PUT + DELETE
+  const getRes = await fetch(src, { headers: { Authorization: c.auth } });
+  if(!getRes.ok){
+    throw new Error('SHOP MOVE fallback GET failed: '+getRes.status);
+  }
+  const buf = new Uint8Array(await getRes.arrayBuffer());
+  await shopDavPut(newKey, buf, getRes.headers.get('content-type') || undefined);
+  await shopDavDelete(oldKey).catch(()=>undefined);
+  return { url: shopWebdavPublicUrl(newKey), key: newKey };
+}
+
 async function ensureParentDir(key: string, baseUrl: string, auth: string){
   const idx = key.lastIndexOf('/');
   if(idx <= 0) return;

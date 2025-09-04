@@ -54,9 +54,7 @@ export default function ArenaPage() {
         </a>
       </div>
       
-      <a href="/dashboard" className="bg-gray-600 text-white py-2 px-4 rounded font-semibold hover:bg-gray-700 transition">
-  {/* Zurück-Link entfernt */}
-      </a>
+  {/* Dashboard-Button entfernt, da Navigation über Header vorhanden */}
     </main>
   );
 }

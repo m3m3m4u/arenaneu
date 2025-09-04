@@ -29,6 +29,7 @@ export async function POST(req: Request){
 		const user = session.user?.username || session.user?.email || 'user';
 		const useShop = isShopWebdavEnabled();
 		const useDav = useShop || isWebdavEnabled();
+		console.log('[temp-files] erhaltene FormData file-Einträge:', files.map(f=> ({ type: typeof f, name: (f as any)?.name, hasArrayBuffer: !!(f as any)?.arrayBuffer })));
 		for(const raw of files){
 			const f: any = raw; // Kann File, Blob oder unbekannt sein
 			if(!f || typeof f.arrayBuffer !== 'function'){
@@ -64,8 +65,10 @@ export async function POST(req: Request){
 			}
 		}
 		if(!created.length){
+			console.warn('[temp-files] Keine Datei erfolgreich gespeichert. Errors:', errors);
 			return NextResponse.json({ success:false, error:'Kein Datei-Upload gelungen', errors, received: files.length }, { status:500 });
 		}
+		console.log('[temp-files] Upload erfolgreich', { count: created.length });
 		return NextResponse.json({ success:true, files: created, temp: created[0]||null, errors: errors.length? errors: undefined, received: files.length });
 	} catch(e){
 		console.error('temp-files POST error', e);
