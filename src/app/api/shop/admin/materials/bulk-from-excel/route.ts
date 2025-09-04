@@ -6,6 +6,7 @@ import { isShopWebdavEnabled, shopDavPut, shopWebdavPublicUrl } from '@/lib/webd
 import { isWebdavEnabled, davPut, webdavPublicUrl } from '@/lib/webdavClient';
 import { isS3Enabled, s3Put, s3PublicUrl } from '@/lib/storage';
 import * as XLSX from 'xlsx';
+import { normalizeCategory } from '@/lib/categories';
 
 export const runtime='nodejs';
 export const maxDuration=120;
@@ -14,6 +15,7 @@ export const maxDuration=120;
 // Struktur: Jede Spalte = ein Material
 // Row1: Titel, Row2: Kategorie, Row3: Beschreibung, Row4: Preis (Zahl / optional), Rows5+: Dateinamen
 // Dateien müssen vorab hochgeladen sein und exakt mit gespeicherten Namen vorkommen (wir suchen nach key-Endungen)
+// mode=preview -> nur parse; sonst anlegen (mit Platzhaltern für Dateien)
 export async function POST(req: Request){
   try {
     if(!await isAdminRequest(req)) return NextResponse.json({ success:false, error:'Forbidden' }, { status:403 });
@@ -27,12 +29,14 @@ export async function POST(req: Request){
     const sheet = wb.Sheets[wb.SheetNames[0]]; if(!sheet) return NextResponse.json({ success:false, error:'Kein Sheet gefunden' }, { status:400 });
     const range=XLSX.utils.decode_range(sheet['!ref']||'A1');
     const cols:number[]=[]; for(let c=range.s.c;c<=range.e.c;c++) cols.push(c);
-    const materials: Array<{ title:string; category?:string; description?:string; price:number; files:string[] }> = [];
+  const materials: Array<{ title:string; category?:string; description?:string; price:number; files:string[]; normalizedCategory?:string }> = [];
     for(const c of cols){
       const cellVal=(r:number)=>{ const ref=XLSX.utils.encode_cell({c,r}); const cell=sheet[ref]; if(!cell) return ''; return String(cell.v??'').trim(); };
       const title = cellVal(range.s.r);
       if(!title) continue; // leere Spalte ignorieren
-      const category = cellVal(range.s.r+1) || undefined;
+  const categoryRaw = cellVal(range.s.r+1) || undefined;
+  const normalizedCategory = categoryRaw ? normalizeCategory(categoryRaw) || undefined : undefined;
+  const category = categoryRaw;
       const description = cellVal(range.s.r+2) || undefined;
       const priceRaw = cellVal(range.s.r+3);
       const price = priceRaw? Number(priceRaw.replace(',','.'))||0 : 0;
@@ -40,9 +44,14 @@ export async function POST(req: Request){
       for(let r=range.s.r+4; r<=range.e.r; r++){
         const name = cellVal(r); if(name) fileNames.push(name);
       }
-      materials.push({ title, category, description, price, files: fileNames });
+      materials.push({ title, category, description, price, files: fileNames, normalizedCategory });
     }
     if(!materials.length) return NextResponse.json({ success:false, error:'Keine gültigen Spalten gefunden' }, { status:400 });
+
+    const urlObj=new URL(req.url); const preview = urlObj.searchParams.get('mode')==='preview';
+    if(preview){
+      return NextResponse.json({ success:true, preview:true, materials });
+    }
 
     // Wir können hier keine Dateinamen->Key Zuordnung ohne Index kennen. Vereinfachung: wir versuchen, vorhandene Produkte nicht zu duplizieren (gleicher Titel).
     // Für Datei-Verknüpfungen: Admin lädt zuerst Dateien (Medien-ähnlich) in einen Ordner /shop/uploads/raw/<filename>. Wir suchen diese Keys.
@@ -54,7 +63,7 @@ export async function POST(req: Request){
     for(const m of materials){
       const existing = await ShopProduct.findOne({ title: m.title });
       if(existing){ skipped.push({ title:m.title, reason:'existiert' }); continue; }
-      const doc = await ShopProduct.create({ title: m.title, category: m.category, description: m.description, price: m.price, tags:[], isPublished:false, files: [] });
+  const doc = await ShopProduct.create({ title: m.title, category: m.normalizedCategory, description: m.description, price: m.price, tags:[], isPublished:false, files: [] });
       // Placeholder file entries (ohne Upload). Später per separatem Endpoint verknüpfen.
       m.files.forEach(fn=>{ doc.files.push({ key:`placeholder:${fn}`, name:fn, size:0, contentType: undefined, createdAt:new Date() }); });
       await doc.save();
