@@ -30,6 +30,7 @@ export async function POST(req: Request){
 		const useShop = isShopWebdavEnabled();
 		const useDav = useShop || isWebdavEnabled();
 		const useS3 = !useDav && isS3Enabled();
+		console.log('[temp-files] storage flags', { useShop, genericWebdav: isWebdavEnabled(), useDav, useS3, user, count: files.length });
 		console.log('[temp-files] erhaltene FormData file-Einträge:', files.map(f=> ({ type: typeof f, name: (f as any)?.name, hasArrayBuffer: !!(f as any)?.arrayBuffer })));
 		const attempts: any[] = [];
 		for(const raw of files){
