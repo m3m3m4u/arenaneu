@@ -251,17 +251,19 @@ export default function AdminMaterialPage(){
         <div className="grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {rawFiles.map(f=>{
             const sel = selectedRawIds.includes(f.id);
+            const usedByProduct = products.some(p=> (p.files||[]).some(file=> file.key===f.key || file.name===f.name));
             return (
-              <div key={f.id} onClick={()=>toggleRaw(f.id)} className={`relative cursor-pointer border rounded p-2 text-left flex flex-col gap-1 text-[11px] hover:bg-gray-50 ${sel?'ring-2 ring-blue-500 bg-blue-50':''}`}>
+              <div key={f.id} onClick={()=>!usedByProduct && toggleRaw(f.id)} className={`relative border rounded p-2 text-left flex flex-col gap-1 text-[11px] ${usedByProduct? 'opacity-70 cursor-not-allowed bg-gray-50':'cursor-pointer hover:bg-gray-50'} ${sel?'ring-2 ring-blue-500 bg-blue-50':''}`}>
                 <button
-                  onClick={(e)=>{ e.stopPropagation(); deleteRawFile(f.id); }}
-                  title="Löschen"
-                  className="absolute top-1 right-1 text-red-600 hover:text-red-800 text-xs px-1"
-                  disabled={rawDeletingId===f.id}
+                  onClick={(e)=>{ e.stopPropagation(); if(usedByProduct) return; deleteRawFile(f.id); }}
+                  title={usedByProduct? 'In Produkt verwendet – nicht löschbar':'Löschen'}
+                  className={`absolute top-1 right-1 text-xs px-1 ${usedByProduct? 'text-gray-400':'text-red-600 hover:text-red-800'}`}
+                  disabled={rawDeletingId===f.id || usedByProduct}
                 >{rawDeletingId===f.id? '…':'×'}</button>
                 <span className="font-medium truncate pr-4" title={f.name}>{f.name}</span>
                 <span className="text-gray-500">{Math.round(f.size/1024)} KB</span>
                 <span className="text-gray-400">{new Date(f.createdAt).toLocaleDateString()}</span>
+                {usedByProduct && <span className="text-[10px] text-emerald-700">in Produkt</span>}
               </div>
             );
           })}
@@ -333,7 +335,17 @@ export default function AdminMaterialPage(){
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {products.map(p=> (
             <div key={p._id} className="border rounded p-4 bg-white flex flex-col gap-2 text-sm">
-              <div className="font-semibold flex justify-between items-center"><span>{p.title}</span>{typeof p.price==='number' && <span className="text-xs text-gray-500">{p.price.toFixed(2)} €</span>}</div>
+              <div className="font-semibold flex justify-between items-center">
+                <span className="truncate pr-2" title={p.title}>{p.title}</span>
+                <div className="flex items-center gap-2">
+                  {typeof p.price==='number' && <span className="text-xs text-gray-500">{p.price.toFixed(2)} €</span>}
+                  <button
+                    onClick={async()=>{ if(!confirm(`Produkt "${p.title}" löschen?`)) return; try{ const r=await fetch(`/api/shop/products/${p._id}`,{ method:'DELETE' }); const d=await r.json(); if(!(r.ok && d.success)) alert(d.error||'Löschen fehlgeschlagen'); else setProducts(prev=> prev.filter(x=> x._id!==p._id)); } catch { alert('Netzwerkfehler'); } }}
+                    className="text-xs text-red-600 hover:text-red-800 px-1 py-0.5 border border-red-200 rounded"
+                    title="Produkt löschen"
+                  >✕</button>
+                </div>
+              </div>
               {p.category && <div className="text-[11px] text-indigo-700">{p.category}</div>}
               <div className="text-[11px] text-gray-500">{p.files?.filter(f=>!f.key?.startsWith('placeholder:')).length || 0} echte Dateien / {p.files?.length||0} gesamt</div>
               {p.description && <p className="text-[11px] text-gray-600 line-clamp-3 whitespace-pre-line">{p.description}</p>}

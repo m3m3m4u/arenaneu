@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import ShopRawFile from '@/models/ShopRawFile';
+import ShopProduct from '@/models/ShopProduct';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { isShopWebdavEnabled, shopDavPut, shopWebdavPublicUrl } from '@/lib/webdavShopClient';
@@ -93,8 +94,11 @@ export async function DELETE(req: Request){
     const session:any=await getServerSession(authOptions as any);
     if(!session || session.user?.role!=='admin') return NextResponse.json({ success:false, error:'Kein Zugriff' }, { status:403 });
     const url=new URL(req.url); const id=url.searchParams.get('id'); if(!id) return NextResponse.json({ success:false, error:'id fehlt' }, { status:400 });
-    const doc=await ShopRawFile.findById(id); if(!doc) return NextResponse.json({ success:false, error:'Nicht gefunden' }, { status:404 });
-    // Optional: Löschlogik Storage
+  const doc=await ShopRawFile.findById(id); if(!doc) return NextResponse.json({ success:false, error:'Nicht gefunden' }, { status:404 });
+  // Prüfen ob in Produkten referenziert (über Dateiname oder Key)
+  const inUse = await ShopProduct.exists({ $or:[ { 'files.key': doc.key }, { 'files.name': doc.name } ] });
+  if(inUse) return NextResponse.json({ success:false, error:'Datei wird von einem Produkt verwendet' }, { status:409 });
+  // Optional: Löschlogik Storage (noch nicht implementiert)
     await ShopRawFile.deleteOne({ _id: id });
     return NextResponse.json({ success:true });
   } catch(e){
