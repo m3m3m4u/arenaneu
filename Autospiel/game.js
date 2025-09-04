@@ -40,7 +40,7 @@ let desiredLane = carLane;
 
 function loadCar() {
   const img = new Image();
-  img.src = 'auto.png?v=3';
+  img.src = 'auto2.png?v=1';
   img.onload = () => {
     const targetWidth = LANE_WIDTH * 0.7;
     const aspect = (img.naturalHeight / img.naturalWidth) || 1.5;
@@ -48,7 +48,7 @@ function loadCar() {
     CAR_HEIGHT = targetWidth * aspect;
     carImage = beautifyCar(img, Math.ceil(window.devicePixelRatio||1)+1);
   };
-  img.onerror = () => { console.warn('auto.png konnte nicht geladen werden – verwende Platzhalter-Rechteck'); };
+  img.onerror = () => { console.warn('auto2.png konnte nicht geladen werden – verwende Platzhalter-Rechteck'); };
 }
 
 // Entfernt weißen / hellen Rand (Fringing) und erstellt hochauflösendes Canvas-Sprite
