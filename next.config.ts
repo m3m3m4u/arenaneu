@@ -47,6 +47,9 @@ const securityHeaders = (() => {
 
 const nextConfig: NextConfig = {
   output: 'standalone', // kleinere Lambda bundles (Vercel / Docker)
+  env: {
+    BUILD_TIME: new Date().toISOString()
+  },
   // Sorgt dafür, dass @vercel/blob trotz dynamischem Import in /api/media mit in das Standalone-Bundle aufgenommen wird
   outputFileTracingIncludes: {
     '/api/media': [
