@@ -80,7 +80,7 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
   const leftColor = (l:string)=>{ const r= matched[l]; if(!r) return null; const idx = pairIndex(l,r); return idx>=0? colorClasses[idx % colorClasses.length]: null; };
   const rightColor = (r:string)=>{ const entry = Object.entries(matched).find(([l,rr])=> rr===r); if(!entry) return null; const [l,rr]=entry; const idx = pairIndex(l,rr); return idx>=0? colorClasses[idx % colorClasses.length]: null; };
   const [fullscreen,setFullscreen] = useState(false);
-  const [vertical,setVertical] = useState(false); // deaktiviert (immer horizontal)
+  const [vertical,setVertical] = useState(false); // horizontal (false) oder vertikal (true)
   const [isSmall, setIsSmall] = useState(false); // screen < md für kompakte 2-Spalten Ansicht
 
   // Responsive Breakpoint Überwachung
@@ -97,8 +97,15 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
   // Keine erzwungene Vertikal-Ansicht mehr: Auf kleinen Screens nutzen wir eine kompakte 2-Spalten Horizontal-Variante
 
   // Layout Präferenz laden (und auf kleinen Screens initial vertikal)
-  useEffect(()=>{ try { localStorage.removeItem('matchingLayout'); } catch {} }, []);
-  const toggleLayout=()=>{}; // deaktiviert
+  useEffect(()=>{
+    try {
+      const saved = localStorage.getItem('matchingLayout');
+      if(saved === 'vertical') setVertical(true);
+    } catch {}
+  },[]);
+  const toggleLayout=()=>{
+    setVertical(v=>{ const next=!v; try{ localStorage.setItem('matchingLayout', next? 'vertical':'horizontal'); }catch{} return next; });
+  };
   const resetMatches=()=>{ if(antiGuess.blocked) return; setMatched({}); setSelectedLeft(null); setErrorPair(null); };
   const Wrapper: React.FC<{children:React.ReactNode}> = ({children}) => fullscreen ? (
     <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm overflow-auto p-4 md:p-8 flex flex-col">
@@ -128,13 +135,13 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
   const totalPairs = question.correctAnswers?.length || 0;
   const matchedCount = Object.keys(matched).length;
   const progress = totalPairs? Math.round((matchedCount/totalPairs)*100) : 0;
-  const effectiveVertical = false; // vertikales Layout deaktiviert
+  const effectiveVertical = vertical; // vertikal = übereinander
   return <Wrapper>
   {antiGuess.blocked && <AntiGuessingOverlay remainingMs={antiGuess.remainingMs} totalMs={antiGuess.cooldownMs} />}
     <div className="flex items-start justify-between mb-3 gap-4 flex-wrap relative">
       <div className="space-y-1">
   <h3 className="font-semibold text-base text-gray-700 md:text-lg">Zuordnung</h3>
-  <p className="text-xs md:text-sm text-gray-500 leading-snug max-w-xl">Tippe zuerst links, dann rechts. Gefundene Paare erhalten eine Farbe. (Layout fix: nebeneinander)</p>
+  <p className="text-xs md:text-sm text-gray-500 leading-snug max-w-xl">Tippe zuerst links, dann rechts. Gefundene Paare erhalten eine Farbe. Layout umschaltbar: Reihen (oben/unten) oder Spalten (links/rechts).</p>
   <div className="mt-2 w-full max-w-xs">
     <div className="h-2 rounded bg-gray-200 overflow-hidden">
       <div className="h-full bg-green-500 transition-all" style={{width: `${progress}%`}} />
@@ -144,7 +151,7 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
       </div>
       <div>
         <div className="flex gap-2">
-          {/* Layout Toggle entfernt */}
+          <button onClick={toggleLayout} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50" title="Layout umschalten">{vertical? 'Reihen' : 'Spalten'}</button>
           <button onClick={()=>setFullscreen(f=>!f)} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">{fullscreen? 'Schließen':'Vollbild'}</button>
           {Object.keys(matched).length>0 && !fullscreen && !allMatched && (
             <button onClick={resetMatches} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50" title="Zurücksetzen">Reset</button>
@@ -152,7 +159,22 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
         </div>
       </div>
     </div>
-  {/* Vertikales Layout entfernt, immer horizontales 2-Spalten Layout */}
+  {effectiveVertical ? (
+      <div className="flex flex-col gap-10 items-stretch justify-center pb-10">
+        <div>
+          <h4 className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">Obere Reihe</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l)); const base='relative group aspect-square w-full flex items-center justify-center border rounded transition-colors bg-white overflow-hidden'; const cls= matchedRight? `${base} animate-match ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800 animate-shake`: (selectedLeft===l)? `${base} border-blue-500 bg-blue-50`: `${base} border-gray-200 hover:bg-gray-50 active:scale-[0.97]`; return <button key={l} onClick={()=>handleLeftClick(l)} disabled={Boolean(matchedRight)} className={cls} aria-label={l}><div className={`p-2 w-full h-full flex items-center justify-center text-center break-words ${isImg?'':adaptiveText(l)}`}>{renderOption(l)}</div></button>; })}
+          </div>
+        </div>
+        <div>
+          <h4 className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">Untere Reihe</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {rightOptions.map(r=>{ const isUsed=isRightMatched(r); const isErr= errorPair?.right===r; const color = rightColor(r); const isImg = isImagePath(resolveMediaPath(r)); const base='relative group aspect-square w-full flex items-center justify-center border rounded transition-colors bg-white overflow-hidden'; const cls= isUsed? `${base} animate-match ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800 animate-shake`: `${base} border-gray-200 hover:bg-gray-50 active:scale-[0.97]`; return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`p-2 w-full h-full flex items-center justify-center text-center break-words ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
+          </div>
+        </div>
+      </div>
+    ) : (
       <div className="w-full flex flex-row gap-2 sm:gap-8 items-start">
         <div className="w-1/2 flex flex-col gap-2 sm:gap-3">
           {leftOptions.map(l=>{ const matchedRight= matched[l]; const isErr= errorPair?.left===l; const color = leftColor(l); const isImg = isImagePath(resolveMediaPath(l));
@@ -170,7 +192,8 @@ export default function MatchingUI({ question, onSolved, onContinue }: MatchingP
             const cls= isUsed? `${base} animate-match ${color?`${color.border} ${color.bg} ${color.text}`:'border-green-500 bg-green-50 text-green-800'} cursor-default`: isErr? `${base} border-red-500 bg-red-50 text-red-800 animate-shake`: `${base} border-gray-200 hover:bg-gray-50 active:scale-[0.97]`;
             return <button key={r} onClick={()=>handleRightClick(r)} disabled={isUsed} className={cls} aria-label={r}><div className={`w-full h-full flex items-center justify-center text-center break-words ${isImg?'':adaptiveText(r)}`}>{renderOption(r)}</div></button>; })}
         </div>
-  </div>
+      </div>
+    )}
     {allMatched && !fullscreen && onContinue && (
       <div className="mt-6 hidden md:block">
         <button onClick={onContinue} className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700">Weiter</button>
