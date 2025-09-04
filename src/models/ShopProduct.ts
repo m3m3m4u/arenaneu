@@ -15,6 +15,7 @@ export interface IShopProduct extends Document {
   description?: string;
   tags: string[];
   category?: string;
+  subjects?: string[]; // Fächer (Filter)
   files: IShopProductFile[];
   isPublished: boolean;
   price?: number;
@@ -37,6 +38,7 @@ const ShopProductSchema = new Schema<IShopProduct>({
   description: { type: String, trim: true },
   tags: [{ type: String, trim: true }],
   category: { type: String, index: true },
+  subjects: [{ type: String, trim: true, index: true }],
   files: { type: [FileSchema], default: [] },
   isPublished: { type: Boolean, default: false, index: true },
   price: { type: Number, default: 0 },

@@ -19,7 +19,8 @@ export async function GET(req: Request){
     const page = Math.max(1, parseInt(url.searchParams.get('page')||'1',10));
     const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit')||'12',10)));
     const search = (url.searchParams.get('q')||'').trim();
-    const cat = (url.searchParams.get('cat')||'').trim();
+  const cat = (url.searchParams.get('cat')||'').trim();
+  const subject = (url.searchParams.get('subject')||'').trim();
   // Lehrer sollen im Download-Bereich ebenfalls unveröffentlichte Materialien sehen können
   const showAll = url.searchParams.get('all') === '1' && (role === 'admin' || role === 'teacher');
     const filter: any = showAll ? {} : { isPublished: true };
@@ -29,7 +30,8 @@ export async function GET(req: Request){
         { description: { $regex: search, $options: 'i' } }
       ];
     }
-    if (cat) filter.category = cat;
+  if (cat) filter.category = cat;
+  if (subject) filter.subjects = subject;
     const total = await ShopProduct.countDocuments(filter);
     const itemsRaw = await ShopProduct.find(filter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean();
   const useShopWebdav = isShopWebdavEnabled();
@@ -42,9 +44,10 @@ export async function GET(req: Request){
       })) : []
     }));
   // Kategorienquelle vereinheitlicht: zentrale Liste zurückgeben, gefiltert auf verwendete falls gewünscht
-  const usedCats = page===1 ? (await ShopProduct.distinct('category', { isPublished: true })).filter(Boolean) : [];
+  const usedCats = page===1 ? (await ShopProduct.distinct('category', showAll ? {} : { isPublished: true })).filter(Boolean) : [];
+  const subjects = page===1 ? (await ShopProduct.distinct('subjects', showAll ? {} : { isPublished: true })).filter(Boolean) : [];
   const categories = CATEGORIES.filter(c=> usedCats.includes(c));
-  return NextResponse.json({ success:true, items, page, pageSize: limit, total, categories });
+  return NextResponse.json({ success:true, items, page, pageSize: limit, total, categories, subjects });
   } catch (e){
     console.error('ShopProduct GET error', e);
     return NextResponse.json({ success:false, error:'Fehler beim Laden' }, { status:500 });
@@ -60,13 +63,13 @@ export async function POST(req: Request){
       return NextResponse.json({ success:false, error:'Kein Zugriff' }, { status:403 });
     }
   const body = await req.json();
-  const { title, description='', category='', tags=[], isPublished=false, tempKeys=[], rawFileIds=[], price } = body||{};
+  const { title, description='', category='', tags=[], isPublished=false, tempKeys=[], rawFileIds=[], price, subjects=[] } = body||{};
     if(!title){ return NextResponse.json({ success:false, error:'Titel erforderlich' }, { status:400 }); }
     const catNorm = normalizeCategory(category);
     if(category && !catNorm){
       return NextResponse.json({ success:false, error:'Ungültige Kategorie' }, { status:400 });
     }
-    const doc = await ShopProduct.create({ title: String(title).trim(), description: String(description).trim(), category: catNorm, tags: Array.isArray(tags)?tags.map((t:any)=>String(t).trim()).filter(Boolean):[], isPublished: !!isPublished, price: typeof price === 'number' ? price : (price ? Number(price) || 0 : 0) });
+  const doc = await ShopProduct.create({ title: String(title).trim(), description: String(description).trim(), category: catNorm, tags: Array.isArray(tags)?tags.map((t:any)=>String(t).trim()).filter(Boolean):[], subjects: Array.isArray(subjects)?subjects.map((s:any)=>String(s).trim()).filter(Boolean):[], isPublished: !!isPublished, price: typeof price === 'number' ? price : (price ? Number(price) || 0 : 0) });
     // Direkte Verknüpfung vorhandener Raw-Dateien (werden NICHT verschoben, nur referenziert)
     if(Array.isArray(rawFileIds) && rawFileIds.length){
       const raws = await ShopRawFile.find({ _id: { $in: rawFileIds } });

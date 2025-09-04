@@ -6,6 +6,8 @@ interface Product { _id:string; title:string; description?:string; price?:number
 
 export default function TeacherDownloadShop(){
   const [items,setItems] = useState<Product[]>([]);
+  const [subjects,setSubjects] = useState<string[]>([]);
+  const [activeSubject,setActiveSubject] = useState<string>('');
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState<string|null>(null);
   const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index der aktiven Datei (für Karussell)
@@ -80,13 +82,14 @@ export default function TeacherDownloadShop(){
   async function load(){
     setLoading(true); setError(null);
     try {
-      const r = await fetch('/api/shop/products?all=1');
+      const qs = new URLSearchParams(); qs.set('all','1'); if(activeSubject) qs.set('subject', activeSubject);
+      const r = await fetch(`/api/shop/products?${qs.toString()}`);
       const d = await r.json();
-      if(r.ok && d.success){ setItems(d.items||[]); } else setError(d.error||'Fehler');
+      if(r.ok && d.success){ setItems(d.items||[]); if(d.subjects) setSubjects(d.subjects); } else setError(d.error||'Fehler');
     } catch { setError('Netzwerkfehler'); }
     setLoading(false);
   }
-  useEffect(()=>{ void load(); },[]);
+  useEffect(()=>{ void load(); },[activeSubject]);
 
   const isPdf = (f:ProductFile)=> /\.pdf$/i.test(f.name);
   const isImage = (f:ProductFile)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name);
@@ -105,7 +108,13 @@ export default function TeacherDownloadShop(){
 
   return (
     <main className="max-w-6xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Material-Downloads</h1>
+      <h1 className="text-2xl font-bold mb-4">Material-Downloads</h1>
+      <div className="flex flex-wrap gap-2 mb-6 text-sm">
+        <button onClick={()=>setActiveSubject('')} className={`px-3 py-1 rounded border ${!activeSubject?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>Alle Fächer</button>
+        {subjects.map(s=> (
+          <button key={s} onClick={()=>setActiveSubject(s)} className={`px-3 py-1 rounded border ${activeSubject===s?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>{s}</button>
+        ))}
+      </div>
       {loading && <div className="text-sm text-gray-500">Lade…</div>}
       {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
       {!loading && !error && items.length===0 && <div className="text-sm text-gray-500">Keine Produkte vorhanden.</div>}
