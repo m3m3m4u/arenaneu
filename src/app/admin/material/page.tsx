@@ -70,22 +70,6 @@ export default function AdminMaterialPage(){
   }
   useEffect(()=>{ load(); },[]);
 
-  async function createProduct(){
-    if(!title.trim()) return;
-    const chosenCat = cat === '__new' ? newCat : cat;
-    setCreating(true); setCreateError(null);
-    try {
-      const payload: any = { title: title.trim(), description: desc.trim(), rawFileIds: selectedRawIds };
-      if(chosenCat && chosenCat.trim()) payload.category = chosenCat.trim();
-      if(price.trim()) payload.price = Number(price.replace(',','.'))||0;
-      const r = await fetch('/api/shop/products', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
-      const d = await r.json();
-      if(!(r.ok && d.success)) setCreateError(d.error||'Erstellen fehlgeschlagen');
-      else { setTitle(''); setDesc(''); setCat(''); setNewCat(''); setPrice(''); setSelectedRawIds([]); await load(); }
-    } catch { setError('Netzwerkfehler'); }
-    setCreating(false);
-  }
-
   async function uploadFile(id: string, file: File){
     const form = new FormData(); form.append('file', file);
     setUploadingProductFile(id);
@@ -208,33 +192,7 @@ export default function AdminMaterialPage(){
         </nav>
       </header>
 
-      {tab==='manage' && <section className="bg-white border rounded shadow-sm p-5 space-y-4">
-        <h2 className="font-semibold">Neues Produkt aus Raw-Dateien</h2>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Titel" className="border rounded px-3 py-2 text-sm flex-1" />
-            <div className="flex flex-col gap-2 w-48">
-              <select value={cat} onChange={e=>{ setCat(e.target.value); }} className="border rounded px-2 py-2 text-sm bg-white">
-                <option value="">Kategorie wählen</option>
-                {categories.map(c=> <option key={c} value={c}>{c}</option>)}
-                <option value="__new">+ Neue Kategorie...</option>
-              </select>
-              {cat==='__new' && (
-                <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Neue Kategorie" className="border rounded px-2 py-1 text-xs" />
-              )}
-            </div>
-            <input value={price} onChange={e=>setPrice(e.target.value)} placeholder="Preis" className="border rounded px-2 py-2 text-sm w-28" />
-            <button disabled={!title.trim()||creating|| (cat==='__new' && !newCat.trim())} onClick={createProduct} className="bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-40">Anlegen</button>
-          </div>
-          <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Beschreibung (optional)" className="border rounded px-3 py-2 text-sm w-full min-h-[70px] resize-y" />
-          <div className="border-t pt-3 space-y-2 text-[11px]">
-            <p>Raw-Dateien auswählen (unten in Bibliothek hochladen & anklicken). Gewählt: {selectedRawIds.length}</p>
-            {createError && <div className="text-xs text-red-600">{createError}</div>}
-          </div>
-        </div>
-  </section>}
-
-  {tab==='manage' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
+      {tab==='manage' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <h2 className="font-semibold">Raw-Dateien</h2>
           <div className="flex gap-2 items-center text-xs">
