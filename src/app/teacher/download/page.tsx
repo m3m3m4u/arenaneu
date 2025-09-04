@@ -142,7 +142,13 @@ export default function TeacherDownloadShop(){
                   {typeof p.price==='number' && <span className="font-medium text-gray-700">{p.price.toFixed(2)} €</span>}
                   <span>{files.length} PDF{files.length!==1?'s':''}</span>
                 </div>
-                {current && <button onClick={()=> downloadFile(current)} className="mt-2 w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">PDF Download</button>}
+                <button onClick={()=> {
+                  // Gesamtes Produkt als ZIP herunterladen
+                  const a=document.createElement('a');
+                  a.href=`/api/shop/products/${p._id}/download-zip`;
+                  a.download=`${p.title.replace(/[^a-zA-Z0-9._-]+/g,'_')}.zip`;
+                  document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);
+                }} className="mt-2 w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">Alle Dateien (ZIP)</button>
               </div>
             </div>
           );
