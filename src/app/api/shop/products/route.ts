@@ -69,6 +69,7 @@ export async function POST(req: Request){
       const temps = await TempShopFile.find({ key: { $in: tempKeys } });
       const prefix = (process.env.WEBDAV_SHOP_PREFIX || 'shop').replace(/^[\\/]+|[\\/]+$/g,'');
       const useWebdav = isShopWebdavEnabled() || isWebdavEnabled();
+      let movedCount = 0;
       for(const t of temps){
         try {
           const safeName = t.name.replace(/[^a-zA-Z0-9._-]+/g,'_');
@@ -86,6 +87,7 @@ export async function POST(req: Request){
           if(moved){
             doc.files.push({ key: newKey, name: t.name, size: t.size, contentType: t.contentType });
             await TempShopFile.deleteOne({ _id: t._id });
+            movedCount++;
           } else {
             console.warn('Temp Datei konnte nicht übernommen werden (Move fehlgeschlagen):', t.key);
           }
@@ -94,6 +96,9 @@ export async function POST(req: Request){
         }
       }
       await doc.save();
+      if(movedCount === 0){
+        console.warn('Kein tempKey erfolgreich verschoben', { tempKeys, useWebdav, isShop: isShopWebdavEnabled(), isGeneric: isWebdavEnabled(), s3: isS3Enabled() });
+      }
     }
     return NextResponse.json({ success:true, product: doc });
   } catch(e){

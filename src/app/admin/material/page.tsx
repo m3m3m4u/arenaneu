@@ -32,10 +32,10 @@ export default function AdminMaterialPage(){
         if(arr.length){
           setPreUploads(p=> [...p, ...arr.map((x:any)=> ({ key:x.key, name:x.name, size:x.size }))]);
         } else {
-          alert('Kein Dateiobjekt im Response');
+          alert('Upload Antwort ohne Dateien. Status '+r.status);
         }
       } else {
-        alert(d.error||'Upload fehlgeschlagen');
+        alert('Upload fehlgeschlagen ('+r.status+'): '+ (d && (d.error||d.message)||'Unbekannter Fehler'));
       }
     } catch { alert('Netzwerkfehler'); }
     setTempUploading(false);
