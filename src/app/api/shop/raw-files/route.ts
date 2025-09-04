@@ -53,8 +53,24 @@ export async function POST(req: Request){
     const useShop=isShopWebdavEnabled(); const anyWebdav=useShop || isWebdavEnabled(); let finalUrl:string|undefined;
     try {
       if(anyWebdav){
-        const up = useShop ? await shopDavPut(key, bytes, file.type||undefined) : await davPut(key, bytes, file.type||undefined);
-        finalUrl= up?.url || (useShop? shopWebdavPublicUrl(key): webdavPublicUrl(key));
+        try {
+          const up = useShop ? await shopDavPut(key, bytes, file.type||undefined) : await davPut(key, bytes, file.type||undefined);
+          finalUrl= up?.url || (useShop? shopWebdavPublicUrl(key): webdavPublicUrl(key));
+        } catch(err:any){
+          // Fallback: Wenn Shop aktiv war und 401 -> generisches WebDAV testen
+          if(useShop && err?.status === 401 && isWebdavEnabled()){
+            try {
+              const up2 = await davPut(key, bytes, file.type||undefined);
+              finalUrl = up2?.url || webdavPublicUrl(key);
+            } catch(err2){
+              if(isS3Enabled()){
+                const up3 = await s3Put(key, bytes, file.type||'application/octet-stream'); finalUrl = up3?.url || s3PublicUrl(key);
+              } else throw err2;
+            }
+          } else if(isS3Enabled()){
+            const up3 = await s3Put(key, bytes, file.type||'application/octet-stream'); finalUrl = up3?.url || s3PublicUrl(key);
+          } else throw err;
+        }
       } else if(isS3Enabled()){
         const up = await s3Put(key, bytes, file.type||'application/octet-stream'); finalUrl= up?.url || s3PublicUrl(key);
       } else {

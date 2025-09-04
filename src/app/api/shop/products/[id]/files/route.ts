@@ -70,3 +70,31 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
     return NextResponse.json({ success:false, error:'Upload fehlgeschlagen' }, { status:500 });
   }
 }
+
+export async function DELETE(req: Request, ctx: { params: { id: string }} ){
+  try {
+    await dbConnect();
+    const session: any = await getServerSession(authOptions as any);
+    const role = session?.user?.role;
+    if(!session || role !== 'admin'){
+      return NextResponse.json({ success:false, error:'Kein Zugriff' }, { status:403 });
+    }
+    const url = new URL(req.url);
+    const key = url.searchParams.get('key');
+    if(!key){
+      return NextResponse.json({ success:false, error:'key fehlt' }, { status:400 });
+    }
+    const doc = await ShopProduct.findById(ctx.params.id);
+    if(!doc){ return NextResponse.json({ success:false, error:'Produkt nicht gefunden' }, { status:404 }); }
+    const before = doc.files.length;
+    doc.files = doc.files.filter((f: any)=> f.key !== key);
+    if(doc.files.length === before){
+      return NextResponse.json({ success:false, error:'Datei nicht gefunden' }, { status:404 });
+    }
+    await doc.save();
+    return NextResponse.json({ success:true, removed:true, remaining: doc.files.length });
+  } catch(e){
+    console.error('Remove product file error', e);
+    return NextResponse.json({ success:false, error:'Löschen fehlgeschlagen' }, { status:500 });
+  }
+}

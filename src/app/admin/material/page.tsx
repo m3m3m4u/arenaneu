@@ -93,6 +93,15 @@ export default function AdminMaterialPage(){
     setUploadingProductFile(null);
   }
 
+  async function removeProductFile(productId:string, key:string){
+    if(!confirm('Datei wirklich entfernen?')) return;
+    try {
+      const r = await fetch(`/api/shop/products/${productId}/files?key=${encodeURIComponent(key)}`, { method:'DELETE' });
+      const d = await r.json();
+      if(!(r.ok && d.success)) alert(d.error||'Entfernen fehlgeschlagen'); else load();
+    } catch { alert('Netzwerkfehler'); }
+  }
+
   async function uploadRawFile(file: File){
     setRawUploading(true);
     try {
@@ -273,7 +282,19 @@ export default function AdminMaterialPage(){
               </label>
               {uploadingProductFile===p._id && <div className="text-[11px] text-gray-500">Upload läuft...</div>}
               <ul className="space-y-1 text-[11px] max-h-24 overflow-auto">
-                {p.files?.map(f=> <li key={f.key} className="truncate"><a className="text-blue-600 hover:underline" href={f.downloadUrl||'#'} target="_blank" rel="noopener noreferrer">{f.name}</a></li>)}
+                {p.files?.map(f=> {
+                  const placeholder = f.key?.startsWith('placeholder:');
+                  return (
+                    <li key={f.key} className="flex items-center gap-2">
+                      {placeholder ? (
+                        <span title="Platzhalter" className="text-orange-600 truncate">{f.name}</span>
+                      ) : (
+                        <a className="text-blue-600 hover:underline truncate" href={f.downloadUrl||'#'} target="_blank" rel="noopener noreferrer">{f.name}</a>
+                      )}
+                      <button onClick={()=>removeProductFile(p._id, f.key)} className="text-red-500 hover:underline shrink-0">x</button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
