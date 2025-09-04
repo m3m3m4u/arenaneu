@@ -199,7 +199,12 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
         }
   } catch(err){ console.warn('Plane mask build failed', err); }
     }; 
-    planeImg.onerror = ()=> console.warn('PlaneGame: /media/kopernikusflieger.png konnte nicht geladen werden');
+    planeImg.onerror = ()=> { 
+      console.warn('PlaneGame: /media/kopernikusflieger.png konnte nicht geladen – fallback auf /media/flugzeug.svg');
+      // Fallback auf altes SVG
+      planeImg.src='/media/flugzeug.svg';
+    };
+    console.debug('PlaneGame: lade neues Flugzeug /media/kopernikusflieger.png');
     planeImg.src='/media/kopernikusflieger.png'; planeImgRef.current=planeImg;
     const bgImg = new Image(); bgImg.onload=()=>{ bgReadyRef.current=true; }; bgImg.onerror=()=> console.warn('PlaneGame: /media/hintergrundbild.png konnte nicht geladen werden'); bgImg.src='/media/hintergrundbild.png'; bgImgRef.current=bgImg;
   },[]);

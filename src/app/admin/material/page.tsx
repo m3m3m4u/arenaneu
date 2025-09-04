@@ -323,7 +323,15 @@ export default function AdminMaterialPage(){
                   ))}
                   {p.files && p.files.length>4 && <span className="text-[10px] text-gray-400">+{p.files.length-4}</span>}
                 </div>
-                {(()=>{ const pdfFile = (p.files||[]).find(f=> f.downloadUrl && f.name.toLowerCase().endsWith('.pdf')); if(!pdfFile) return null; return require('react').createElement(require('@/components/media/PdfThumbs').default, { url: pdfFile.downloadUrl, onOpen: ()=> setPdfUrl(pdfFile.downloadUrl) }); })()}
+                {(()=>{ 
+                  const pdfFile = (p.files||[]).find(f=> f.downloadUrl && /\.pdf$/i.test(f.name));
+                  if(!pdfFile) return null;
+                  return <div className="border-t pt-1 mt-1">
+                    <span className="block text-[10px] text-gray-400 mb-0.5">Vorschau</span>
+                    {/* @ts-ignore */}
+                    {require('react').createElement(require('@/components/media/PdfThumbs').default, { url: pdfFile.downloadUrl, onOpen: ()=> setPdfUrl(pdfFile.downloadUrl) })}
+                  </div>;
+                })()}
               </div>
             </div>
           ))}
