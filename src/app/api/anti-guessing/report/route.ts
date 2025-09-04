@@ -26,30 +26,31 @@ export async function POST(req: Request){
     const cls = await TeacherClass.findById(user.class, 'teacher').lean();
     if(!cls?.teacher) return NextResponse.json({ ok:true, skipped:true, reason:'kein_teacher' });
 
-    // Event protokollieren (jede Blockade)
+    // Der Client ruft (laut Kommentar) nur nach jeder dritten Blockade (3,6,9,...) diese Route auf.
+    // Die ursprüngliche Implementierung erwartete aber einen Aufruf NACH JEDER Blockade und
+    // prüfte deshalb totalEvents % 3 === 0. Dadurch wurde bei einem Aufruf erst bei totalEvents=1
+    // (entspricht 3 Blockaden) KEINE Nachricht gesendet. Ergebnis: Lehrer bekam nichts.
+    // Anpassung: Wir interpretieren JEDEN Aufruf als ein "Schwellen-Report" (= 3 weitere Blockaden erreicht).
+    // Somit ist die Sequenznummer einfach die Anzahl der gespeicherten Events (1 => 3 Sperren, 2 => 6 Sperren, ...).
     await AntiGuessingEvent.create({ user: user._id, class: user.class, teacher: cls.teacher });
 
-    // Anzahl aller Block-Events für diesen Lernenden (nach Anlage dieses Events)
-    const totalEvents = await AntiGuessingEvent.countDocuments({ user: user._id });
-    const thresholdReached = totalEvents >=3 && totalEvents % 3 === 0; // 3,6,9,...
-    if(!thresholdReached){
-      return NextResponse.json({ ok:true, createdEvent:true, totalEvents, thresholdReached:false, notified:false });
-    }
-    // Sequenznummer bestimmen (3=>1, 6=>2, ...)
-    const seq = Math.floor(totalEvents/3);
-    // Prüfen ob für diese Sequenz bereits Nachricht existiert
+    // Anzahl aller Schwellen-Reports für diesen Lernenden
+    const totalThresholdReports = await AntiGuessingEvent.countDocuments({ user: user._id });
+    const seq = totalThresholdReports; // 1,2,3,... entspricht (3,6,9,...) Blockaden
+    const totalBlocksApprox = seq * 3; // Nur zur Information (heuristisch)
     const subjectPrefix = `Hinweis: Häufiges Raten (#${seq}) bei ${user.username}`;
+    // Prüfen ob für diese Sequenz bereits Nachricht existiert
     const existing = await Message.findOne({
       sender: user._id,
       recipientUser: cls.teacher,
       subject: subjectPrefix
     }, '_id').lean();
     if(existing){
-      return NextResponse.json({ ok:true, createdEvent:true, totalEvents, thresholdReached:true, notified:false, duplicate:true });
+      return NextResponse.json({ ok:true, createdEvent:true, totalThresholdReports, notified:false, duplicate:true, seq });
     }
-    const body = `Automatische Meldung (Anti-Raten-Schutz):\n\nDer Lernende "${user.username}" wurde mittlerweile ${totalEvents} mal wegen sehr schneller falscher Antworten kurzzeitig blockiert (möglicherweise Raten).\n\nDies ist Meldung #${seq} (je 3 Sperren eine Meldung).\n\nEmpfehlung: Lernstand / Verständnis prüfen oder Rückfrage stellen.`;
+    const body = `Automatische Meldung (Anti-Raten-Schutz):\n\nDer Lernende "${user.username}" wurde mittlerweile ca. ${totalBlocksApprox} mal (in 3er-Schwellen gezählt) wegen sehr schneller falscher Antworten kurzzeitig blockiert (möglicherweise Raten).\n\nDies ist Meldung #${seq} (Client meldet jede 3. Sperre).\n\nEmpfehlung: Lernstand / Verständnis prüfen oder Rückfrage stellen.`;
     await Message.create({ sender: user._id, recipientUser: cls.teacher, subject: subjectPrefix, body });
-    return NextResponse.json({ ok:true, createdEvent:true, totalEvents, thresholdReached:true, notified:true, seq });
+    return NextResponse.json({ ok:true, createdEvent:true, totalThresholdReports, notified:true, seq });
   } catch (e:any) {
     return NextResponse.json({ ok:false, error: e?.message || 'server error' }, { status:500 });
   }
