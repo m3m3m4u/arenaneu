@@ -30,12 +30,14 @@ export default function AdminMaterialPage(){
   const [rawSearch, setRawSearch] = useState('');
   const [rawUploading, setRawUploading] = useState(false);
   const [selectedRawIds, setSelectedRawIds] = useState<string[]>([]);
+  const [rawDeletingId, setRawDeletingId] = useState<string|null>(null);
 
   // Excel Import
   const [excelPreview, setExcelPreview] = useState<ExcelPreviewMaterial[]|null>(null);
   const [excelUnmatched, setExcelUnmatched] = useState<string[]>([]);
   const [excelLoading, setExcelLoading] = useState(false);
   const [excelResult, setExcelResult] = useState<any|null>(null);
+  const [excelToken, setExcelToken] = useState<string|null>(null);
 
   const toggleRaw = (id:string)=> setSelectedRawIds(ids=> ids.includes(id)? ids.filter(x=>x!==id): [...ids,id]);
 
@@ -114,16 +116,42 @@ export default function AdminMaterialPage(){
     setRawUploading(false);
   }
 
-  async function handleExcel(file: File, preview=true){
+  async function deleteRawFile(id:string){
+    if(!confirm('Roh-Datei wirklich löschen?')) return;
+    setRawDeletingId(id);
+    try {
+      const r = await fetch('/api/shop/raw-files?id='+encodeURIComponent(id), { method:'DELETE' });
+      const d = await r.json();
+      if(!(r.ok && d.success)) alert(d.error||'Löschen fehlgeschlagen');
+      else {
+        setSelectedRawIds(x=> x.filter(i=> i!==id));
+        await loadRaw(1);
+      }
+    } catch { alert('Netzwerkfehler'); }
+    setRawDeletingId(null);
+  }
+
+  async function handleExcel(file: File){
     setExcelLoading(true); setExcelResult(null); setExcelUnmatched([]);
     try {
       const form = new FormData(); form.append('file', file);
-      const url = '/api/shop/admin/materials/bulk-from-excel'+ (preview?'?mode=preview':'');
+      const url = '/api/shop/admin/materials/bulk-from-excel?mode=preview';
       const r = await fetch(url, { method:'POST', body: form });
       const d = await r.json();
       if(!(r.ok && d.success)){ alert(d.error||'Excel Import Fehler'); }
-      else if(preview){ setExcelPreview(d.materials||null); }
-      else { setExcelResult(d); setExcelUnmatched(d.unmatched||[]); }
+      else { setExcelPreview(d.materials||null); setExcelToken(d.token||null); setExcelResult(null); }
+    } catch { alert('Netzwerkfehler'); }
+    setExcelLoading(false);
+  }
+
+  async function commitExcel(){
+    if(!excelToken){ alert('Kein Preview Token'); return; }
+    setExcelLoading(true); setExcelResult(null); setExcelUnmatched([]);
+    try {
+      const r = await fetch(`/api/shop/admin/materials/bulk-from-excel?token=${encodeURIComponent(excelToken)}`, { method:'POST' });
+      const d = await r.json();
+      if(!(r.ok && d.success)){ alert(d.error||'Commit Fehler'); }
+      else { setExcelResult(d); setExcelUnmatched(d.unmatched||[]); setExcelToken(null); load(); }
     } catch { alert('Netzwerkfehler'); }
     setExcelLoading(false);
   }
@@ -193,11 +221,17 @@ export default function AdminMaterialPage(){
           {rawFiles.map(f=>{
             const sel = selectedRawIds.includes(f.id);
             return (
-              <button key={f.id} onClick={()=>toggleRaw(f.id)} className={`border rounded p-2 text-left flex flex-col gap-1 text-[11px] hover:bg-gray-50 ${sel?'ring-2 ring-blue-500 bg-blue-50':''}`}>
-                <span className="font-medium truncate" title={f.name}>{f.name}</span>
+              <div key={f.id} onClick={()=>toggleRaw(f.id)} className={`relative cursor-pointer border rounded p-2 text-left flex flex-col gap-1 text-[11px] hover:bg-gray-50 ${sel?'ring-2 ring-blue-500 bg-blue-50':''}`}>
+                <button
+                  onClick={(e)=>{ e.stopPropagation(); deleteRawFile(f.id); }}
+                  title="Löschen"
+                  className="absolute top-1 right-1 text-red-600 hover:text-red-800 text-xs px-1"
+                  disabled={rawDeletingId===f.id}
+                >{rawDeletingId===f.id? '…':'×'}</button>
+                <span className="font-medium truncate pr-4" title={f.name}>{f.name}</span>
                 <span className="text-gray-500">{Math.round(f.size/1024)} KB</span>
                 <span className="text-gray-400">{new Date(f.createdAt).toLocaleDateString()}</span>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -213,14 +247,11 @@ export default function AdminMaterialPage(){
           <h2 className="font-semibold">Excel Import</h2>
           <div className="flex gap-2 text-xs items-center">
             <label className="cursor-pointer px-2 py-1 border rounded bg-gray-50 hover:bg-gray-100">
-              Datei wählen (Preview)
-              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) handleExcel(f,true); e.target.value=''; }} />
+              Datei wählen
+              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) handleExcel(f); e.target.value=''; }} />
             </label>
-            {excelPreview && (
-              <label className="cursor-pointer px-2 py-1 border rounded bg-indigo-50 hover:bg-indigo-100">
-                Commit (selbe Datei erneut)
-                <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) handleExcel(f,false); e.target.value=''; }} />
-              </label>
+            {excelPreview && excelToken && !excelResult && (
+              <button onClick={commitExcel} className="px-2 py-1 border rounded bg-emerald-600 text-white hover:bg-emerald-700 text-xs">Import bestätigen</button>
             )}
             {excelLoading && <span>Lädt…</span>}
           </div>
@@ -248,7 +279,7 @@ export default function AdminMaterialPage(){
                 ))}
               </tbody>
             </table>
-            <p className="mt-2 text-gray-500">Zum Commit dieselbe Datei im Commit Button auswählen.</p>
+            {excelToken && <p className="mt-2 text-gray-500">Bitte prüfen und dann "Import bestätigen" klicken. Token: <span className="font-mono">{excelToken}</span></p>}
           </div>
         )}
         {excelResult && (
@@ -264,54 +295,7 @@ export default function AdminMaterialPage(){
         )}
   </section>}
 
-  {tab==='manage' && <section>
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-          <h2 className="font-semibold">Produkte</h2>
-          <div className="flex items-center gap-2 text-xs">
-            <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} className="border rounded px-2 py-1 bg-white">
-              <option value="">Alle Kategorien</option>
-              {categories.map(c=> <option key={c} value={c}>{c}</option>)}
-            </select>
-            {filterCat && <button onClick={()=>setFilterCat('')} className="text-blue-600 hover:underline">Zurücksetzen</button>}
-          </div>
-        </div>
-        {loading && <div className="text-sm text-gray-500">Lade...</div>}
-        {error && <div className="text-sm text-red-600 mb-2">{error}</div>}
-        {!loading && !products.length && <div className="text-sm text-gray-500">Keine Produkte gefunden.</div>}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.filter(p=> !filterCat || p.category===filterCat).map(p=> (
-            <div key={p._id} className="bg-white border rounded p-4 shadow-sm flex flex-col gap-3">
-              <h3 className="font-semibold text-lg">{p.title}</h3>
-              <div className="flex flex-wrap gap-2 items-center text-[11px] text-gray-500">
-                {p.category && <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-200">{p.category}</span>}
-                <span>{p.files?.length||0} Dateien</span>
-                {typeof p.price==='number' && <span>{p.price.toFixed(2)} €</span>}
-              </div>
-              {p.description && <p className="text-[11px] leading-snug text-gray-600 line-clamp-4 whitespace-pre-line">{p.description}</p>}
-              <label className="text-xs cursor-pointer inline-block bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded">
-                Datei hochladen
-                <input type="file" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFile(p._id,f); e.target.value=''; }} />
-              </label>
-              {uploadingProductFile===p._id && <div className="text-[11px] text-gray-500">Upload läuft...</div>}
-              <ul className="space-y-1 text-[11px] max-h-24 overflow-auto">
-                {p.files?.map(f=> {
-                  const placeholder = f.key?.startsWith('placeholder:');
-                  return (
-                    <li key={f.key} className="flex items-center gap-2">
-                      {placeholder ? (
-                        <span title="Platzhalter" className="text-orange-600 truncate">{f.name}</span>
-                      ) : (
-                        <a className="text-blue-600 hover:underline truncate" href={f.downloadUrl||'#'} target="_blank" rel="noopener noreferrer">{f.name}</a>
-                      )}
-                      <button onClick={()=>removeProductFile(p._id, f.key)} className="text-red-500 hover:underline shrink-0">x</button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </section>}
+  {/* Produktliste im Materialien-Tab entfernt (nicht mehr benötigt) */}
 
       {tab==='preview' && <section className="bg-white border rounded shadow-sm p-5 space-y-4">
         <h2 className="font-semibold">Shop Vorschau (alle Produkte)</h2>

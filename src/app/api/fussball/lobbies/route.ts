@@ -18,5 +18,5 @@ export async function POST(req: Request){
   const title = typeof body.title==='string'? body.title.slice(0,60): 'Fußball Match';
   const lessonId = typeof body.lessonId==='string'? body.lessonId: undefined;
   const lobby = createLobby(String(userId), String(username), title, lessonId);
-  return NextResponse.json({ success:true, lobby:{ id: lobby.id, title: lobby.title, players: lobby.players, status: lobby.status } });
+  return NextResponse.json({ success:true, lobby:{ id: lobby.id, title: lobby.title, lessonId: lobby.lessonId, players: lobby.players, status: lobby.status } });
 }

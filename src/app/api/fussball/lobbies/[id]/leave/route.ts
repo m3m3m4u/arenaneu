@@ -11,5 +11,5 @@ export async function POST(_:Request, { params }:{ params:{ id:string }} ){
   if(!userId) return NextResponse.json({ success:false, error:'UNAUTHENTICATED' }, { status:401 });
   const res = leaveLobby(params.id, String(userId));
   if('error' in res) return NextResponse.json({ success:false, error:res.error }, { status:400 });
-  return NextResponse.json({ success:true, lobby: res.lobby, deleted: (res as any).deleted });
+  return NextResponse.json({ success:true, lobby: res.lobby ? { ...res.lobby, lessonId: (res.lobby as any).lessonId } : undefined, deleted: (res as any).deleted });
 }

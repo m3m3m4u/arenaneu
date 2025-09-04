@@ -17,20 +17,64 @@ export const maxDuration=120;
 // Row1: Titel, Row2: Kategorie, Row3: Beschreibung, Row4: Preis (Zahl / optional), Rows5+: Dateinamen
 // Dateien müssen vorab hochgeladen sein und exakt mit gespeicherten Namen vorkommen (wir suchen nach key-Endungen)
 // mode=preview -> nur parse; sonst anlegen (mit Platzhaltern für Dateien)
+// In-Memory Cache für Preview-Daten (flüchtig – Neustart löscht alles)
+const previewCache = new Map<string,{ materials: Array<{ title:string; category?:string; description?:string; price:number; files:string[]; normalizedCategory?:string }>; ts:number; mode:'row'|'column' }>();
+const PREVIEW_TTL_MS = 15*60*1000; // 15 Minuten
+
+function cleanupCache(){
+  const now=Date.now();
+  for(const [k,v] of previewCache){ if(now - v.ts > PREVIEW_TTL_MS) previewCache.delete(k); }
+}
+
 export async function POST(req: Request){
   try {
     if(!await isAdminRequest(req)) return NextResponse.json({ success:false, error:'Forbidden' }, { status:403 });
     if(!rateLimit(req,'bulk-excel')) return NextResponse.json({ success:false, error:'Rate limit' }, { status:429 });
+    await dbConnect();
+    // Parse Excel
+    const urlObj=new URL(req.url); const previewMode = urlObj.searchParams.get('mode')==='preview';
+    const token = urlObj.searchParams.get('token');
+    cleanupCache();
+
+    // Commit via Token (ohne erneuten Datei-Upload)
+    if(token && !previewMode){
+      const cached = previewCache.get(token);
+      if(!cached) return NextResponse.json({ success:false, error:'Preview abgelaufen oder Token ungültig' }, { status:400 });
+      const { materials } = cached;
+      // Commit Logik (kopiert aus unten stehender ursprünglicher Commit-Phase)
+      const allNames = [...new Set(materials.flatMap(m=> m.files))];
+      const rawFiles = await ShopRawFile.find({ name: { $in: allNames } }).lean();
+      const rawMap = new Map<string, any>(); rawFiles.forEach(r=> rawMap.set(r.name, r));
+      const created:any[]=[]; const skipped:any[]=[]; const unmatched:Set<string>=new Set();
+      for(const m of materials){
+        const existing = await ShopProduct.findOne({ title: m.title });
+        if(existing){ skipped.push({ title:m.title, reason:'existiert' }); continue; }
+        const doc = await ShopProduct.create({ title: m.title, category: m.normalizedCategory, description: m.description, price: m.price, tags:[], isPublished:false, files: [] });
+        let linked = 0; let placeholders = 0;
+        for(const fn of m.files){
+          const rf = rawMap.get(fn);
+          if(rf){
+            doc.files.push({ key: rf.key, name: rf.name, size: rf.size, contentType: rf.contentType, createdAt: new Date() }); linked++;
+          } else {
+            doc.files.push({ key:`placeholder:${fn}`, name:fn, size:0, contentType: undefined, createdAt:new Date() }); placeholders++; unmatched.add(fn);
+          }
+        }
+        await doc.save();
+        created.push({ id: doc._id, title: doc.title, linked, placeholders });
+      }
+      // Nach Commit Token entfernen
+      previewCache.delete(token);
+      return NextResponse.json({ success:true, created, skipped, count: created.length, totalInput: materials.length, unmatched: Array.from(unmatched), fromToken:true });
+    }
+
+    // Sonst: Erwartet multipart (Preview oder Direkt-Commit alter Stil)
     const ct=req.headers.get('content-type')||''; if(!/multipart\/form-data/i.test(ct)) return NextResponse.json({success:false,error:'multipart/form-data erwartet'},{status:400});
     const form=await req.formData(); const f=form.get('file'); if(!f || !(f instanceof File)) return NextResponse.json({success:false,error:'Datei fehlt'},{status:400});
     const buf=new Uint8Array(await f.arrayBuffer());
-    await dbConnect();
-    // Parse Excel
     const wb = XLSX.read(buf, { type:'array' });
     const sheet = wb.Sheets[wb.SheetNames[0]]; if(!sheet) return NextResponse.json({ success:false, error:'Kein Sheet gefunden' }, { status:400 });
     const range=XLSX.utils.decode_range(sheet['!ref']||'A1');
     const cell=(c:number,r:number)=>{ const ref=XLSX.utils.encode_cell({c,r}); const v=sheet[ref]; return v? String(v.v??'').trim():''; };
-    // Erkennung Zeilenmodus: erste Zeile enthält typische Header
     const headerVals: string[] = [];
     for(let c=range.s.c;c<=range.e.c;c++){ headerVals.push(cell(c, range.s.r).toLowerCase()); }
     const hasRowHeader = headerVals.includes('titel') && (headerVals.includes('kategorie') || headerVals.includes('preis'));
@@ -89,9 +133,10 @@ export async function POST(req: Request){
 
     if(!materials.length) return NextResponse.json({ success:false, error:'Keine gültigen Produkte gefunden (Spalten- oder Zeilenformat)' }, { status:400 });
 
-    const urlObj=new URL(req.url); const preview = urlObj.searchParams.get('mode')==='preview';
-    if(preview){
-      return NextResponse.json({ success:true, preview:true, materials, mode: hasRowHeader? 'row':'column' });
+    if(previewMode){
+      const newToken = Math.random().toString(36).slice(2,10);
+      previewCache.set(newToken, { materials, ts: Date.now(), mode: hasRowHeader? 'row':'column' });
+      return NextResponse.json({ success:true, preview:true, materials, mode: hasRowHeader? 'row':'column', token:newToken });
     }
 
     // Wir können hier keine Dateinamen->Key Zuordnung ohne Index kennen. Vereinfachung: wir versuchen, vorhandene Produkte nicht zu duplizieren (gleicher Titel).
@@ -119,7 +164,7 @@ export async function POST(req: Request){
       await doc.save();
       created.push({ id: doc._id, title: doc.title, linked, placeholders });
     }
-    return NextResponse.json({ success:true, created, skipped, count: created.length, totalInput: materials.length, unmatched: Array.from(unmatched) });
+  return NextResponse.json({ success:true, created, skipped, count: created.length, totalInput: materials.length, unmatched: Array.from(unmatched), legacyCommit:true });
   } catch(e:any){
     console.error('bulk-from-excel error', e);
     return NextResponse.json({ success:false, error:'Serverfehler', message:e?.message });

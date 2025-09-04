@@ -1,8 +1,8 @@
 "use client";
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 
-interface LobbyListItem { id:string; title:string; players:{userId:string;username:string;side:string;ready:boolean}[]; createdAt:number; }
+interface LobbyListItem { id:string; title:string; lessonId?:string; players:{userId:string;username:string;side:string;ready:boolean}[]; createdAt:number; }
 
 interface LobbyApiResponse { success:boolean; lobbies: LobbyListItem[] }
 
@@ -18,10 +18,20 @@ export default function FussballLobbyPage(){
   const [creating,setCreating] = useState(false);
   const [title,setTitle] = useState('');
   const [lessonId,setLessonId] = useState('');
+  const [lockExercise,setLockExercise] = useState(false);
+  const [exercises,setExercises] = useState<Array<{ _id:string; title:string; category?:string }>>([]);
   const [lobby,setLobby] = useState<any>(null);
   const [joining,setJoining] = useState(false);
   const [ready,setReady] = useState(false);
   const [error,setError] = useState<string|undefined>();
+
+  // Load exercises (reuse /api/exercises like snake-live)
+  useEffect(()=>{
+    let alive=true; (async()=>{ try{ const r=await fetch('/api/exercises'); const j=await r.json(); if(!alive) return; if(j.success){ const list=(j.exercises||[]).map((e:any)=>({_id:e._id,title:e.title,category:e.category})); setExercises(list); } }catch{} })();
+    return ()=>{ alive=false; };
+  },[]);
+
+  const selectedExercise = useMemo(()=> exercises.find(e=> e._id===lessonId), [exercises, lessonId]);
 
   async function createLobby(){
     setCreating(true); setError(undefined);
@@ -54,6 +64,12 @@ export default function FussballLobbyPage(){
     loadList();
   }
 
+  // When a lobby is active, poll its state (to reflect other player ready toggles)
+  useEffect(()=>{
+    if(!lobby?.id) return; let alive=true; const tick=async()=>{ try{ const r=await fetch(`/api/fussball/lobbies/${lobby.id}/join`); const j=await r.json(); if(!alive) return; if(j.success){ setLobby((prev:any)=> prev? { ...prev, ...j.lobby }: j.lobby); } }catch{} };
+    const iv=setInterval(tick, 4000); tick(); return ()=>{ alive=false; clearInterval(iv); };
+  },[lobby?.id]);
+
   if(lobby){
     return (
       <main className="max-w-3xl mx-auto p-4 flex flex-col gap-6">
@@ -63,6 +79,12 @@ export default function FussballLobbyPage(){
             <div className="text-sm font-semibold text-gray-600">Spiel Titel</div>
             <div className="text-lg font-bold">{lobby.title}</div>
           </div>
+          {lobby.lessonId && (
+            <div>
+              <div className="text-sm font-semibold text-gray-600">Übung</div>
+              <div className="text-sm text-gray-800">{selectedExercise?.title || exercises.find(e=> e._id===lobby.lessonId)?.title || lobby.lessonId}</div>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <div className="text-sm font-semibold text-gray-600">Spieler</div>
             <ul className="text-sm flex flex-col gap-1">
@@ -87,13 +109,27 @@ export default function FussballLobbyPage(){
       <h1 className="text-2xl font-bold flex items-center gap-3">⚽ Fußball Matchmaking <span className="text-sm font-normal text-gray-500">(Prototyp)</span></h1>
       <section className="rounded border bg-white shadow p-4 flex flex-col gap-4">
         <h2 className="text-lg font-semibold">Neues Spiel erstellen</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm">Titel
+        <div className="grid gap-4 sm:grid-cols-3">
+          <label className="flex flex-col gap-1 text-sm col-span-1">Titel
             <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Mein Fußballspiel" className="border rounded px-2 py-1 text-sm" />
           </label>
-          <label className="flex flex-col gap-1 text-sm">Lesson / Übung ID (optional)
-            <input value={lessonId} onChange={e=>setLessonId(e.target.value)} placeholder="lessonId" className="border rounded px-2 py-1 text-sm" />
-          </label>
+          <div className="flex flex-col gap-1 text-sm col-span-2">
+            <span>Übung auswählen (optional)</span>
+            {!lockExercise && (
+              <select value={lessonId} onChange={e=>setLessonId(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                <option value="">— keine Übung —</option>
+                {exercises.map(ex=> <option key={ex._id} value={ex._id}>{ex.title}</option>)}
+              </select>
+            )}
+            {lockExercise && (
+              <div className="text-xs text-gray-700">{selectedExercise?.title || '—'}</div>
+            )}
+            <div className="flex gap-2 items-center mt-1">
+              <label className="text-xs flex items-center gap-1 cursor-pointer select-none"><input type="checkbox" checked={lockExercise} onChange={e=>setLockExercise(e.target.checked)} /> Auswahl sperren</label>
+              {lessonId && !lockExercise && <button onClick={()=>setLockExercise(true)} className="text-[10px] px-2 py-0.5 border rounded bg-gray-50 hover:bg-gray-100">Sperren</button>}
+              {lockExercise && <button onClick={()=>setLockExercise(false)} className="text-[10px] px-2 py-0.5 border rounded bg-gray-50 hover:bg-gray-100">Ändern</button>}
+            </div>
+          </div>
         </div>
         <div className="flex gap-3 items-center">
           <button disabled={creating || !session} onClick={createLobby} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating? 'Erstelle…':'Lobby erstellen'}</button>
@@ -106,9 +142,10 @@ export default function FussballLobbyPage(){
         <div className="flex flex-col gap-3">
           {list.length? list.map((l:LobbyListItem)=>(
             <div key={l.id} className="border rounded p-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-              <div className="flex-1">
-                <div className="font-semibold text-sm">{l.title}</div>
-                <div className="text-[11px] text-gray-500">Spieler: {l.players.map((p)=>p.username).join(', ')||'—'}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm truncate" title={l.title}>{l.title}</div>
+                <div className="text-[11px] text-gray-500 truncate">Spieler: {l.players.map((p)=>p.username).join(', ')||'—'}</div>
+                {l.lessonId && <div className="text-[10px] text-indigo-600 truncate">Übung: {exercises.find(e=> e._id===l.lessonId)?.title || l.lessonId}</div>}
               </div>
               <button disabled={!session || joining} onClick={()=> join(l.id)} className="px-3 py-1.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">{joining? '…':'Beitreten'}</button>
             </div>

@@ -62,7 +62,7 @@ export function listOpenLobbies(){
   const now = Date.now();
   return Array.from(lobbies.values())
     .filter(l=> l.status==='waiting' && now - l.createdAt < MAX_LOBBY_AGE_MS)
-    .map(l=> ({ id: l.id, title: l.title, players: l.players.map(p=>({userId:p.userId,username:p.username,side:p.side,ready:p.ready})), createdAt: l.createdAt }));
+  .map(l=> ({ id: l.id, title: l.title, lessonId: l.lessonId, players: l.players.map(p=>({userId:p.userId,username:p.username,side:p.side,ready:p.ready})), createdAt: l.createdAt }));
 }
 
 export function setTitle(id: string, userId: string, title: string){

@@ -13,7 +13,7 @@ export async function POST(_:Request, { params }:{ params:{ id:string }} ){
   const { id } = params;
   const res = joinLobby(id, String(userId), String(username));
   if('error' in res) return NextResponse.json({ success:false, error:res.error }, { status:400 });
-  return NextResponse.json({ success:true, lobby: res.lobby });
+  return NextResponse.json({ success:true, lobby: { ...res.lobby, lessonId: (res.lobby as any).lessonId } });
 }
 
 export async function GET(_:Request, { params }:{ params:{ id:string }} ){
