@@ -9,6 +9,7 @@ interface ExcelPreviewMaterial { title:string; category?:string; description?:st
 // Neuer Admin Bereich: Produkte aus Raw-Dateien erstellen, Raw-Datei Bibliothek & Excel Import Preview
 export default function AdminMaterialPage(){
   const [products, setProducts] = useState<Product[]>([]);
+  const [tab, setTab] = useState<'manage'|'excel'|'preview'>('manage');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string|null>(null);
   const [creating, setCreating] = useState(false);
@@ -134,12 +135,22 @@ export default function AdminMaterialPage(){
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold">Material-Upload (Admin)</h1>
-        <p className="text-sm text-gray-600 mt-1">Produkte anlegen und Dateien hochladen. Lehrkräfte sehen nur den Downloadbereich.</p>
+      <header className="space-y-2">
+        <h1 className="text-2xl font-bold">Material Verwaltung</h1>
+        <p className="text-sm text-gray-600">Roh-Dateien, Produkte, Excel-Import & Shop Vorschau.</p>
+        <nav className="flex flex-wrap gap-2 text-sm mt-2">
+          {[
+            {id:'manage', label:'Materialien'},
+            {id:'excel', label:'Excel Import'},
+            {id:'preview', label:'Shop Vorschau'}
+          ].map(t=> (
+            <button key={t.id} onClick={()=>setTab(t.id as any)} className={`px-3 py-1.5 rounded border ${tab===t.id? 'bg-blue-600 text-white border-blue-600':'bg-white hover:bg-gray-50'}`}>{t.label}</button>
+          ))}
+          <button onClick={()=>load()} className="ml-auto px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-xs">Refresh</button>
+        </nav>
       </header>
 
-      <section className="bg-white border rounded shadow-sm p-5 space-y-4">
+      {tab==='manage' && <section className="bg-white border rounded shadow-sm p-5 space-y-4">
         <h2 className="font-semibold">Neues Produkt aus Raw-Dateien</h2>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -163,9 +174,9 @@ export default function AdminMaterialPage(){
             {createError && <div className="text-xs text-red-600">{createError}</div>}
           </div>
         </div>
-      </section>
+  </section>}
 
-      <section className="bg-white border rounded shadow-sm p-5 space-y-3">
+  {tab==='manage' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <h2 className="font-semibold">Raw-Dateien</h2>
           <div className="flex gap-2 items-center text-xs">
@@ -195,9 +206,9 @@ export default function AdminMaterialPage(){
             <button onClick={()=>{ loadRaw(rawPage+1); }} className="text-xs px-3 py-1 border rounded">Mehr…</button>
           </div>
         )}
-      </section>
+  </section>}
 
-      <section className="bg-white border rounded shadow-sm p-5 space-y-3">
+  {tab==='excel' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="font-semibold">Excel Import</h2>
           <div className="flex gap-2 text-xs items-center">
@@ -251,9 +262,9 @@ export default function AdminMaterialPage(){
             {excelUnmatched.length>0 && <p className="text-orange-600">Unmatched Dateien: {excelUnmatched.slice(0,20).join(', ')}{excelUnmatched.length>20?' …':''}</p>}
           </div>
         )}
-      </section>
+  </section>}
 
-      <section>
+  {tab==='manage' && <section>
         <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
           <h2 className="font-semibold">Produkte</h2>
           <div className="flex items-center gap-2 text-xs">
@@ -274,6 +285,7 @@ export default function AdminMaterialPage(){
               <div className="flex flex-wrap gap-2 items-center text-[11px] text-gray-500">
                 {p.category && <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-200">{p.category}</span>}
                 <span>{p.files?.length||0} Dateien</span>
+                {typeof p.price==='number' && <span>{p.price.toFixed(2)} €</span>}
               </div>
               {p.description && <p className="text-[11px] leading-snug text-gray-600 line-clamp-4 whitespace-pre-line">{p.description}</p>}
               <label className="text-xs cursor-pointer inline-block bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded">
@@ -299,7 +311,25 @@ export default function AdminMaterialPage(){
             </div>
           ))}
         </div>
-      </section>
+      </section>}
+
+      {tab==='preview' && <section className="bg-white border rounded shadow-sm p-5 space-y-4">
+        <h2 className="font-semibold">Shop Vorschau (alle Produkte)</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {products.map(p=> (
+            <div key={p._id} className="border rounded p-4 bg-white flex flex-col gap-2 text-sm">
+              <div className="font-semibold flex justify-between items-center"><span>{p.title}</span>{typeof p.price==='number' && <span className="text-xs text-gray-500">{p.price.toFixed(2)} €</span>}</div>
+              {p.category && <div className="text-[11px] text-indigo-700">{p.category}</div>}
+              <div className="text-[11px] text-gray-500">{p.files?.filter(f=>!f.key?.startsWith('placeholder:')).length || 0} echte Dateien / {p.files?.length||0} gesamt</div>
+              {p.description && <p className="text-[11px] text-gray-600 line-clamp-3 whitespace-pre-line">{p.description}</p>}
+              <div className="flex flex-wrap gap-1 mt-auto">
+                {(p.files||[]).slice(0,4).map(f=> <span key={f.key} className={`px-1 py-0.5 border rounded text-[10px] ${f.key.startsWith('placeholder:')?'border-orange-300 text-orange-600':'border-gray-200 text-gray-600'}`}>{f.name.slice(0,18)}</span>)}
+                {p.files && p.files.length>4 && <span className="text-[10px] text-gray-400">+{p.files.length-4}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>}
     </main>
   );
 }
