@@ -84,15 +84,17 @@ export default function TeacherDownloadShop(){
   }
   useEffect(()=>{ void load(); },[]);
 
-  function pdfFiles(p:Product){
-    // Nur echte Dateien (keine Platzhalter) und ausschließlich PDFs für die Vorschau
-    return (p.files||[])
+  const isPdf = (f:ProductFile)=> /\.pdf$/i.test(f.name);
+  const isImage = (f:ProductFile)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name);
+  function previewFiles(p:Product){
+    // Echte Dateien (keine Platzhalter) die PDF oder Bild sind
+    return (p.files||[]) 
       .filter(f=> !f.key?.startsWith('placeholder:'))
-      .filter(f=> /\.pdf$/i.test(f.name));
+      .filter(f=> isPdf(f) || isImage(f));
   }
 
   function setActive(pId:string, dir:number){
-    setActiveIdx(prev=>{ const cur = prev[pId]||0; const files = pdfFiles(items.find(i=> i._id===pId)!); if(!files.length) return prev; const next = ( (cur+dir)%files.length + files.length ) % files.length; return { ...prev, [pId]: next }; });
+    setActiveIdx(prev=>{ const cur = prev[pId]||0; const files = previewFiles(items.find(i=> i._id===pId)!); if(!files.length) return prev; const next = ( (cur+dir)%files.length + files.length ) % files.length; return { ...prev, [pId]: next }; });
   }
 
   function downloadFile(f:ProductFile){ if(!f.downloadUrl) return; try{ const a=document.createElement('a'); a.href=f.downloadUrl; a.download=f.name||'download'; a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch { window.open(f.downloadUrl,'_blank'); } }
@@ -105,26 +107,30 @@ export default function TeacherDownloadShop(){
       {!loading && !error && items.length===0 && <div className="text-sm text-gray-500">Keine Produkte vorhanden.</div>}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
         {items.map(p=>{
-          const files = pdfFiles(p);
+          const files = previewFiles(p);
           const idx = activeIdx[p._id]||0;
           const current = files[idx];
-          if(current) enqueueThumb(current); // nur PDFs vorhanden
+          if(current && isPdf(current)) enqueueThumb(current); // nur PDF braucht Rendering
           const thumbKey = current?.key || '';
           return (
             <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
               <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2">
-                {/* Nur PDF-Thumbnails (erste Seite). Andere Dateitypen werden ignoriert. */}
+                {/* PDF oder Bild Vorschau */}
                 {current && current.downloadUrl ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    {thumbs[thumbKey] && thumbs[thumbKey] !== 'error' && (
-                      <img src={thumbs[thumbKey]} alt={current.name} className="max-w-full max-h-full object-contain rounded shadow-sm" />
-                    )}
-                    {!thumbs[thumbKey] && <span className="text-[11px] text-gray-500">Lade Vorschau…</span>}
-                    {thumbs[thumbKey] === 'error' && <span className="text-[11px] text-red-500">Keine Vorschau</span>}
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-gray-400">Keine PDFs</div>
-                )}
+                  isPdf(current) ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                      {thumbs[thumbKey] && thumbs[thumbKey] !== 'error' && (
+                        <img src={thumbs[thumbKey]} alt={current.name} className="max-w-full max-h-full object-contain rounded shadow-sm" />
+                      )}
+                      {!thumbs[thumbKey] && <span className="text-[11px] text-gray-500">Lade Vorschau…</span>}
+                      {thumbs[thumbKey] === 'error' && <span className="text-[11px] text-red-500">Keine Vorschau</span>}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <img src={current.downloadUrl} alt={current.name} className="max-w-full max-h-full object-contain rounded shadow-sm" loading="lazy" />
+                    </div>
+                  )
+                ) : <div className="text-[11px] text-gray-400">Keine Vorschau</div>}
                 {files.length>1 && (
                   <>
                     <button onClick={()=>setActive(p._id,-1)} className="absolute left-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">‹</button>
@@ -140,7 +146,7 @@ export default function TeacherDownloadShop(){
                 {p.description && <p className="text-xs text-gray-600 whitespace-pre-line line-clamp-4">{p.description}</p>}
                 <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-500">
                   {typeof p.price==='number' && <span className="font-medium text-gray-700">{p.price.toFixed(2)} €</span>}
-                  <span>{files.length} PDF{files.length!==1?'s':''}</span>
+                  <span>{files.length} Datei{files.length!==1?'en':''}</span>
                 </div>
                 <button onClick={()=> {
                   // Gesamtes Produkt als ZIP herunterladen
