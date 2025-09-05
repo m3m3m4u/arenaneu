@@ -35,10 +35,10 @@ export default function PdfPreview({ url, onClose }: PdfPreviewProps){
         // @ts-ignore
         if(pdfjsLib.GlobalWorkerOptions){
           // @ts-ignore
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.2.67'}/pdf.worker.min.js`;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/api/pdf-worker';
         }
         // @ts-ignore
-        const task = pdfjsLib.getDocument(url);
+        const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false });
         const pdf = await task.promise;
         if(cancelled) return;
         pdfRef.current = pdf;

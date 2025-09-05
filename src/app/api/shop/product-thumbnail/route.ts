@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+export const runtime = 'nodejs';
 import dbConnect from '@/lib/db';
 import ShopProduct from '@/models/ShopProduct';
 import { isWebdavEnabled, davPut, webdavPublicUrl } from '@/lib/webdavClient';
@@ -9,7 +10,7 @@ export async function POST(req: Request){
   try {
     const body = await req.json();
   const { key: fileKey, productId, dataUrl } = body||{};
-  if(!fileKey || !productId || !dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png')){
+  if(!fileKey || !productId || !dataUrl || typeof dataUrl !== 'string' || !/^data:image\/(png|jpeg)/i.test(dataUrl)){
       return NextResponse.json({ success:false, error:'Invalid payload' }, { status:400 });
     }
     await dbConnect();
@@ -22,18 +23,28 @@ export async function POST(req: Request){
     }
     // DataURL -> Binary
     const commaIdx = dataUrl.indexOf(',');
+    if(commaIdx < 0){ return NextResponse.json({ success:false, error:'Malformed data URL' }, { status:400 }); }
+    const meta = dataUrl.substring(0, commaIdx);
     const b64 = dataUrl.substring(commaIdx+1);
-  const bin = (globalThis as any).Buffer ? (globalThis as any).Buffer.from(b64, 'base64') : new Uint8Array([]);
-    const fileNameSafe = file.name.replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/\.pdf$/i,'');
+    const isJpeg = /jpeg/i.test(meta);
+    const ct = isJpeg ? 'image/jpeg' : 'image/png';
+    let bin: Uint8Array;
+    try {
+      // @ts-ignore
+      const B = (globalThis as any).Buffer;
+      bin = B ? new Uint8Array(B.from(b64, 'base64')) : Uint8Array.from(atob(b64), c=> c.charCodeAt(0));
+    } catch { bin = new Uint8Array([]); }
+    const fileNameSafe = (file.name||'file').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/\.(pdf|PDF)$/,'');
   const keyBase = `thumbnails/${prod._id}`;
-  const thumbKey = `${keyBase}/${fileNameSafe}_p1.png`;
+  const ext = isJpeg ? 'jpg' : 'png';
+  const thumbKey = `${keyBase}/${fileNameSafe}_p1.${ext}`;
     let publicUrl: string | null = null;
     try {
       if(isWebdavEnabled()){
-        const put = await davPut(thumbKey, bin, 'image/png');
+        const put = await davPut(thumbKey, bin, ct);
         publicUrl = put?.url || webdavPublicUrl(thumbKey);
       } else if(isS3Enabled()){
-        const put = await s3Put(thumbKey, bin instanceof Uint8Array ? bin : new Uint8Array(bin), 'image/png');
+        const put = await s3Put(thumbKey, bin instanceof Uint8Array ? bin : new Uint8Array(bin), ct);
         publicUrl = put?.url || s3PublicUrl(thumbKey);
       }
     } catch(e){ console.warn('Thumbnail Upload fehlgeschlagen', thumbKey, e); }

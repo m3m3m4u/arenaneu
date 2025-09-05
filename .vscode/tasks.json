@@ -68,6 +68,21 @@
 			"type": "shell",
 			"command": "npm run dev",
 			"group": "build"
+		},
+		{
+			"label": "build-check",
+			"type": "shell",
+			"command": "npm run -s typecheck",
+			"group": "build"
+		},
+		{
+			"label": "typecheck",
+			"type": "shell",
+			"command": "npm run -s typecheck",
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
 		}
 	]
 }

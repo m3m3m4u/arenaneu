@@ -21,11 +21,11 @@ export default function PdfThumbs({ url, maxPages=4, onOpen, className }: PdfThu
           throw new Error('pdfjs getDocument nicht gefunden');
         }
         if(pdfjsLib.GlobalWorkerOptions){
-          const version = pdfjsLib.version || '5.4.149';
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
+          // Lokalen Worker ausliefern, um CSP (script-src 'self') einzuhalten
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/api/pdf-worker';
         }
         console.debug('[PdfThumbs] Lade PDF', url);
-  const task = pdfjsLib.getDocument({ url });
+  const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false });
         const pdf = await task.promise; if(dead) return;
         console.debug('[PdfThumbs] PDF Seiten', pdf.numPages);
         const total = Math.min(pdf.numPages, maxPages);
