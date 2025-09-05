@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/authOptions';
 import { s3Put, isS3Enabled } from '@/lib/storage';
 import { isWebdavEnabled, davPut, webdavPublicUrl } from '@/lib/webdavClient';
 import { isShopWebdavEnabled, shopDavPut, shopWebdavPublicUrl } from '@/lib/webdavShopClient';
+import { generatePdfPreviewImagesForShopFile } from '@/lib/pdf/generatePreviews';
 
 export const runtime = 'nodejs'; // benötigt für Buffer
 
@@ -62,9 +63,21 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
       finalUrl = up?.url;
     }
 
+  const isPdf = /pdf$/i.test(file.type||'') || /\.pdf$/i.test(file.name||'');
   doc.files.push({ key, name: file.name, size: bytes.length, contentType: file.type, createdAt: new Date() });
     await doc.save();
-    return NextResponse.json({ success:true, file: { key, url: finalUrl } });
+
+    // Fire-and-forget: Vorschaugenerierung für PDFs
+    if(isPdf){
+      // nicht blockierend, aber geloggt
+  // @ts-ignore _id ist ObjectId; zur Sicherheit String bauen
+  const pid = String((doc as any)._id);
+  generatePdfPreviewImagesForShopFile(pid, key, file.name).catch(e=>{
+        console.warn('PDF Preview Gen Fehlgeschlagen', (e as any)?.message);
+      });
+    }
+
+    return NextResponse.json({ success:true, file: { key, url: finalUrl }, previewQueued: !!isPdf });
   } catch(e){
     console.error('Upload file error', e);
     return NextResponse.json({ success:false, error:'Upload fehlgeschlagen' }, { status:500 });

@@ -20,12 +20,12 @@ export default function PdfThumbs({ url, maxPages=4, onOpen, className }: PdfThu
           console.error('[PdfThumbs] getDocument fehlt auf pdfjsLib', Object.keys(pdfjsLib));
           throw new Error('pdfjs getDocument nicht gefunden');
         }
-        if(pdfjsLib.GlobalWorkerOptions){
+  if(pdfjsLib.GlobalWorkerOptions){
           // Lokalen Worker ausliefern, um CSP (script-src 'self') einzuhalten
-          pdfjsLib.GlobalWorkerOptions.workerSrc = '/api/pdf-worker';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/api/pdf-worker', window.location.origin).toString();
         }
         console.debug('[PdfThumbs] Lade PDF', url);
-  const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false });
+  const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true, withCredentials: false });
         const pdf = await task.promise; if(dead) return;
         console.debug('[PdfThumbs] PDF Seiten', pdf.numPages);
         const total = Math.min(pdf.numPages, maxPages);

@@ -1,24 +1,30 @@
 "use client";
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import Image from 'next/image';
 
 interface MCQuestion { id:string; text:string; options:string[]; correct:number; }
-
-// Dummy Fragen – später via API / WebSocket ersetzen
-const DUMMY_QUESTIONS: MCQuestion[] = [
-  { id:'q1', text:'Wie viele Spieler pro Team auf dem Feld?', options:['9','10','11','12'], correct:2 },
-  { id:'q2', text:'Was ist ein Abseits?', options:['Fehlstart','Regelverstoß bei Pass nach vorn','Tor-Aus','Handspiel'], correct:1 },
-  { id:'q3', text:'Eckstoß erfolgt von …', options:['Mittellinie','Seitenaus','Ecke','Torraum'], correct:2 },
-  { id:'q4', text:'Wie lang ist ein Spiel (regulär)?', options:['2x30','2x35','2x40','2x45'], correct:3 },
-];
 
 export default function FussballLivePage(){
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
+  const FIELD_IMAGES = useMemo(() => [
+    '/media/spielfelder/spielfeld1.JPG',
+    '/media/spielfelder/spielfeld2.JPG',
+    '/media/spielfelder/spielfeld3.JPG',
+    '/media/spielfelder/spielfeld4.JPG',
+    '/media/spielfelder/spielfeld5.JPG',
+    '/media/spielfelder/spielfeld6.JPG',
+    '/media/spielfelder/spielfeld7.JPG',
+  ], []);
+  const [fieldIdx, setFieldIdx] = useState<number>(() => Math.floor(Math.random() * 7));
 
-  // Später: Fragen / Spielfeld-Kontext via WS holen
-  const [questions] = useState<MCQuestion[]>(DUMMY_QUESTIONS);
+  // Fragen aus gewählter Übung laden
+  const [questions, setQuestions] = useState<MCQuestion[]>([]);
+  const [exerciseTitle, setExerciseTitle] = useState<string|undefined>();
+  const [loadingQs, setLoadingQs] = useState<boolean>(true);
+  const [errorQs, setErrorQs] = useState<string|undefined>();
   const [history,setHistory] = useState<Array<{id:string; correct:boolean}>>([]);
   const [current,setCurrent] = useState<MCQuestion|undefined>();
   const [locked,setLocked] = useState(false);
@@ -40,7 +46,33 @@ export default function FussballLivePage(){
     setCurrent(weights[weights.length-1].q);
   },[questions, correctCounts]);
 
-  useEffect(()=>{ pickNext(); },[pickNext]);
+  useEffect(()=>{ if(questions.length) pickNext(); },[pickNext, questions.length]);
+
+  // Übung aus Lobby laden und Fragen setzen
+  useEffect(()=>{
+    let alive = true;
+    (async()=>{
+      try{
+        setLoadingQs(true); setErrorQs(undefined);
+        // Lobby laden -> lessonId
+        const rLobby = await fetch(`/api/fussball/lobbies/${encodeURIComponent(id)}/join`);
+        const jLobby = await rLobby.json();
+        if(!jLobby?.success) throw new Error('Lobby nicht gefunden');
+        const lessonId: string | undefined = jLobby.lobby?.lessonId;
+        if(!lessonId){
+          throw new Error('Keine Übung in dieser Lobby hinterlegt');
+        }
+        // Übung laden
+        const rEx = await fetch(`/api/exercises?lessonId=${encodeURIComponent(lessonId)}`);
+        const jEx = await rEx.json();
+        if(!jEx?.success || !jEx.exercise) throw new Error('Übung nicht gefunden');
+        const mapped = toMcQuestions(jEx.exercise);
+        if(alive){ setExerciseTitle(mapped.title); setQuestions(mapped.items); }
+      } catch(e:any){ if(alive) setErrorQs(e?.message || String(e)); }
+      finally { if(alive) setLoadingQs(false); }
+    })();
+    return ()=>{ alive=false; };
+  },[id]);
 
   function answer(idx:number){
     if(!current || locked) return;
@@ -65,6 +97,7 @@ export default function FussballLivePage(){
         <div>
           <h1 className="text-2xl font-bold">⚽ Fußball Match</h1>
           <p className="text-xs text-gray-500">Lobby ID: <span className="font-mono">{id}</span></p>
+          {exerciseTitle && <p className="text-xs text-gray-500">Übung: <span className="font-medium">{exerciseTitle}</span></p>}
         </div>
         <div className="text-xs text-gray-500 flex gap-4">
           <span>Fragen: {stats.asked}</span>
@@ -73,6 +106,12 @@ export default function FussballLivePage(){
         </div>
         <div className="ml-auto text-xs"><a href="/arena/fussball2" className="text-blue-600 hover:underline">Zur Lobby</a></div>
       </header>
+      {loadingQs && (
+        <div className="mb-4 p-2 rounded bg-gray-50 border text-xs text-gray-600">Lade Fragen aus Übung…</div>
+      )}
+      {errorQs && (
+        <div className="mb-4 p-2 rounded bg-red-50 border border-red-200 text-xs text-red-700">{errorQs}</div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Linke Spalte: Fragen */}
         <div className="flex flex-col gap-4">
@@ -99,17 +138,24 @@ export default function FussballLivePage(){
                   })}
                 </div>
               </>
-            ) : <div className="text-sm text-gray-500">Lade nächste Frage…</div>}
+            ) : (
+              <div className="text-sm text-gray-500">{loadingQs? 'Lade Fragen…' : (questions.length? 'Lade nächste Frage…' : 'Keine Fragen gefunden')}</div>
+            )}
           </div>
           <div className="p-3 rounded bg-amber-50 border border-amber-300 text-amber-800 text-xs leading-relaxed">
             Gewichtete Wiederholung aktiv: Falsch beantwortete Fragen tauchen wahrscheinlicher erneut auf. Diese Logik ist lokal – später serverseitig synchronisiert.
           </div>
         </div>
-        {/* Rechte Spalte: Spielfeld Platzhalter */}
-        <div className="relative border rounded bg-gradient-to-br from-green-600 via-green-700 to-emerald-800 shadow-inner aspect-[16/9] overflow-hidden">
-          <Pitch />
-          <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/40 text-white backdrop-blur">
-            Platzhalter Spielfeld
+        {/* Rechte Spalte: Spielfeld mit Foto-Hintergrund */}
+        <div className="relative border rounded bg-black shadow-inner aspect-[16/9] overflow-hidden">
+          <Image src={FIELD_IMAGES[fieldIdx % FIELD_IMAGES.length]} alt="Spielfeld" fill priority sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
+          <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/50 text-white backdrop-blur">
+            Spielfeld: {fieldIdx + 1}/{FIELD_IMAGES.length}
+          </div>
+          <div className="absolute top-2 right-2 flex gap-1">
+            <button onClick={()=> setFieldIdx(i=> (i-1+FIELD_IMAGES.length)%FIELD_IMAGES.length)} className="px-2 py-1 text-[10px] rounded bg-white/70 hover:bg-white text-gray-900">◀</button>
+            <button onClick={()=> setFieldIdx(i=> (i+1)%FIELD_IMAGES.length)} className="px-2 py-1 text-[10px] rounded bg-white/70 hover:bg-white text-gray-900">▶</button>
           </div>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
             {questions.map(q=>{ const statsQ = correctCounts[q.id]; const wrong = statsQ?.wrong||0; const asked = statsQ?.asked||0; return (
@@ -125,21 +171,55 @@ export default function FussballLivePage(){
   );
 }
 
-// Einfaches Canvas / SVG Spielfeld
-function Pitch(){
-  return (
-    <svg viewBox="0 0 1200 675" className="absolute inset-0 w-full h-full">
-      <rect x="0" y="0" width="1200" height="675" fill="#0a7d2b" />
-      <rect x="10" y="10" width="1180" height="655" fill="none" stroke="#fff" strokeWidth="8" />
-      <line x1="600" y1="10" x2="600" y2="665" stroke="#fff" strokeWidth="6" />
-      <circle cx="600" cy="337.5" r="80" stroke="#fff" strokeWidth="6" fill="none" />
-      <circle cx="600" cy="337.5" r="6" fill="#fff" />
-      <rect x="10" y="187.5" width="160" height="300" stroke="#fff" strokeWidth="6" fill="none" />
-      <rect x="1030" y="187.5" width="160" height="300" stroke="#fff" strokeWidth="6" fill="none" />
-      <rect x="10" y="247.5" width="60" height="180" stroke="#fff" strokeWidth="6" fill="none" />
-      <rect x="1130" y="247.5" width="60" height="180" stroke="#fff" strokeWidth="6" fill="none" />
-      <circle cx="170" cy="337.5" r="6" fill="#fff" />
-      <circle cx="1030" cy="337.5" r="6" fill="#fff" />
-    </svg>
-  );
+// (Das frühere SVG-Pitch wurde durch Foto-Hintergründe ersetzt)
+
+// Daten aus Lobby/Exercise laden
+async function fetchLobby(lobbyId: string){
+  try{
+    const r = await fetch(`/api/fussball/lobbies/${lobbyId}/join`);
+    const j = await r.json();
+    if(j?.success) return j.lobby as { id:string; title:string; lessonId?:string };
+  }catch{}
+  throw new Error('Lobby nicht gefunden');
 }
+
+type ExerciseApi = { success:boolean; exercise?: { _id:string; title:string; type:string; questions?: Array<{ question:string; allAnswers?:string[]; correctAnswer?:string; correctAnswers?:string[]; wrongAnswers?:string[] }>} };
+
+async function fetchExercise(lessonId: string){
+  const r = await fetch(`/api/exercises?lessonId=${encodeURIComponent(lessonId)}`);
+  const j: ExerciseApi = await r.json();
+  if(!j.success || !j.exercise) throw new Error('Übung nicht gefunden');
+  return j.exercise;
+}
+
+function toMcQuestions(exercise: NonNullable<ExerciseApi['exercise']>): { title?:string; items: MCQuestion[] }{
+  const items: MCQuestion[] = [];
+  const qs = Array.isArray(exercise.questions)? exercise.questions : [];
+  qs.forEach((q, idx)=>{
+    let options: string[] = Array.isArray(q.allAnswers) && q.allAnswers.length? [...q.allAnswers] : [];
+    // Fallback-Optionen aus korrekt + falsch bauen
+    if(options.length === 0){
+      const pool = new Set<string>();
+      if(q.correctAnswer) pool.add(q.correctAnswer);
+      (q.correctAnswers||[]).forEach(a=> pool.add(a));
+      (q.wrongAnswers||[]).forEach(a=> pool.add(a));
+      options = Array.from(pool);
+    }
+    if(options.length === 0) return; // Frage überspringen
+    // Korrekte Antwort bestimmen (single-choice bevorzugt)
+    let correctAnswer: string | undefined = q.correctAnswer || (q.correctAnswers && q.correctAnswers[0]) || undefined;
+    if(!correctAnswer){
+      // Wenn allAnswers existiert und erste Antwort korrekt sein soll, nimm Index 0
+      correctAnswer = options[0];
+    }
+    // Sicherstellen, dass die korrekte Antwort in den Optionen ist
+    if(!options.includes(correctAnswer)) options = [correctAnswer, ...options];
+    // Eindeutig machen
+    options = Array.from(new Set(options));
+    const correct = Math.max(0, options.indexOf(correctAnswer));
+    items.push({ id: `q${idx}`, text: q.question || `Frage ${idx+1}`, options, correct });
+  });
+  return { title: exercise.title, items };
+}
+
+// Ende

@@ -260,7 +260,10 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   useEffect(()=>{ initMaze(); initGhosts(); if(!questionPoolRef.current.length) initQuestionPool(); loadQuestion(); centerPlayer(); let last=performance.now(); const loop=(ts:number)=>{ const dt=Math.min(0.05,(ts-last)/1000); last=ts; update(dt); draw(); requestAnimationFrame(loop); }; requestAnimationFrame(loop); },[]); // eslint-disable-line
 
   // Vollbild
-  const toggleFullscreen=()=>{ const el=wrapperRef.current; if(!el) return; if(!document.fullscreenElement){ el.requestFullscreen?.(); } else { document.exitFullscreen?.(); } };
+  const toggleFullscreen=async()=>{ const el=wrapperRef.current; if(!el) return; if(!document.fullscreenElement){
+      try { await (el as any).requestFullscreen?.({ navigationUI:'hide' }); } catch { try { await (el as any).requestFullscreen?.(); } catch {} }
+    } else { try { await document.exitFullscreen?.(); } catch {} }
+  };
   useEffect(()=>{ const h=()=>setIsFullscreen(!!document.fullscreenElement); document.addEventListener('fullscreenchange',h); return ()=> document.removeEventListener('fullscreenchange',h); },[]);
 
   // Resize ähnlich SpaceImpact
@@ -271,7 +274,15 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
 
   const restart=()=>{ setScore(0); setLives(MAX_LIVES); setGameOver(false); setFinished(false); centerPlayer(); resetGhosts(); loadQuestion(); };
 
-  return (<div ref={wrapperRef} className={isFullscreen? 'w-screen h-screen flex flex-col items-center bg-[#05070d] overflow-hidden':'w-full flex flex-col items-center gap-2 bg-transparent overflow-hidden'}>
+  return (<div
+    ref={wrapperRef}
+    className={isFullscreen? 'fixed inset-0 z-50 flex flex-col items-center bg-[#05070d] overflow-hidden':'w-full flex flex-col items-center gap-2 bg-transparent overflow-hidden'}
+    onDoubleClick={toggleFullscreen}
+    onTouchStart={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+    onTouchMove={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+    onWheel={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+    style={{ touchAction: isFullscreen? 'none':'manipulation' }}
+  >
     <div ref={hudRef} className="w-full" style={{width: gamePixelWidth? gamePixelWidth:'100%', maxWidth:gamePixelWidth}}>
       <div className="w-full flex flex-col gap-2 bg-[#101826] border-2 border-[#2c3e50] rounded p-3">
         <div className="flex justify-between items-start gap-4">

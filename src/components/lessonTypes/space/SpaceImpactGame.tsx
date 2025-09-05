@@ -88,7 +88,15 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
   const lastTimeRef=useRef(0); const lastFrameDtRef=useRef(0);
   const wrongFlashRef=useRef(0); const correctFlashRef=useRef(0); const shakeRef=useRef(0);
 
-  const toggleFullscreen=()=>{ const el=wrapperRef.current; if(!el) return; if(!document.fullscreenElement){ el.requestFullscreen?.(); } else { document.exitFullscreen?.(); } };
+  const toggleFullscreen=async()=>{ const el=wrapperRef.current; if(!el) return; if(!document.fullscreenElement){
+      try {
+        await (el as any).requestFullscreen?.({ navigationUI:'hide' });
+      } catch {
+        try { await (el as any).requestFullscreen?.(); } catch {}
+      }
+    } else { try { await document.exitFullscreen?.(); } catch {}
+    }
+  };
   useEffect(()=>{ const h=()=>setIsFullscreen(!!document.fullscreenElement); document.addEventListener('fullscreenchange',h); return ()=> document.removeEventListener('fullscreenchange',h); },[]);
 
   useEffect(()=>{ const kd=(e:KeyboardEvent)=>{ if(e.code==='ArrowUp'||e.code==='KeyW'){inputRef.current.up=true; e.preventDefault();} if(e.code==='ArrowDown'||e.code==='KeyS'){inputRef.current.down=true; e.preventDefault();} if(e.code==='Space'){inputRef.current.shoot=true; e.preventDefault();} if(e.code==='KeyP'){ setPaused(p=>!p);} if(!running && e.code==='Enter'){ start(); } if(gameOver && e.code==='Enter'){ restart(); } }; const ku=(e:KeyboardEvent)=>{ if(e.code==='ArrowUp'||e.code==='KeyW') inputRef.current.up=false; if(e.code==='ArrowDown'||e.code==='KeyS') inputRef.current.down=false; if(e.code==='Space') inputRef.current.shoot=false; }; window.addEventListener('keydown',kd); window.addEventListener('keyup',ku); return ()=>{ window.removeEventListener('keydown',kd); window.removeEventListener('keyup',ku); }; },[running,gameOver]);
@@ -290,7 +298,15 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
   const BASE_WIDTH=Math.round(W*DISPLAY_SCALE);
 
   return (
-  <div ref={wrapperRef} className={isFullscreen? 'w-screen h-screen flex flex-col items-center bg-[#05070d] overflow-hidden':'w-full flex flex-col items-center gap-2 bg-transparent overflow-hidden'}>
+  <div
+      ref={wrapperRef}
+      className={isFullscreen? 'fixed inset-0 z-50 flex flex-col items-center bg-[#05070d] overflow-hidden':'w-full flex flex-col items-center gap-2 bg-transparent overflow-hidden'}
+      onDoubleClick={toggleFullscreen}
+      onTouchStart={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      onTouchMove={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      onWheel={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      style={{ touchAction: isFullscreen? 'none':'manipulation' }}
+    >
       {/* HUD */}
   <div ref={hudRef} className="w-full" style={{width: gamePixelWidth? gamePixelWidth: '100%', maxWidth: gamePixelWidth? gamePixelWidth: undefined}}>
         <div className="grid w-full select-none" style={{gridTemplateColumns:'1fr auto',gridTemplateAreas:'"frage status" "antworten antworten"',gap: isFullscreen?10:8,background:'#101826',border:'2px solid #2c3e50',borderRadius:10,padding: isFullscreen? '10px 14px':'10px 14px',boxShadow:'0 2px 6px -2px rgba(0,0,0,0.6)'}}>

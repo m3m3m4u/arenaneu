@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readFile } from 'fs/promises';
+import { readFile, access } from 'fs/promises';
 import path from 'path';
 
 export const runtime = 'nodejs';
@@ -9,15 +9,26 @@ export async function GET(){
   try {
   // Zugriff über require('process') um Edge-Typkonflikte zu umgehen
   const baseCwd = (require('process') as any).cwd();
-    let workerPath = path.join(baseCwd, 'node_modules','pdfjs-dist','build','pdf.worker.min.js');
-    let code: string;
-    try {
-      code = await readFile(workerPath,'utf8');
-    } catch(e){
-      // Fallback: versuche im Standalone Bundle (bei output:standalone wird node_modules verlinkt/kopiert)
-      workerPath = path.join(baseCwd, '.next','standalone','node_modules','pdfjs-dist','build','pdf.worker.min.js');
-      code = await readFile(workerPath,'utf8');
+    const candidates = [
+      // ESM/Legacy Varianten
+      ['node_modules','pdfjs-dist','build','pdf.worker.min.mjs'],
+      ['node_modules','pdfjs-dist','build','pdf.worker.min.js'],
+      ['node_modules','pdfjs-dist','build','pdf.worker.js'],
+      ['node_modules','pdfjs-dist','legacy','build','pdf.worker.min.mjs'],
+      ['node_modules','pdfjs-dist','legacy','build','pdf.worker.min.js'],
+      // Standalone (output: standalone)
+      ['.next','standalone','node_modules','pdfjs-dist','build','pdf.worker.min.mjs'],
+      ['.next','standalone','node_modules','pdfjs-dist','build','pdf.worker.min.js'],
+      ['.next','standalone','node_modules','pdfjs-dist','legacy','build','pdf.worker.min.mjs'],
+      ['.next','standalone','node_modules','pdfjs-dist','legacy','build','pdf.worker.min.js'],
+    ];
+    let workerPath = '';
+    for(const parts of candidates){
+      const p = path.join(baseCwd, ...parts);
+      try { await access(p); workerPath = p; break; } catch { /* try next */ }
     }
+    if(!workerPath) throw new Error('pdf.worker.* nicht gefunden');
+    const code = await readFile(workerPath,'utf8');
     return new Response(code, {
       status: 200,
       headers: {

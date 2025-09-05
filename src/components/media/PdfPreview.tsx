@@ -29,22 +29,27 @@ export default function PdfPreview({ url, onClose }: PdfPreviewProps){
     (async()=>{
       try {
         setLoading(true); setError(undefined);
+        // pdfjs laden (ESM-Paket)
         // @ts-ignore
-        const pdfjsLib = await import('pdfjs-dist');
+        const pdfjsLib: any = await import('pdfjs-dist');
+        if(!pdfjsLib || !pdfjsLib.getDocument){
+          console.error('[PdfPreview] pdfjs getDocument nicht verfügbar. Verfügbare Keys:', pdfjsLib && Object.keys(pdfjsLib));
+          throw new Error('pdfjs getDocument nicht verfügbar');
+        }
         // Worker setzen (Fallback CDN falls bundler Pfad nicht passt)
         // @ts-ignore
         if(pdfjsLib.GlobalWorkerOptions){
           // @ts-ignore
-          pdfjsLib.GlobalWorkerOptions.workerSrc = '/api/pdf-worker';
+          pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/api/pdf-worker', window.location.origin).toString();
         }
         // @ts-ignore
-        const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false });
+        const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true, withCredentials: false });
         const pdf = await task.promise;
         if(cancelled) return;
         pdfRef.current = pdf;
         setNumPages(pdf.numPages);
         await renderPage(1, pdf);
-      } catch(e:any){ if(!cancelled) setError('PDF konnte nicht geladen werden'); }
+      } catch(e:any){ console.error('[PdfPreview] Fehler', e); if(!cancelled) setError('PDF konnte nicht geladen werden'); }
       finally { if(!cancelled) setLoading(false); }
     })();
     return ()=>{ cancelled=true; };
