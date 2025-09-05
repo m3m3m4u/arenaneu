@@ -21,57 +21,6 @@
 		{
 			"label": "typecheck",
 			"type": "shell",
-			"command": "npm run typecheck",
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		},
-		{
-			"label": "typecheck",
-			"type": "shell",
-			"command": "npm run typecheck",
-			"group": "build"
-		},
-		{
-			"label": "typecheck",
-			"type": "shell",
-			"command": "npm run typecheck",
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		},
-		{
-			"label": "typecheck",
-			"type": "shell",
-			"command": "npm run typecheck",
-			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		},
-		{
-			"label": "typecheck",
-			"type": "shell",
-			"command": "npm run -s typecheck",
-			"args": [],
-			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		},
-		{
-			"label": "dev",
-			"type": "shell",
-			"command": "npm run dev",
-			"group": "build"
-		},
-		{
-			"label": "typecheck",
-			"type": "shell",
 			"command": "npm run -s typecheck",
 			"args": [],
 			"isBackground": false,
@@ -84,77 +33,28 @@
 			"label": "typecheck",
 			"type": "shell",
 			"command": "npm run -s typecheck",
-			"args": [],
 			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
 			"group": "build"
 		},
 		{
 			"label": "typecheck",
 			"type": "shell",
 			"command": "npm run -s typecheck",
-			"args": [],
 			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
 			"group": "build"
 		},
 		{
 			"label": "typecheck",
 			"type": "shell",
 			"command": "npm run -s typecheck",
-			"args": [],
 			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
 			"group": "build"
 		},
 		{
 			"label": "typecheck",
 			"type": "shell",
 			"command": "npm run -s typecheck",
-			"args": [],
 			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		},
-		{
-			"label": "typecheck",
-			"type": "shell",
-			"command": "npm run -s typecheck",
-			"args": [],
-			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		},
-		{
-			"label": "typecheck",
-			"type": "shell",
-			"command": "npm run -s typecheck",
-			"args": [],
-			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		},
-		{
-			"label": "typecheck",
-			"type": "shell",
-			"command": "npm run -s typecheck",
-			"args": [],
-			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
 			"group": "build"
 		}
 	]
