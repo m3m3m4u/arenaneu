@@ -82,7 +82,15 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
   const enterFullscreen = async ()=>{
     const el = wrapperRef.current; if(!el) return;
     try {
-      if(el.requestFullscreen){ await el.requestFullscreen(); }
+      // Versuche die UI im Fullscreen auszublenden (Safari/Chromium unterstützen teils navigationUI)
+      const anyEl: any = el as any;
+      if (anyEl.requestFullscreen) {
+        try {
+          await anyEl.requestFullscreen({ navigationUI: 'hide' } as any);
+        } catch {
+          await anyEl.requestFullscreen();
+        }
+      }
       // Safari prefixes werden hier bewusst weggelassen, Next-Ziel sind moderne Browser
       setIsFullscreen(true);
   recalcFsSize(true);
@@ -199,11 +207,12 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
       </div>
       <div
         ref={wrapperRef}
-        className={"w-full flex flex-col lg:flex-row gap-6 " + (isFullscreen ? "border-2 border-gray-300 rounded-xl p-3 bg-white" : "")}
+        className={(isFullscreen ? "fixed inset-0 z-50 bg-white overflow-hidden p-3 " : "") + "w-full flex flex-col lg:flex-row gap-6"}
         onDoubleClick={()=>{ if(document.fullscreenElement){ exitFullscreen(); } else { enterFullscreen(); } }}
-        onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current = { x:t.clientX, y:t.clientY, time: performance.now() }; lastTouchMoveRef.current={ x:t.clientX, y:t.clientY }; }}
-        onTouchMove={(e)=>{ if(!isFullscreen) return; if(!touchStartRef.current) return; const t=e.touches[0]; const dy=t.clientY - touchStartRef.current.y; if(dy>25){ try{ e.preventDefault(); }catch{} } lastTouchMoveRef.current={ x:t.clientX, y:t.clientY }; }}
+        onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current = { x:t.clientX, y:t.clientY, time: performance.now() }; lastTouchMoveRef.current={ x:t.clientX, y:t.clientY }; if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+        onTouchMove={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } if(!touchStartRef.current) return; const t=e.touches[0]; if(!t) return; lastTouchMoveRef.current={ x:t.clientX, y:t.clientY }; }}
         onTouchEnd={()=>{ touchStartRef.current=null; lastTouchMoveRef.current=null; }}
+        onWheel={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
         style={{ touchAction: isFullscreen ? 'none' : 'manipulation' }}
       >
   <div className={(isFullscreen ? "lg:w-[420px] p-5 text-[0.95rem]" : "lg:w-80 p-4") + " w-full lg:w-auto flex-shrink-0 bg-white border rounded space-y-4 h-fit min-h-[420px]"}>
