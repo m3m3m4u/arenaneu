@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import useFullscreenTouchLock from '@/lib/useFullscreenTouchLock';
 import type { Lesson, LessonContent } from '../types';
 import { useSession } from 'next-auth/react';
 import { finalizeLesson } from '../../../lib/lessonCompletion';
@@ -135,11 +136,17 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
   },[nextQuestion]);
 
   // Fullscreen
-  const toggleFullscreen = () => {
+  const enterFullscreen = async ()=>{
     const el = wrapperRef.current; if(!el) return;
-    if(!document.fullscreenElement){ el.requestFullscreen?.(); } else { document.exitFullscreen?.(); }
+    try { await (el as any).requestFullscreen?.({ navigationUI: 'hide' } as any); }
+    catch { try { await (el as any).requestFullscreen?.(); } catch {/* ignore */} }
   };
+  const exitFullscreen = ()=>{ try{ document.exitFullscreen?.(); } catch{} };
+  const toggleFullscreen = ()=>{ if(!document.fullscreenElement) enterFullscreen(); else exitFullscreen(); };
   useEffect(()=>{ const handler=()=> setIsFullscreen(!!document.fullscreenElement); document.addEventListener('fullscreenchange', handler); return ()=> document.removeEventListener('fullscreenchange', handler); },[]);
+
+  // Systemgesten im Fullscreen konsequent blocken (iOS Safari, Android Chrome)
+  useFullscreenTouchLock(isFullscreen, { edgeWidth: 40, topEdgeHeight: 40 });
 
   // Input
   useEffect(()=>{
@@ -478,15 +485,16 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
   return (
     <div
       ref={wrapperRef}
-      className={isFullscreen ? 'w-screen h-screen bg-black relative overflow-hidden' : 'w-full py-4'}
-      onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current={ x:t.clientX, y:t.clientY, time: performance.now() }; }}
-      onTouchMove={(e)=>{ if(!touchStartRef.current) return; if(!isFullscreen) return; const t=e.touches[0]; const dy=t.clientY - touchStartRef.current.y; if(dy>25){ try{ e.preventDefault(); }catch{} } }}
-      onTouchEnd={(e)=>{ const s=touchStartRef.current; if(!s) return; const t=(e.changedTouches&&e.changedTouches[0])? e.changedTouches[0] : (e.touches[0]||null); if(!t){ touchStartRef.current=null; return; } const dx=t.clientX-s.x; const dy=t.clientY-s.y; const adx=Math.abs(dx), ady=Math.abs(dy); if(ady>36 && ady>adx){ if(dy<0){ // nach oben wischen
+      className={isFullscreen ? 'fixed inset-0 z-50 bg-black overflow-hidden' : 'w-full py-4'}
+      onTouchStart={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } const t=e.touches[0]; touchStartRef.current={ x:t.clientX, y:t.clientY, time: performance.now() }; }}
+      onTouchMove={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } if(!touchStartRef.current) return; const t=e.touches[0]; const dy=t.clientY - touchStartRef.current.y; if(isFullscreen && Math.abs(dy)>10){ try{ e.preventDefault(); }catch{} } }}
+      onTouchEnd={(e)=>{ const s=touchStartRef.current; if(!s) return; const t=(e.changedTouches&&e.changedTouches[0])? e.changedTouches[0] : (e.touches[0]||null); if(!t){ touchStartRef.current=null; return; } const dx=t.clientX-s.x; const dy=t.clientY-s.y; const adx=Math.abs(dx), ady=Math.abs(dy); if(ady>36 && ady>adx){ if(dy<0){
             keysRef.current.ArrowUp = true; keysRef.current.ArrowDown = false; setTimeout(()=>{ keysRef.current.ArrowUp=false; }, 140);
-          } else { // nach unten wischen (kein Fullscreen Exit, nur Move)
+          } else {
             keysRef.current.ArrowDown = true; keysRef.current.ArrowUp = false; setTimeout(()=>{ keysRef.current.ArrowDown=false; }, 140);
           } }
           touchStartRef.current=null; }}
+      onWheel={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
       style={{touchAction: isFullscreen ? 'none' : 'manipulation'}}
     >
       <div className={isFullscreen ? 'relative w-full h-full' : 'mx-auto w-full'} style={ isFullscreen ? {width:'100%', height:'100%'} : {width:'100%'} }>

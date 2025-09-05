@@ -9,7 +9,7 @@ export async function POST(_:Request, { params }:{ params:{ id:string }} ){
   const session: any = await getServerSession(authOptions as any);
   const userId = session?.user?.id || session?.user?._id;
   if(!userId) return NextResponse.json({ success:false, error:'UNAUTHENTICATED' }, { status:401 });
-  const res = leaveLobby(params.id, String(userId));
+  const res = await leaveLobby(params.id, String(userId));
   if('error' in res) return NextResponse.json({ success:false, error:res.error }, { status:400 });
   return NextResponse.json({ success:true, lobby: res.lobby ? { ...res.lobby, lessonId: (res.lobby as any).lessonId } : undefined, deleted: (res as any).deleted });
 }

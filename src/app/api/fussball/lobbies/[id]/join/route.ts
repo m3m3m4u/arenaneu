@@ -11,13 +11,13 @@ export async function POST(_:Request, { params }:{ params:{ id:string }} ){
   const username = session?.user?.username || session?.user?.name || 'Spieler';
   if(!userId) return NextResponse.json({ success:false, error:'UNAUTHENTICATED' }, { status:401 });
   const { id } = params;
-  const res = joinLobby(id, String(userId), String(username));
+  const res = await joinLobby(id, String(userId), String(username));
   if('error' in res) return NextResponse.json({ success:false, error:res.error }, { status:400 });
   return NextResponse.json({ success:true, lobby: { ...res.lobby, lessonId: (res.lobby as any).lessonId } });
 }
 
 export async function GET(_:Request, { params }:{ params:{ id:string }} ){
-  const lobby = getLobby(params.id);
+  const lobby = await getLobby(params.id);
   if(!lobby) return NextResponse.json({ success:false, error:'NOT_FOUND' }, { status:404 });
   return NextResponse.json({ success:true, lobby });
 }

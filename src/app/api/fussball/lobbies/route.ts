@@ -6,7 +6,8 @@ import { createLobby, listOpenLobbies } from '@/lib/fussball/lobbyStore';
 export const runtime = 'nodejs';
 
 export async function GET(){
-  return NextResponse.json({ success:true, lobbies: listOpenLobbies() });
+  const lobbies = await listOpenLobbies();
+  return NextResponse.json({ success:true, lobbies });
 }
 
 export async function POST(req: Request){
@@ -17,6 +18,6 @@ export async function POST(req: Request){
   const body = await req.json().catch(()=>({}));
   const title = typeof body.title==='string'? body.title.slice(0,60): 'Fußball Match';
   const lessonId = typeof body.lessonId==='string'? body.lessonId: undefined;
-  const lobby = createLobby(String(userId), String(username), title, lessonId);
+  const lobby = await createLobby(String(userId), String(username), title, lessonId);
   return NextResponse.json({ success:true, lobby:{ id: lobby.id, title: lobby.title, lessonId: lobby.lessonId, players: lobby.players, status: lobby.status } });
 }
