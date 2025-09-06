@@ -85,6 +85,12 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
         } catch(e){
           console.warn('Sync PDF Preview Gen Fehlgeschlagen', (e as any)?.message);
         }
+        // Falls Sync fehlgeschlagen hat, asynchron nachreichen
+        if(!previewResult){
+          void generatePdfPreviewImagesForShopFile(pid, key, file.name).catch(e=>{
+            console.warn('PDF Preview Gen (Fallback async) Fehlgeschlagen', (e as any)?.message);
+          });
+        }
       } else {
         void generatePdfPreviewImagesForShopFile(pid, key, file.name).catch(e=>{
           console.warn('PDF Preview Gen Fehlgeschlagen', (e as any)?.message);
