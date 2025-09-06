@@ -21,8 +21,8 @@ export const metadata = {
   title: "LernArena - Interaktive Lernplattform",
   description: "Eine moderne Lernplattform mit interaktiven Kursen und Quizzes",
   icons: {
-    icon: "/favicon.ico",
-    apple: "/favicon.ico"
+    icon: "/icon.svg",
+    apple: "/icon.svg"
   }
 };
 
