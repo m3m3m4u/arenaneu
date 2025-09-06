@@ -27,6 +27,7 @@ export default function AdminMaterialPage(){
   const [rawFiles, setRawFiles] = useState<RawFile[]>([]);
   const [rawPage, setRawPage] = useState(1);
   const [rawTotal, setRawTotal] = useState(0);
+  const [rawPageSize, setRawPageSize] = useState(20);
   const [rawSearch, setRawSearch] = useState('');
   const [rawUploading, setRawUploading] = useState(false);
   const [rawFormat, setRawFormat] = useState('');
@@ -56,7 +57,7 @@ export default function AdminMaterialPage(){
     try {
       const qs = new URLSearchParams();
       qs.set('page', String(page));
-      qs.set('limit','30');
+      qs.set('limit', String(rawPageSize));
       if(rawSearch) qs.set('q', rawSearch);
       if(rawFormat) qs.set('format', rawFormat);
       if(rawYear) qs.set('year', rawYear);
@@ -64,9 +65,14 @@ export default function AdminMaterialPage(){
       if(rawDay) qs.set('day', rawDay);
       const r = await fetch(`/api/shop/raw-files?${qs.toString()}`);
       const d = await r.json();
-      if(r.ok && d.success){ setRawFiles(d.items); setRawTotal(d.total); setRawPage(d.page); }
+      if(r.ok && d.success){
+        setRawFiles(d.items);
+        setRawTotal(d.total);
+        setRawPage(d.page);
+        if(typeof d.pageSize === 'number' && d.pageSize>0) setRawPageSize(d.pageSize);
+      }
     } catch{/*ignore*/}
-  },[rawSearch, rawFormat, rawYear, rawMonth, rawDay]);
+  },[rawSearch, rawFormat, rawYear, rawMonth, rawDay, rawPageSize]);
 
   async function load(){
     setLoading(true); setError(null);
@@ -302,6 +308,14 @@ export default function AdminMaterialPage(){
               <button onClick={deleteSelectedRaw} className="px-2 py-1 border rounded bg-red-50 hover:bg-red-100 text-red-700" title="Ausgewählte löschen">Löschen ({selectedRawIds.length})</button>
             )}
             {rawUploading && <span>Upload…</span>}
+            {/* Pagination (20 pro Seite) */}
+            <div className="ml-auto flex items-center gap-1">
+              <button onClick={()=>{ const p=1; setRawPage(p); loadRaw(p); }} disabled={rawPage<=1} className="px-2 py-1 border rounded disabled:opacity-50">«</button>
+              <button onClick={()=>{ const p=Math.max(1, rawPage-1); setRawPage(p); loadRaw(p); }} disabled={rawPage<=1} className="px-2 py-1 border rounded disabled:opacity-50">‹</button>
+              <span className="px-2">Seite {rawPage} / {Math.max(1, Math.ceil(rawTotal / rawPageSize))}</span>
+              <button onClick={()=>{ const totalPages=Math.max(1, Math.ceil(rawTotal / rawPageSize)); const p=Math.min(totalPages, rawPage+1); setRawPage(p); loadRaw(p); }} disabled={rawPage >= Math.max(1, Math.ceil(rawTotal / rawPageSize))} className="px-2 py-1 border rounded disabled:opacity-50">›</button>
+              <button onClick={()=>{ const p=Math.max(1, Math.ceil(rawTotal / rawPageSize)); setRawPage(p); loadRaw(p); }} disabled={rawPage >= Math.max(1, Math.ceil(rawTotal / rawPageSize))} className="px-2 py-1 border rounded disabled:opacity-50">»</button>
+            </div>
           </div>
         </div>
         {/* Drag & Drop Zone (3x höher) */}
@@ -344,11 +358,14 @@ export default function AdminMaterialPage(){
             );
           })}
         </div>
-        {rawTotal>rawFiles.length && (
-          <div className="flex justify-center mt-2">
-            <button onClick={()=>{ loadRaw(rawPage+1); }} className="text-xs px-3 py-1 border rounded">Mehr…</button>
-          </div>
-        )}
+        {/* Untere Pagination */}
+        <div className="flex justify-center mt-2 gap-2 text-xs">
+          <button onClick={()=>{ const p=1; setRawPage(p); loadRaw(p); }} disabled={rawPage<=1} className="px-2 py-1 border rounded disabled:opacity-50">« Erste</button>
+          <button onClick={()=>{ const p=Math.max(1, rawPage-1); setRawPage(p); loadRaw(p); }} disabled={rawPage<=1} className="px-2 py-1 border rounded disabled:opacity-50">‹ Zurück</button>
+          <span className="px-2 py-1">Seite {rawPage} von {Math.max(1, Math.ceil(rawTotal / rawPageSize))} • {rawPageSize} pro Seite</span>
+          <button onClick={()=>{ const totalPages=Math.max(1, Math.ceil(rawTotal / rawPageSize)); const p=Math.min(totalPages, rawPage+1); setRawPage(p); loadRaw(p); }} disabled={rawPage >= Math.max(1, Math.ceil(rawTotal / rawPageSize))} className="px-2 py-1 border rounded disabled:opacity-50">Weiter ›</button>
+          <button onClick={()=>{ const p=Math.max(1, Math.ceil(rawTotal / rawPageSize)); setRawPage(p); loadRaw(p); }} disabled={rawPage >= Math.max(1, Math.ceil(rawTotal / rawPageSize))} className="px-2 py-1 border rounded disabled:opacity-50">Letzte »</button>
+        </div>
   </section>}
 
   {tab==='excel' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
