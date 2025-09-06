@@ -277,7 +277,7 @@ export default function AdminMaterialPage(){
 
       {tab==='manage' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
         <div className="flex flex-wrap gap-3 items-center justify-between">
-          <h2 className="font-semibold">Raw-Dateien</h2>
+          <h2 className="font-semibold">Alle Dateien</h2>
           <div className="flex gap-2 items-center text-xs flex-wrap">
             <input value={rawSearch} onChange={e=>setRawSearch(e.target.value)} placeholder="Suche" className="border rounded px-2 py-1" />
             <select value={rawFormat} onChange={e=>setRawFormat(e.target.value)} className="border rounded px-2 py-1">

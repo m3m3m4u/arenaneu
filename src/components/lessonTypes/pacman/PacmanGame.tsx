@@ -92,8 +92,25 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   };
 
   const initMaze=useCallback(async ()=>{
-    // Erzwinge die Verwendung der öffentlichen Template-CSV
-    const url: string = '/pacman/maze_template.csv';
+    // Bevorzugt CSV-Quelle aus Lesson-Content, Fallback: öffentliche Template-CSV
+    const getCsvUrl = (): string => {
+      try {
+        const c: any = (lesson && (lesson as any).content) || {};
+        let raw: unknown = c.pacmanCsv ?? c.mazeCsv ?? c.csv ?? c.boardCsv ?? c.boardUrl;
+        if (typeof raw === 'string') {
+          let s = raw.trim();
+          if (!s) return '/pacman/maze_template.csv';
+          // Absolute http(s) oder data:-URL direkt nutzen
+          if (/^(https?:)?\/\//i.test(s) || s.startsWith('data:')) return s;
+          // Root-relativ bereitstellen
+          if (s.startsWith('/')) return s;
+          // Nur Dateiname/relativ: unter /pacman/ erwarten
+          return '/pacman/' + s;
+        }
+      } catch {}
+      return '/pacman/maze_template.csv';
+    };
+    const url: string = getCsvUrl();
     if(url){
       try{
   const res=await fetch(url, { cache: 'no-store' });
