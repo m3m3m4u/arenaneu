@@ -103,6 +103,14 @@ export default function FussballTeamLobbyPage(){
   if(lobby){
     const leftPlayers = (lobby.players||[]).filter((p:any)=> p.side==='left');
     const rightPlayers = (lobby.players||[]).filter((p:any)=> p.side==='right');
+    const mySide = (()=>{
+      try{
+        const uid = String((session as any)?.user?.id || (session as any)?.user?._id || '');
+        const me = (lobby.players||[]).find((p:any)=> String(p.userId)===uid);
+        if(me && (me.side==='left' || me.side==='right')) return me.side as 'left'|'right';
+      }catch{}
+      return null;
+    })();
     return (
       <main className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex flex-col gap-6">
         <h1 className="text-2xl font-bold">⚽ Fußball Team Lobby</h1>
@@ -119,6 +127,13 @@ export default function FussballTeamLobbyPage(){
           )}
           <div className="flex flex-col gap-3">
             <div className="text-sm font-semibold text-gray-600">Spieler</div>
+            {mySide && (
+              <div className="text-xs">
+                <span className={(mySide==='left'?'text-red-700 bg-red-50 border-red-200':'text-blue-700 bg-blue-50 border-blue-200') + ' inline-block px-2 py-0.5 rounded border font-semibold'}>
+                  Du bist Team {mySide==='left'?'ROT':'BLAU'}
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="border rounded p-2">
                 <div className="flex items-center justify-between mb-1">

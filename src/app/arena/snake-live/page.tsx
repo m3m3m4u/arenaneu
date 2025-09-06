@@ -23,11 +23,8 @@ export default function SnakeLivePage(){
   const guestCanvasRef = useRef<HTMLCanvasElement|null>(null);
   const [guestJoined, setGuestJoined] = useState(false);
   const [rooms, setRooms] = useState<Array<{ id:string; name:string; host?:string; exerciseId?:string; guestId?:string }>>([]);
-  const wsRef = useRef<WebSocket|null>(null);
-  const [useWs, setUseWs] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [pendingJoinId, setPendingJoinId] = useState<string | null>(null);
-  const connectionTimerRef = useRef<any>(null);
   const lastStateRef = useRef<any>(null);
 
   // Load exercises
@@ -64,11 +61,8 @@ export default function SnakeLivePage(){
   const current = useMemo(()=> exercises.find(e=> e._id===selectedId), [exercises, selectedId]);
 
   const publish = useCallback(async (id: string, msg: LiveMsg)=>{
-    // Prefer WebSocket if connected
-    if(wsRef.current && wsRef.current.readyState === WebSocket.OPEN){
-      try{ wsRef.current.send(JSON.stringify(msg)); return; }catch{}
-    }
-    try{ await fetch(`/api/live/room/${id}/publish`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(msg) }); }catch{}
+  // Einheitlich per SSE/HTTP publizieren
+  try{ await fetch(`/api/live/room/${id}/publish`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(msg) }); }catch{}
   },[]);
 
   // Host flow
@@ -87,23 +81,13 @@ export default function SnakeLivePage(){
   const info = rooms.find(r => r.id === id) || { id, name: 'Raum', exerciseId: undefined, host: undefined } as any;
   setRoom({ id: info.id, name: info.name, hostReady: false, guestId: undefined, ...(info.host ? { host: info.host } : {}) } as any);
     setMode('guest');
-    // Start a connection timeout: if no WS/SSE within 3s, fallback
-    if(connectionTimerRef.current) clearTimeout(connectionTimerRef.current);
-    connectionTimerRef.current = setTimeout(()=>{
-      if(!wsRef.current && !esRef.current){
-        setErrorMsg('Verbindung fehlgeschlagen. Bitte erneut versuchen.');
-        setMode('pick'); setRoom(null); setPendingJoinId(null);
-      }
-    }, 3000);
     // Try to acquire slot on server (so Liste verschwindet für andere)
     try{
       const res = await fetch(`/api/live/room/${id}/join`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
       if(res.status === 409){
         try{ const r = await fetch('/api/live/rooms', { cache: 'no-store' }); const d = await r.json(); setRooms((d.rooms||[]).filter((x:any)=>!x.guestId)); }catch{}
-        if(!wsRef.current && !esRef.current){
-          setErrorMsg('Dieser Raum ist bereits belegt.');
-          setMode('pick'); setRoom(null); setPendingJoinId(null);
-        }
+  setErrorMsg('Dieser Raum ist bereits belegt.');
+  setMode('pick'); setRoom(null); setPendingJoinId(null);
         return;
       }
       const data = await res.json();
@@ -113,11 +97,10 @@ export default function SnakeLivePage(){
     }
   },[rooms]);
 
-  // Subscribe to room events
+  // Subscribe to room events (SSE-only, stabil und einheitlich)
   useEffect(()=>{
     if(!room?.id || mode==='pick') return;
     let es: EventSource | null = null;
-    let ws: WebSocket | null = null;
   const onMsg = (raw: any)=>{
       try{
         const msg = typeof raw === 'string' ? JSON.parse(raw||'{}') : raw;
@@ -154,31 +137,15 @@ export default function SnakeLivePage(){
         // Host broadcasts state; guests could render passively in a future iteration
       }catch{}
     };
-    try{
-      ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/live/ws?room=${encodeURIComponent(room.id)}&role=${mode==='host'?'host':'guest'}`);
-  ws.onopen = ()=> { setUseWs(true); if(connectionTimerRef.current){ clearTimeout(connectionTimerRef.current); connectionTimerRef.current = null; } if(mode==='host' && room?.id){ /* proactively announce room */ publish(room.id, { type:'hello', room: { id: room.id, name: room.name, exerciseId: selectedId } }); } };
-      ws.onmessage = (ev)=> onMsg(ev.data);
-      ws.onerror = ()=>{};
-      ws.onclose = ()=>{};
-      wsRef.current = ws;
-    } catch {}
-    // Fallback to SSE if WS not available after a short timeout
-    const t = setTimeout(()=>{
-      if(wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
-      if(esRef.current) return;
-      es = new EventSource(`/api/live/room/${room.id}/subscribe`);
-      es.onmessage = (ev)=> onMsg(ev.data);
-      es.onerror = ()=>{};
-      esRef.current = es;
-    }, 300);
+    // Direkt per SSE anmelden
+    es = new EventSource(`/api/live/room/${room.id}/subscribe`);
+    es.onmessage = (ev)=> onMsg(ev.data);
+    es.onerror = ()=>{};
+    esRef.current = es;
 
     return ()=>{
-      clearTimeout(t);
-      try{ wsRef.current?.close(); }catch{}
-      wsRef.current = null;
       try{ esRef.current?.close(); }catch{}
       esRef.current = null;
-      setUseWs(false);
   setPendingJoinId(null);
     };
   },[room?.id, mode]);

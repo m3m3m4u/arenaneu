@@ -1,6 +1,7 @@
 "use client";
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 
 interface MCQuestion { id:string; text:string; options:string[]; correct:number; }
@@ -9,6 +10,7 @@ export default function FussballTeamLivePage(){
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
+  const { data: session } = useSession();
   const FIELD_IMAGES = useMemo(() => [
     '/media/spielfelder/spielfeld1.JPG',
     '/media/spielfelder/spielfeld2.JPG',
@@ -29,6 +31,7 @@ export default function FussballTeamLivePage(){
   const [scores, setScores] = useState<{left:number; right:number}>({ left: 0, right: 0 });
   const [goals, setGoals] = useState<{left:number; right:number}>({ left: 0, right: 0 });
   const [turn, setTurn] = useState<'left'|'right'>('left');
+  const [mySide, setMySide] = useState<'left'|'right'|null>(null);
   const [current,setCurrent] = useState<MCQuestion|undefined>();
   const [locked,setLocked] = useState(false);
   const [answerState,setAnswerState] = useState<{picked:number|null; correct:boolean|null}>({ picked:null, correct:null });
@@ -59,6 +62,14 @@ export default function FussballTeamLivePage(){
         const jLobby = await rLobby.json();
         if(!jLobby?.success) throw new Error('Lobby nicht gefunden');
         const lessonId: string | undefined = jLobby.lobby?.lessonId;
+        // Eigene Teamseite bestimmen
+        try{
+          const uid = String((session as any)?.user?.id || (session as any)?.user?._id || '');
+          if(uid && jLobby.lobby?.players){
+            const me = (jLobby.lobby.players as any[]).find(p=> String(p.userId)===uid);
+            if(me && (me.side==='left' || me.side==='right')) setMySide(me.side);
+          }
+        } catch{}
         if(!lessonId){ throw new Error('Keine Übung in dieser Lobby hinterlegt'); }
         const rEx = await fetch(`/api/exercises?lessonId=${encodeURIComponent(lessonId)}`);
         const jEx = await rEx.json();
@@ -69,7 +80,24 @@ export default function FussballTeamLivePage(){
       finally { if(alive) setLoadingQs(false); }
     })();
     return ()=>{ alive=false; };
-  },[id]);
+  },[id, session?.user?.id]);
+
+  // Falls Session später kommt oder sich ändert: mySide gelegentlich aktualisieren
+  useEffect(()=>{
+    let alive = true;
+    (async()=>{
+      try{
+        const uid = String((session as any)?.user?.id || (session as any)?.user?._id || '');
+        if(!uid) return;
+        const rLobby = await fetch(`/api/fussball-team/lobbies/${encodeURIComponent(id)}/join`, { cache:'no-store' });
+        const jLobby = await rLobby.json();
+        if(!alive || !jLobby?.success) return;
+        const me = (jLobby.lobby?.players||[]).find((p:any)=> String(p.userId)===uid);
+        if(me && (me.side==='left' || me.side==='right')) setMySide(me.side);
+      } catch{}
+    })();
+    return ()=>{ alive=false; };
+  },[id, session?.user?.id]);
 
   const answeringRef = useRef(false);
   async function answer(idx:number){
@@ -146,6 +174,11 @@ export default function FussballTeamLivePage(){
               </div>
             </div>
             <div className="hidden md:flex items-center gap-3">
+              {mySide && (
+                <span className={"px-2 py-0.5 rounded text-xs font-semibold border " + (mySide==='left' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200')}>
+                  Du bist Team {mySide==='left' ? 'ROT' : 'BLAU'}{turn===mySide ? ' • Du bist am Zug' : ''}
+                </span>
+              )}
               <span className="text-[11px] text-gray-500">Fragen</span>
               <span className="px-2 py-0.5 rounded bg-gray-50 border text-xs">{stats.asked}</span>
               <span className="text-[11px] text-gray-500">Korrekt</span>
