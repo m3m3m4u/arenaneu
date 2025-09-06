@@ -24,6 +24,9 @@ body {
   color: var(--foreground);
 }
 
+/* Verhindert Layout-Shift durch ein-/ausblendende Scrollbar (Windows) */
+html { scrollbar-gutter: stable both-edges; }
+
 /* Skip-Link (Accessibility) */
 .skip-link { position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; }
 .skip-link:focus { left:8px; top:8px; width:auto; height:auto; padding:8px 12px; background:#111; color:#fff; z-index:2000; border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,.4); }
