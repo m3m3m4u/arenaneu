@@ -1,4 +1,3 @@
-
 // Metadata Typ entfernt (vereinfachtes Typing ohne Next Types)
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -21,6 +20,10 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "LernArena - Interaktive Lernplattform",
   description: "Eine moderne Lernplattform mit interaktiven Kursen und Quizzes",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/favicon.ico"
+  }
 };
 
 export default function RootLayout({
