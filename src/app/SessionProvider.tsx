@@ -35,6 +35,21 @@ function InvalidationWatcher(){
   return null;
 }
 
+function LocalSessionSync(){
+  const { data: session, status } = useSession();
+  useEffect(()=>{
+    try {
+      const username = session?.user && (session.user as any).username;
+      if (status === 'authenticated' && username) {
+        localStorage.setItem('session:username', String(username));
+      } else if (status === 'unauthenticated') {
+        localStorage.removeItem('session:username');
+      }
+    } catch {}
+  }, [status, session?.user]);
+  return null;
+}
+
 export default function CustomSessionProvider({ children }: { children: React.ReactNode }) {
-  return <SessionProvider><InvalidationWatcher />{children}</SessionProvider>;
+  return <SessionProvider><InvalidationWatcher /><LocalSessionSync />{children}</SessionProvider>;
 }

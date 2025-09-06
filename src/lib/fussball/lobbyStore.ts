@@ -134,8 +134,8 @@ export async function getState(id: string){
 
 export async function applyAnswer(id: string, isCorrect: boolean, answeredBy: 'left'|'right'){
   const lobby = await getLobby(id) as LobbyRecord | undefined; if(!lobby) return { error:'NOT_FOUND' } as const;
-  const turn = lobby.turn || 'left';
-  const target: 'left'|'right' = isCorrect ? turn : (turn==='left' ? 'right' : 'left');
+  // Punktevergabe: korrekt -> eigenes Team; falsch -> Gegner
+  const target: 'left'|'right' = isCorrect ? answeredBy : (answeredBy==='left' ? 'right' : 'left');
   const scores = { left: lobby.scores?.left||0, right: lobby.scores?.right||0 };
   scores[target] += 1;
   // Bildindex nach 3-Punkte-Vorsprung verschieben, Tor bei 1/7
@@ -156,7 +156,8 @@ export async function applyAnswer(id: string, isCorrect: boolean, answeredBy: 'l
     lobby.scores = scores;
     lobby.fieldIdx = desiredIdx;
   }
-  lobby.turn = (turn==='left' ? 'right':'left');
+  // Besitzwechsel: nach einer Antwort ist die andere Seite am Zug (nur Anzeigezweck)
+  lobby.turn = (answeredBy==='left' ? 'right':'left');
   lobby.lastActivity = Date.now();
   if(useDb){ try{ await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { scores: lobby.scores, goals: lobby.goals, fieldIdx: lobby.fieldIdx, turn: lobby.turn, lastActivity: lobby.lastActivity } }); } catch{}
   } else { lobbies.set(id, lobby); }

@@ -17,7 +17,8 @@ export async function POST(req:Request, { params }:{ params:{ id:string }} ){
   if(!lobby) return NextResponse.json({ success:false, error:'NOT_FOUND' }, { status:404 });
   const inLobby = (lobby.players||[]).some((p:any)=> p.userId===String(userId));
   if(!inLobby) return NextResponse.json({ success:false, error:'NOT_IN_LOBBY' }, { status:403 });
-  const res = await applyAnswer(params.id, correct, 'left');
+  const side: 'left'|'right' = (lobby.players||[]).find((p:any)=> p.userId===String(userId))?.side || 'left';
+  const res = await applyAnswer(params.id, correct, side);
   if('error' in res) return NextResponse.json({ success:false, error: res.error }, { status:400 });
   return NextResponse.json({ success:true, state: res.state });
 }

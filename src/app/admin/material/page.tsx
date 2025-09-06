@@ -44,6 +44,8 @@ export default function AdminMaterialPage(){
   const [excelToken, setExcelToken] = useState<string|null>(null);
   // PDF Preview
   const [pdfUrl,setPdfUrl] = useState<string|null>(null);
+  // Karussell-Index je Produkt (für Vorschau wie beim Lehrer)
+  const [activeIdx,setActiveIdx] = useState<Record<string,number>>({});
 
   const toggleRaw = (id:string)=> setSelectedRawIds(ids=> ids.includes(id)? ids.filter(x=>x!==id): [...ids,id]);
 
@@ -205,6 +207,31 @@ export default function AdminMaterialPage(){
     // Für jedes Preview-Material versuchen wir zu matchen: Der Nutzer kann später Produkte einzeln editieren – hier nur Info.
   }
 
+  // Helper wie im Lehrer-Shop: Preview-Bilder aus Dateien ableiten
+  const isPdf = (f:any)=> /\.pdf$/i.test(f?.name||'') || (f?.contentType||'').includes('pdf');
+  const isImage = (f:any)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f?.name||'');
+  function getPreviewImages(p: Product): { images: string[]; pdf?: any }{
+    const files = (p.files||[]).filter((f:any)=> !String(f.key||'').startsWith('placeholder:'));
+    const pdf = files.find(isPdf);
+    const images = files.filter(isImage);
+    if(pdf){
+      const base = String(pdf.name||'').replace(/\.(pdf)$/i,'');
+      const relImgs = images
+        .filter((img:any)=> new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i').test(img.name||''))
+        .map((img:any)=> ({ url: img.downloadUrl, idx: parseInt((String(img.name||'').match(/-(\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
+        .filter(x=> !!x.url)
+        .sort((a,b)=> a.idx-b.idx)
+        .map(x=> x.url!)
+      ;
+      if(relImgs.length) return { images: relImgs, pdf };
+      const filePreviews = Array.isArray((pdf as any).previewImages)? (pdf as any).previewImages: [];
+      if(filePreviews.length) return { images: filePreviews, pdf };
+      return { images: [], pdf };
+    }
+    const anyImgs = images.map((i:any)=> i.downloadUrl!).filter(Boolean);
+    return { images: anyImgs };
+  }
+
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-8">
       <header className="space-y-2">
@@ -349,76 +376,58 @@ export default function AdminMaterialPage(){
       {tab==='preview' && <section className="bg-white border rounded shadow-sm p-5 space-y-4">
         <h2 className="font-semibold">Shop Vorschau (alle Produkte)</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map(p=> (
-            <div key={p._id} className="border rounded p-4 bg-white flex flex-col gap-2 text-sm">
-              <div className="font-semibold flex justify-between items-center">
-                <span className="truncate pr-2" title={p.title}>{p.title}</span>
-                <div className="flex items-center gap-2">
-                  {typeof p.price==='number' && <span className="text-xs text-gray-500">{p.price.toFixed(2)} €</span>}
+          {products.map(p=>{
+            const { images, pdf } = getPreviewImages(p);
+            const previews = images;
+            const count = previews.length;
+            const idx = Math.min(activeIdx[p._id]||0, Math.max(0, count-1));
+            const setActive = (dir:number)=> setActiveIdx(prev=>{ const cur = prev[p._id]||0; if(!count) return prev; const next = ((cur+dir)%count + count) % count; return { ...prev, [p._id]: next }; });
+            const currentImg = count? previews[idx] : undefined;
+            return (
+              <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
+                <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2">
+                  {currentImg ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={currentImg} alt={p.title} className="max-w-full max-h-full object-contain rounded shadow-sm" />
+                  ) : (
+                    <div className="text-[11px] text-gray-400">Keine Vorschau</div>
+                  )}
+                  {count>1 && (
+                    <>
+                      <button onClick={()=>setActive(-1)} className="absolute left-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">‹</button>
+                      <button onClick={()=>setActive(1)} className="absolute right-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">›</button>
+                      <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
+                        {previews.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
+                      </div>
+                    </>
+                  )}
+                  {/* Produkt löschen oben rechts */}
                   <button
                     onClick={async()=>{ if(!confirm(`Produkt "${p.title}" löschen?`)) return; try{ const r=await fetch(`/api/shop/products/${p._id}`,{ method:'DELETE' }); const d=await r.json(); if(!(r.ok && d.success)) alert(d.error||'Löschen fehlgeschlagen'); else setProducts(prev=> prev.filter(x=> x._id!==p._id)); } catch { alert('Netzwerkfehler'); } }}
-                    className="text-xs text-red-600 hover:text-red-800 px-1 py-0.5 border border-red-200 rounded"
+                    className="absolute top-1 right-1 text-xs text-red-600 hover:text-red-800 px-1 py-0.5 border border-red-200 rounded"
                     title="Produkt löschen"
                   >✕</button>
                 </div>
-              </div>
-              {p.category && <div className="text-[11px] text-indigo-700">{p.category}</div>}
-              <div className="text-[11px] text-gray-500">{p.files?.filter(f=>!f.key?.startsWith('placeholder:')).length || 0} echte Dateien / {p.files?.length||0} gesamt</div>
-              {p.description && <p className="text-[11px] text-gray-600 line-clamp-3 whitespace-pre-line">{p.description}</p>}
-              <div className="flex flex-col gap-2 mt-auto">
-                {/* Thumbnails / Preview-Images je Datei */}
-                <div className="grid grid-cols-2 gap-2">
-                  {(p.files||[]).map(f=>{
-                    // Manuelle Vorschaubilder anhand Namensschema <PDF-Basis>-<n>.png|jpg|webp suchen
-                    const isPdf = (f.contentType||'').includes('pdf') || /\.pdf$/i.test(f.name||'');
-                    const base = f.name.replace(/\.(pdf)$/i,'');
-                    const relImages = (p.files||[])
-                      .filter((of:any)=> /\.(png|jpe?g|webp)$/i.test(of.name||''))
-                      .filter((of:any)=> new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i').test(of.name||''))
-                      .map((of:any)=> ({ url: of.downloadUrl, idx: parseInt((of.name.match(/-(\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
-                      .filter(x=> !!x.url)
-                      .sort((a,b)=> a.idx-b.idx)
-                      .map(x=> x.url as string);
-                    const previews: string[] = relImages.length ? relImages : (Array.isArray((f as any).previewImages) ? (f as any).previewImages : []);
-                    return (
-                      <div key={f.key} className="border rounded p-2 flex gap-2 items-center">
-                        {previews.length>0 ? (
-                          <div className="flex items-center gap-1 overflow-x-auto max-w-[180px] pr-1">
-                            {previews.slice(0,6).map((src,idx)=> (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img key={idx} src={src} alt={`${f.name} p${idx+1}`} className="w-12 h-16 object-cover rounded border bg-white flex-shrink-0" />
-                            ))}
-                            {previews.length>6 && (
-                              <span className="text-[10px] text-gray-600 px-1">+{previews.length-6}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="w-16 h-20 flex items-center justify-center text-[10px] text-gray-400 bg-gray-50 border rounded">kein Bild</div>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[11px] font-medium truncate" title={f.name}>{f.name}</div>
-                          <div className="flex gap-1 mt-1">
-                            {f.downloadUrl && (
-                              <button
-                                onClick={()=>{ try{ const a=document.createElement('a'); a.href=f.downloadUrl; a.setAttribute('download', f.name||'download'); a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch{ window.open(f.downloadUrl,'_blank'); } }}
-                                className="px-1 py-0.5 border rounded text-[10px] bg-gray-50 hover:bg-gray-100"
-                              >Download</button>
-                            )}
-                            {isPdf && (
-                              <button
-                                onClick={()=> setPdfUrl(f.downloadUrl)}
-                                className="px-1 py-0.5 border rounded text-[10px] bg-white hover:bg-gray-50"
-                              >Ansehen</button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                {/* ZIP Download direkt unter dem Bild */}
+                <div className="px-4 pt-3">
+                  <button onClick={()=> {
+                    const a=document.createElement('a');
+                    a.href=`/api/shop/products/${p._id}/download-zip`;
+                    a.download=`${p.title.replace(/[^a-zA-Z0-9._-]+/g,'_')}.zip`;
+                    document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);
+                  }} className="w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">Alle Dateien (ZIP)</button>
+                </div>
+                <div className="flex-1 flex flex-col p-4 gap-2">
+                  <h3 className="font-semibold text-base leading-tight line-clamp-2" title={p.title}>{p.title}</h3>
+                  {p.description && <p className="text-xs text-gray-600 whitespace-pre-line line-clamp-4">{p.description}</p>}
+                  <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-500">
+                    {typeof p.price==='number' && <span className="font-medium text-gray-700">{p.price.toFixed(2)} €</span>}
+                    <span>{(p.files||[]).filter((f:any)=>!String(f.key||'').startsWith('placeholder:')).length} Datei{((p.files||[]).filter((f:any)=>!String(f.key||'').startsWith('placeholder:')).length)!==1?'en':''}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>}
       {pdfUrl && (
