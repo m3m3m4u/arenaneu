@@ -190,12 +190,13 @@ export default function FussballLivePage(){
             {current ? (
               <>
                 <div className="text-base md:text-lg font-medium mb-4">{current.text}</div>
-                <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
                   {current.options.map((opt,i)=>{
                     const picked = answerState.picked===i;
                     const showCorrect = answerState.correct!==null;
                     const isCorrect = i===current.correct;
-                    const base='text-left px-3 py-2 rounded border text-sm transition-colors';
+          // +200% Größe: deutlich größere Buttons
+          const base='text-left px-6 py-4 rounded border text-xl md:text-2xl transition-colors';
                     let cls=base+' border-gray-200 bg-white hover:bg-gray-50';
                     if(showCorrect){
                       if(isCorrect) cls=base+' border-green-600 bg-green-50 text-green-800 font-semibold';
@@ -238,6 +239,24 @@ export default function FussballLivePage(){
 function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals, scores, current, locked, answerState, onAnswer }:{ images:string[]; fieldIdx:number; fieldWH:{w:number;h:number}|null; questions:MCQuestion[]; correctCounts:Record<string,{asked:number; wrong:number}>; goals:{left:number;right:number}; scores:{left:number;right:number}; current:MCQuestion|undefined; locked:boolean; answerState:{picked:number|null; correct:boolean|null}; onAnswer:(idx:number)=>void }){
   const containerRef = useRef<HTMLDivElement|null>(null);
   const [isFs,setIsFs]=useState(false);
+  // TOR-Overlay für 5 Sekunden einblenden, wenn sich die Tore erhöhen
+  const [goalOverlay, setGoalOverlay] = useState<{show:boolean; side:'left'|'right'|'both'|null}>({ show:false, side:null });
+  const prevGoalsRef = useRef<{left:number; right:number}>({ left: goals.left, right: goals.right });
+  const goalTimerRef = useRef<any>(null);
+  useEffect(()=>{
+    const prev = prevGoalsRef.current;
+    const incLeft = goals.left > prev.left;
+    const incRight = goals.right > prev.right;
+    if(incLeft || incRight){
+      // Bestimme Seite, bei gleichzeitiger Erhöhung (sollte selten sein) zeige 'both'
+      const side = incLeft && incRight ? 'both' : (incLeft ? 'left' : 'right');
+      setGoalOverlay({ show:true, side });
+      if(goalTimerRef.current) clearTimeout(goalTimerRef.current);
+      goalTimerRef.current = setTimeout(()=> setGoalOverlay({ show:false, side:null }), 5000);
+    }
+    prevGoalsRef.current = { left: goals.left, right: goals.right };
+    return ()=>{ /* kein cleanup hier notwendig */ };
+  },[goals.left, goals.right]);
   // 40% kleiner: wir skalieren die Breite relativ runter (0.6)
   const scale = 0.6; // 60% der normalen Größe
   const enterFs = async()=>{
@@ -305,12 +324,13 @@ function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals,
                   {current ? (
                     <>
                       <div className="text-sm md:text-base font-medium mb-3">{current.text}</div>
-                      <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
                         {current.options.map((opt,i)=>{
                           const picked = answerState.picked===i;
                           const showCorrect = answerState.correct!==null;
                           const isCorrect = i===current.correct;
-                          const base='text-left px-3 py-2 rounded border text-[12px] md:text-sm transition-colors';
+              // +200% Größe im Vollbild
+              const base='text-left px-6 py-4 rounded border text-base md:text-2xl transition-colors';
                           let cls=base+' border-white/20 bg-white/10 hover:bg-white/15 text-white';
                           if(showCorrect){
                             if(isCorrect) cls=base+' border-green-500 bg-green-600/20 text-green-200 font-semibold';
@@ -332,6 +352,17 @@ function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals,
                 <Image src={images[fieldIdx % images.length]} alt="Spielfeld" fill priority sizes="100vw" className="object-contain" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
               </div>
+            </div>
+          </div>
+        )}
+  {/* TOR-Overlay, sichtbar in normaler und Vollbild-Ansicht */}
+        {goalOverlay.show && (
+          <div className="absolute inset-0 z-40 bg-black/70 flex flex-col items-center justify-center text-white text-center">
+            <div className="text-6xl md:text-7xl font-extrabold tracking-widest drop-shadow">TOR!!!</div>
+            <div className="mt-4 text-2xl md:text-4xl font-bold">
+              <span className="text-red-400">{goals.left}</span>
+              <span className="mx-4 text-white/80">:</span>
+              <span className="text-blue-400">{goals.right}</span>
             </div>
           </div>
         )}

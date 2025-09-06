@@ -404,7 +404,7 @@ export default function AdminMaterialPage(){
 
       {tab==='preview' && <section className="bg-white border rounded shadow-sm p-5 space-y-4">
         <h2 className="font-semibold">Shop Vorschau (alle Produkte)</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
           {products.map(p=>{
             const { images, pdf } = getPreviewImages(p);
             const previews = images;
@@ -414,22 +414,17 @@ export default function AdminMaterialPage(){
             const currentImg = count? previews[idx] : undefined;
             return (
               <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
-                <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2 w-[80%] mx-auto">
+                <div className="relative bg-gray-50 aspect-[4/3] overflow-hidden w-full">
                   {currentImg ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={currentImg} alt={p.title} className="max-w-full max-h-full object-contain rounded shadow-sm transform scale-50 origin-center" />
+                    <img src={currentImg} alt={p.title} className="absolute inset-0 w-full h-full object-cover" />
                   ) : (
                     <div className="text-[11px] text-gray-400">Keine Vorschau</div>
                   )}
-                  {count>0 && (
-                    <div className="absolute top-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                      {count} Seiten
-                    </div>
-                  )}
                   {count>1 && (
                     <>
-                      <button onClick={()=>setActive(-1)} className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-sm px-2 py-1 rounded shadow border border-gray-200">‹</button>
-                      <button onClick={()=>setActive(1)} className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-sm px-2 py-1 rounded shadow border border-gray-200">›</button>
+                      <button onClick={()=>setActive(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200">‹</button>
+                      <button onClick={()=>setActive(1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200">›</button>
                       <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
                         {previews.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
                       </div>

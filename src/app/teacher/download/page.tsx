@@ -196,7 +196,7 @@ export default function TeacherDownloadShop(){
       {loading && <div className="text-sm text-gray-500">Lade…</div>}
       {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
       {!loading && !error && items.length===0 && <div className="text-sm text-gray-500">Keine Produkte vorhanden.</div>}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
         {items.map(p=>{
           const { images, pdf } = getPreviewImages(p);
           const previews = images;
@@ -230,21 +230,16 @@ export default function TeacherDownloadShop(){
           const totalPages = count || (thumbKey ? pageCounts[thumbKey] : undefined) || undefined;
           return (
             <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
-              <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2 touch-pan-y w-[80%] mx-auto" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+              <div className="relative bg-gray-50 aspect-[4/3] overflow-hidden touch-pan-y w-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
                 {currentImg ? (
-                  <img src={currentImg} alt={p.title} className="max-w-full max-h-full object-contain rounded shadow-sm transform scale-50 origin-center" />
+                  <img src={currentImg} alt={p.title} className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
                   <div className="text-[11px] text-gray-400">{pdf? (thumbs[thumbKey]==='error' ? 'Keine Vorschau' : 'Lade Vorschau…') : 'Keine Vorschau'}</div>
                 )}
-                {typeof totalPages === 'number' && totalPages>0 && (
-                  <div className="absolute top-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                    {totalPages} Seiten
-                  </div>
-                )}
                 {count>1 && (
                   <>
-                    <button onClick={()=>setActive(-1)} className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-sm px-2 py-1 rounded shadow border border-gray-200">‹</button>
-                    <button onClick={()=>setActive(1)} className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-sm px-2 py-1 rounded shadow border border-gray-200">›</button>
+                    <button onClick={()=>setActive(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200">‹</button>
+                    <button onClick={()=>setActive(1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200">›</button>
                     <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
                       {previews.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
                     </div>

@@ -61,20 +61,24 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   // Laden aus XLSX/CSV mit dynamischen Abmessungen und 'S' (Steuerungs-Anker). Fallback: eingebettetes CSV.
   const parseLinesToMaze=(lines:string[])=>{
     ghostSpawnPointsRef.current=[]; controlAnchorRef.current=null;
-    // Trim, split by ; or ,
-  const rows=lines.map(l=> l.split(/[;,\t]/).map(c=>c.trim()).filter(c=>c.length));
+    // Split per row by ; , or TAB, aber KEINE leeren Zellen entfernen, damit Spaltenanzahl erhalten bleibt
+    const rows=lines.map(l=> l.split(/[;,	]/).map(c=> (c==null? '' : String(c)).trim())) as string[][];
     const rCount=rows.length; const cCount=Math.max(0, ...rows.map(r=>r.length));
     rowsRef.current=rCount||DEFAULT_ROWS; colsRef.current=cCount||DEFAULT_COLS;
     const out:string[]=[];
     for(let r=0;r<rowsRef.current;r++){
       const row=rows[r]||[]; let line='';
       for(let c=0;c<colsRef.current;c++){
-        const raw = (row[c]||'').toUpperCase();
-        let ch = raw;
+        const rawCell = (row[c]??'');
+        let raw = String(rawCell).trim();
+        let ch = raw.toUpperCase();
+        // Aliase und Sonderfälle
         if(ch==='G'){ ghostSpawnPointsRef.current.push({x:c,y:r}); ch='0'; }
-  else if(ch==='S'){ controlAnchorRef.current = controlAnchorRef.current || {tx:c,ty:r}; ch='1'; }
-        else if(ch==='.') ch='0';
-        else if(!['A','B','C','D','0','1'].includes(ch)) ch='1';
+        else if(ch==='S'){ controlAnchorRef.current = controlAnchorRef.current || {tx:c,ty:r}; ch='0'; }
+  else if(ch==='') ch='1'; // leere Zelle als Wand interpretieren (CSV-Form strikt halten)
+        else if(ch==='.' || ch==='E' || ch==='O' || ch==='_') ch='0'; // Wege-Aliase
+        else if(ch==='#' || ch==='X' || ch==='W') ch='1'; // Wand-Aliase
+        else if(!['A','B','C','D','0','1'].includes(ch)) ch='1'; // Unbekannt -> Wand, um Ausreißer zu vermeiden
         line+=ch;
       }
       out.push(line);
