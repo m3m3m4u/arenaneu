@@ -19,6 +19,8 @@ export default function TeacherDownloadShop(){
   // Einfache Warteschlange, um gleichzeitige PDF-Decodes zu begrenzen
   const queueRef = useRef<string[]>([]);
   const busyRef = useRef(false);
+  // Seitenanzahl je PDF-Datei (key -> numPages)
+  const [pageCounts, setPageCounts] = useState<Record<string, number>>({});
 
   async function processQueue(){
     if(busyRef.current) return; busyRef.current=true;
@@ -58,7 +60,9 @@ export default function TeacherDownloadShop(){
             throw blobErr;
           }
         }
-        const page = await pdf.getPage(1);
+  // Seitenzahl merken
+  try { if(typeof pdf?.numPages === 'number'){ setPageCounts(pc=> ({ ...pc, [k]: pdf.numPages })); } } catch {}
+  const page = await pdf.getPage(1);
   // Erst mit moderatem Scale rendern (Qualität ausreichend für 320x240 Ziel)
   const baseViewport = page.getViewport({ scale: 0.7 });
   const pageCanvas = document.createElement('canvas');
@@ -222,18 +226,25 @@ export default function TeacherDownloadShop(){
           const thumbKey = pdf?.key || '';
           if(!count && pdf) enqueueThumb(pdf);
           const currentImg = count? previews[idx] : (thumbs[thumbKey] && thumbs[thumbKey] !== 'error' ? thumbs[thumbKey] : undefined);
+          // Seitenanzahl anzeigen: bevorzugt Anzahl Preview-Bilder, sonst pdfjs numPages falls geladen
+          const totalPages = count || (thumbKey ? pageCounts[thumbKey] : undefined) || undefined;
           return (
             <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
               <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2 touch-pan-y" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
                 {currentImg ? (
-                  <img src={currentImg} alt={p.title} className="max-w-full max-h-full object-contain rounded shadow-sm" />
+                  <img src={currentImg} alt={p.title} className="max-w-full max-h-full object-contain rounded shadow-sm transform scale-50 origin-center" />
                 ) : (
                   <div className="text-[11px] text-gray-400">{pdf? (thumbs[thumbKey]==='error' ? 'Keine Vorschau' : 'Lade Vorschau…') : 'Keine Vorschau'}</div>
                 )}
+                {typeof totalPages === 'number' && totalPages>0 && (
+                  <div className="absolute top-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                    {totalPages} Seiten
+                  </div>
+                )}
                 {count>1 && (
                   <>
-                    <button onClick={()=>setActive(-1)} className="absolute left-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">‹</button>
-                    <button onClick={()=>setActive(1)} className="absolute right-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">›</button>
+                    <button onClick={()=>setActive(-1)} className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-sm px-2 py-1 rounded shadow border border-gray-200">‹</button>
+                    <button onClick={()=>setActive(1)} className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-sm px-2 py-1 rounded shadow border border-gray-200">›</button>
                     <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
                       {previews.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
                     </div>

@@ -220,6 +220,12 @@ export default function FussballLivePage(){
           fieldWH={fieldWH}
           questions={questions}
           correctCounts={correctCounts}
+          goals={goals}
+          scores={scores}
+          current={current}
+          locked={locked}
+          answerState={answerState}
+          onAnswer={answer}
         />
       </div>
     </main>
@@ -229,7 +235,7 @@ export default function FussballLivePage(){
 // (Das frühere SVG-Pitch wurde durch Foto-Hintergründe ersetzt)
 
 // Komponente: Spielfeld mit 40% kleinerer Darstellung und Vollbildmodus
-function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts }:{ images:string[]; fieldIdx:number; fieldWH:{w:number;h:number}|null; questions:MCQuestion[]; correctCounts:Record<string,{asked:number; wrong:number}> }){
+function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals, scores, current, locked, answerState, onAnswer }:{ images:string[]; fieldIdx:number; fieldWH:{w:number;h:number}|null; questions:MCQuestion[]; correctCounts:Record<string,{asked:number; wrong:number}>; goals:{left:number;right:number}; scores:{left:number;right:number}; current:MCQuestion|undefined; locked:boolean; answerState:{picked:number|null; correct:boolean|null}; onAnswer:(idx:number)=>void }){
   const containerRef = useRef<HTMLDivElement|null>(null);
   const [isFs,setIsFs]=useState(false);
   // 40% kleiner: wir skalieren die Breite relativ runter (0.6)
@@ -267,18 +273,55 @@ function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts }:{ ima
       >
         <Image src={images[fieldIdx % images.length]} alt="Spielfeld" fill priority sizes="100vw" className="object-contain" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
-        <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/50 text-white backdrop-blur">
-          Spielfeld: {fieldIdx + 1}/{images.length}
-        </div>
-        {/* Manuelle Bildwechsel entfernt – Position ergibt sich aus Vorsprung */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
-          {questions.map(q=>{ const statsQ = correctCounts[q.id]; const wrong = statsQ?.wrong||0; const asked = statsQ?.asked||0; return (
-            <div key={q.id} className="flex flex-col items-center">
-              <span className="w-2 h-2 rounded-full" style={{ background: wrong? '#dc2626': (asked? '#16a34a':'#9ca3af') }} />
-              <span className="text-[8px] text-white/70 mt-0.5">{asked}</span>
+        {/* Im Vollbild zusätzlich Fragen & Spielstand einblenden */}
+        {isFs && (
+          <div className="absolute inset-0 p-3 md:p-4 flex flex-col gap-3 pointer-events-none">
+            {/* Spielstand */}
+            <div className="self-start bg-black/55 text-white rounded shadow border border-white/10 backdrop-blur px-3 py-2 text-[11px] md:text-sm pointer-events-auto">
+              <div className="flex items-center gap-4">
+                <div className="text-center">
+                  <div className="text-[10px] text-white/80">Tore Links</div>
+                  <div className="text-xl md:text-3xl font-extrabold leading-none">{goals.left}</div>
+                  <div className="text-[10px] text-white/70 mt-0.5">Punkte: {scores.left}</div>
+                </div>
+                <div className="text-lg md:text-2xl font-bold text-white/80">:</div>
+                <div className="text-center">
+                  <div className="text-[10px] text-white/80">Tore Rechts</div>
+                  <div className="text-xl md:text-3xl font-extrabold leading-none">{goals.right}</div>
+                  <div className="text-[10px] text-white/70 mt-0.5">Punkte: {scores.right}</div>
+                </div>
+              </div>
             </div>
-          ); })}
-        </div>
+            {/* Frage */}
+            <div className="mt-auto max-w-xl bg-black/55 text-white rounded shadow border border-white/10 backdrop-blur p-3 md:p-4 pointer-events-auto">
+              <div className="text-[11px] md:text-sm opacity-90 mb-1">Frage</div>
+              {current ? (
+                <>
+                  <div className="text-sm md:text-base font-medium mb-3">{current.text}</div>
+                  <div className="flex flex-col gap-2">
+                    {current.options.map((opt,i)=>{
+                      const picked = answerState.picked===i;
+                      const showCorrect = answerState.correct!==null;
+                      const isCorrect = i===current.correct;
+                      const base='text-left px-3 py-2 rounded border text-[12px] md:text-sm transition-colors';
+                      let cls=base+' border-white/20 bg-white/10 hover:bg-white/15 text-white';
+                      if(showCorrect){
+                        if(isCorrect) cls=base+' border-green-500 bg-green-600/20 text-green-200 font-semibold';
+                        else if(picked && !isCorrect) cls=base+' border-red-500 bg-red-600/20 text-red-200';
+                        else cls=base+' border-white/10 bg-white/5 text-white/70';
+                      } else if(picked){
+                        cls=base+' border-blue-400 bg-blue-500/20 text-blue-100';
+                      }
+                      return <button key={i} disabled={locked || showCorrect} onClick={()=>onAnswer(i)} className={cls}>{opt}</button>;
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="text-[12px] text-white/80">Keine Frage</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -304,35 +304,38 @@ export default function AdminMaterialPage(){
             {rawUploading && <span>Upload…</span>}
           </div>
         </div>
-        {/* Drag & Drop Zone */}
+        {/* Drag & Drop Zone (3x höher) */}
         <div
           onDragOver={e=>{ e.preventDefault(); e.stopPropagation(); }}
           onDrop={e=>{ e.preventDefault(); e.stopPropagation(); const files=e.dataTransfer?.files; if(files && files.length){ uploadRawFiles(files); } }}
-          className="mb-2 p-3 rounded border-2 border-dashed border-gray-300 text-center text-xs text-gray-600 bg-gray-50 hover:bg-gray-100"
+          className="mb-2 p-3 py-9 rounded border-2 border-dashed border-gray-300 text-center text-sm text-gray-600 bg-gray-50 hover:bg-gray-100"
         >Dateien hierher ziehen zum Hochladen (Mehrfach-Upload)</div>
-        <div className="grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {/* Raw-Dateien als Zeilenliste, Klick lädt Datei herunter */}
+        <div className="border rounded divide-y">
           {rawFiles.map(f=>{
             const sel = selectedRawIds.includes(f.id);
             const usedByProduct = products.some(p=> (p.files||[]).some(file=> file.key===f.key || file.name===f.name));
+            const leftColor = usedByProduct? 'border-emerald-500':'border-red-500';
+            const nameColor = usedByProduct? 'text-emerald-700':'text-red-700';
+            const handleDownload = ()=>{ try{ const a=document.createElement('a'); a.href=f.url; a.download=f.name||'download'; a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch { window.open(f.url,'_blank'); } };
             return (
-              <div key={f.id} onClick={()=>!usedByProduct && toggleRaw(f.id)} className={`relative border rounded p-2 text-left flex flex-col gap-1 text-[11px] ${usedByProduct? 'opacity-70 cursor-not-allowed bg-gray-50':'cursor-pointer hover:bg-gray-50'} ${sel?'ring-2 ring-blue-500 bg-blue-50':''}`}>
+              <div key={f.id}
+                   onClick={handleDownload}
+                   className={`flex items-center gap-3 p-2 hover:bg-gray-50 cursor-pointer border-l-4 ${leftColor}`}>
+                {/* Auswahl für Sammellöschen */}
+                <input type="checkbox" checked={sel} onChange={(e)=>{ e.stopPropagation(); toggleRaw(f.id); }} className="shrink-0" />
+                <div className="flex-1 flex items-center gap-4 min-w-0">
+                  <span className={`truncate font-medium ${nameColor}`} title={f.name}>{f.name}</span>
+                  <span className="text-gray-500 shrink-0">{Math.round(f.size/1024)} KB</span>
+                  <span className="text-gray-400 shrink-0">{new Date(f.createdAt).toLocaleDateString()}</span>
+                </div>
+                {/* Einzel-Löschen (falls nicht in Produkt) */}
                 <button
                   onClick={(e)=>{ e.stopPropagation(); if(usedByProduct) return; deleteRawFile(f.id); }}
                   title={usedByProduct? 'In Produkt verwendet – nicht löschbar':'Löschen'}
-                  className={`absolute top-1 right-1 text-xs px-1 ${usedByProduct? 'text-gray-400':'text-red-600 hover:text-red-800'}`}
+                  className={`text-xs px-1 ${usedByProduct? 'text-gray-400':'text-red-600 hover:text-red-800'}`}
                   disabled={rawDeletingId===f.id || usedByProduct}
                 >{rawDeletingId===f.id? '…':'×'}</button>
-                <span className="font-medium truncate pr-4" title={f.name}>{f.name}</span>
-                <span className="text-gray-500">{Math.round(f.size/1024)} KB</span>
-                <span className="text-gray-400">{new Date(f.createdAt).toLocaleDateString()}</span>
-                {usedByProduct && <span className="text-[10px] text-emerald-700">in Produkt</span>}
-                <div className="flex gap-1 flex-wrap mt-1">
-                  <a href={f.url} target="_blank" onClick={e=> e.stopPropagation()} className="px-1 py-0.5 border rounded text-[10px] hover:bg-white bg-gray-100">Öffnen</a>
-                  {f.contentType?.includes('pdf') && (
-                    <button onClick={(e)=>{ e.stopPropagation(); setPdfUrl(f.url); }} className="px-1 py-0.5 border rounded text-[10px] bg-indigo-50 hover:bg-indigo-100">Vorschau</button>
-                  )}
-                  <a href={f.url} download onClick={e=> e.stopPropagation()} className="px-1 py-0.5 border rounded text-[10px] bg-gray-50 hover:bg-gray-100">Download</a>
-                </div>
               </div>
             );
           })}
@@ -414,14 +417,19 @@ export default function AdminMaterialPage(){
                 <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2">
                   {currentImg ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={currentImg} alt={p.title} className="max-w-full max-h-full object-contain rounded shadow-sm" />
+                    <img src={currentImg} alt={p.title} className="max-w-full max-h-full object-contain rounded shadow-sm transform scale-50 origin-center" />
                   ) : (
                     <div className="text-[11px] text-gray-400">Keine Vorschau</div>
                   )}
+                  {count>0 && (
+                    <div className="absolute top-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                      {count} Seiten
+                    </div>
+                  )}
                   {count>1 && (
                     <>
-                      <button onClick={()=>setActive(-1)} className="absolute left-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">‹</button>
-                      <button onClick={()=>setActive(1)} className="absolute right-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">›</button>
+                      <button onClick={()=>setActive(-1)} className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-sm px-2 py-1 rounded shadow border border-gray-200">‹</button>
+                      <button onClick={()=>setActive(1)} className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-sm px-2 py-1 rounded shadow border border-gray-200">›</button>
                       <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
                         {previews.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
                       </div>

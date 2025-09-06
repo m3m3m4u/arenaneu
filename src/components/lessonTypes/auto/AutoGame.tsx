@@ -341,7 +341,30 @@ export default function AutoGame({ lesson, courseId, completedLessons, setComple
       }
       ctx.setLineDash([]);
     }
-  function drawCar(ctx:CanvasRenderingContext2D){ const carWidth=LANE_WIDTH*0.7; const carHeight=carWidth*1.5; ctx.save(); ctx.translate(carXRef.current,carYRef.current); let lean=0; const dx = laneCenter(desiredLaneRef.current)-carXRef.current; lean=dx*0.0045; ctx.rotate(lean); let scale=1; if(carPulseRef.current>0){ const t=carPulseRef.current/0.45; scale=1+Math.sin((1-t)*Math.PI)*0.22*t; } ctx.scale(scale,scale); if(carReady && carImgRef.current){ ctx.imageSmoothingEnabled=true; (ctx as any).imageSmoothingQuality='high'; const targetW = carWidth; const targetH = carHeight; ctx.drawImage(carImgRef.current, -targetW/2, -targetH/2, targetW, targetH);} else { ctx.fillStyle='#c00'; ctx.beginPath(); ctx.roundRect(-carWidth/2,-carHeight/2,carWidth,carHeight,16); ctx.fill(); } ctx.restore(); }
+  function drawCar(ctx:CanvasRenderingContext2D){
+    const baseW = LANE_WIDTH*0.7;
+    // Behalte Original-Seitenverhältnis von auto3.png bei
+    let targetW = baseW; let targetH = baseW*1.5;
+    if(carImgRef.current && carImgRef.current.naturalWidth && carImgRef.current.naturalHeight){
+      const ar = carImgRef.current.naturalHeight / carImgRef.current.naturalWidth; // H/W
+      targetW = baseW;
+      targetH = baseW * ar;
+    }
+    ctx.save();
+    ctx.translate(carXRef.current,carYRef.current);
+    const dx = laneCenter(desiredLaneRef.current)-carXRef.current;
+    const lean = dx*0.0045;
+    ctx.rotate(lean);
+    let scale=1; if(carPulseRef.current>0){ const t=carPulseRef.current/0.45; scale=1+Math.sin((1-t)*Math.PI)*0.22*t; }
+    ctx.scale(scale,scale);
+    if(carReady && carImgRef.current){
+      ctx.imageSmoothingEnabled=true; (ctx as any).imageSmoothingQuality='high';
+      ctx.drawImage(carImgRef.current, -targetW/2, -targetH/2, targetW, targetH);
+    } else {
+      ctx.fillStyle='#c00'; ctx.beginPath(); ctx.roundRect(-targetW/2,-targetH/2,targetW,targetH,16); ctx.fill();
+    }
+    ctx.restore();
+  }
     function drawObstacles(ctx:CanvasRenderingContext2D){ for(const o of obstaclesRef.current){ const x=laneCenter(o.lane)-OBSTACLE_WIDTH/2; const y=o.y; ctx.save(); ctx.globalAlpha=(o.removed? o.alpha : (o.hit?0.55:1)); ctx.fillStyle=o.color; ctx.strokeStyle='#00000055'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.roundRect(x,y,OBSTACLE_WIDTH,OBSTACLE_HEIGHT,16); ctx.fill(); ctx.stroke(); ctx.restore(); } }
     function drawParticles(ctx:CanvasRenderingContext2D){ for(const p of particlesRef.current){ const k=1-(p.age/p.life); const alpha=k*k; const r=p.r*(0.4+0.6*k); ctx.save(); ctx.globalAlpha=alpha; ctx.fillStyle=p.color; ctx.translate(p.x,p.y); ctx.rotate(p.spin*p.age); ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(0,-r); ctx.lineTo(r*0.9,0); ctx.lineTo(0,r*0.9); ctx.closePath(); ctx.fill(); ctx.restore(); } }
     frame=requestAnimationFrame(loop); return ()=> cancelAnimationFrame(frame);
