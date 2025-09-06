@@ -55,7 +55,8 @@ export async function POST(req: Request){
 						.slice(0,180);
 					return kept || 'upload.bin';
 				} catch{
-					return originalName.replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,180) || 'upload.bin';
+					// Fallback: erhalte deutsche Umlaute/ß explizit
+					return originalName.replace(/[^a-zA-Z0-9._\-äöüÄÖÜß]+/g,'_').replace(/^_+|_+$/g,'').slice(0,180) || 'upload.bin';
 				}
 			})();
 			let rand = 'xxxx';

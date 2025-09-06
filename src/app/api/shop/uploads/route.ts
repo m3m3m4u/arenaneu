@@ -29,7 +29,8 @@ function sanitize(name: string){
     return kept || 'datei';
   } catch {
     // Fallback ohne Unicode-Property Escapes
-    return (name || 'datei').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,180) || 'datei';
+  // Erhalte deutsche Umlaute/ß im Fallback explizit
+  return (name || 'datei').replace(/[^a-zA-Z0-9._\-äöüÄÖÜß]+/g,'_').replace(/^_+|_+$/g,'').slice(0,180) || 'datei';
   }
 }
 

@@ -11,7 +11,15 @@ import { isS3Enabled, s3Put, s3PublicUrl } from '@/lib/storage';
 export const runtime='nodejs';
 export const maxDuration=60;
 
-function sanitizeName(n:string){ return n.replace(/[^a-zA-Z0-9._-]+/g,'_'); }
+function sanitizeName(n: string){
+  let base = (n || 'datei').toString();
+  try { base = base.normalize('NFC'); } catch {}
+  base = base.replace(/[\\/]+/g, '_'); // keine Pfadtrenner
+  base = base.replace(/[^\p{L}\p{N}._\-\s]+/gu, '_'); // Unicode-Letters/Ziffern behalten
+  base = base.replace(/\s+/g,'_').replace(/^_+|_+$/g,'');
+  if(!base) base='datei';
+  return base.slice(0,180);
+}
 
 export async function GET(req: Request){
   try {
