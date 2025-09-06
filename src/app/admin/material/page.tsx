@@ -320,12 +320,16 @@ export default function AdminMaterialPage(){
             const handleDownload = ()=>{ try{ const a=document.createElement('a'); a.href=f.url; a.download=f.name||'download'; a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch { window.open(f.url,'_blank'); } };
             return (
               <div key={f.id}
-                   onClick={handleDownload}
-                   className={`flex items-center gap-3 p-2 hover:bg-gray-50 cursor-pointer border-l-4 ${leftColor}`}>
+                   className={`flex items-center gap-3 p-2 border-l-4 ${leftColor}`}>
                 {/* Auswahl für Sammellöschen */}
                 <input type="checkbox" checked={sel} onChange={(e)=>{ e.stopPropagation(); toggleRaw(f.id); }} className="shrink-0" />
                 <div className="flex-1 flex items-center gap-4 min-w-0">
-                  <span className={`truncate font-medium ${nameColor}`} title={f.name}>{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e)=>{ e.stopPropagation(); handleDownload(); }}
+                    className={`truncate font-medium text-left underline-offset-2 hover:underline focus:underline ${nameColor}`}
+                    title={f.name}
+                  >{f.name}</button>
                   <span className="text-gray-500 shrink-0">{Math.round(f.size/1024)} KB</span>
                   <span className="text-gray-400 shrink-0">{new Date(f.createdAt).toLocaleDateString()}</span>
                 </div>
