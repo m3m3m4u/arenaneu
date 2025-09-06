@@ -40,6 +40,8 @@ export default function AdminMaterialPage(){
   const [excelToken, setExcelToken] = useState<string|null>(null);
   // PDF Preview
   const [pdfUrl,setPdfUrl] = useState<string|null>(null);
+  // Generierung von Datei-Vorschauen
+  const [genKey, setGenKey] = useState<string|null>(null);
 
   const toggleRaw = (id:string)=> setSelectedRawIds(ids=> ids.includes(id)? ids.filter(x=>x!==id): [...ids,id]);
 
@@ -89,6 +91,28 @@ export default function AdminMaterialPage(){
       const d = await r.json();
       if(!(r.ok && d.success)) alert(d.error||'Entfernen fehlgeschlagen'); else load();
     } catch { alert('Netzwerkfehler'); }
+  }
+
+  async function regeneratePreview(productId: string, key: string, name?: string){
+    try {
+      setGenKey(key);
+      const r = await fetch(`/api/shop/products/${productId}/files/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ key, name })
+      });
+      const d = await r.json();
+      if(!(r.ok && d.success)){
+        alert(d.error || 'Vorschau-Generierung fehlgeschlagen');
+      } else {
+        // Nach kurzer Pause refresh, damit DB-Änderungen sichtbar werden
+        setTimeout(()=> load(), 300);
+      }
+    } catch {
+      alert('Netzwerkfehler');
+    } finally {
+      setGenKey(null);
+    }
   }
 
   async function uploadRawFile(file: File){
@@ -316,35 +340,51 @@ export default function AdminMaterialPage(){
               {p.category && <div className="text-[11px] text-indigo-700">{p.category}</div>}
               <div className="text-[11px] text-gray-500">{p.files?.filter(f=>!f.key?.startsWith('placeholder:')).length || 0} echte Dateien / {p.files?.length||0} gesamt</div>
               {p.description && <p className="text-[11px] text-gray-600 line-clamp-3 whitespace-pre-line">{p.description}</p>}
-              <div className="flex flex-col gap-1 mt-auto">
-                <div className="flex flex-wrap gap-1">
-                  {(p.files||[]).slice(0,4).map(f=> (
-                    <button
-                      key={f.key}
-                      onClick={()=>{
-                        if(!f.downloadUrl) return;
-                        try {
-                          const a = document.createElement('a');
-                          a.href = f.downloadUrl;
-                          // Dateiname ohne Platzhalter-Prefix
-                          const baseName = f.name || 'download';
-                          a.setAttribute('download', baseName);
-                          a.rel = 'noopener';
-                          document.body.appendChild(a);
-                          a.click();
-                          setTimeout(()=> a.remove(), 0);
-                        } catch {
-                          // Fallback: normales Öffnen falls download Attribute nicht greift
-                          window.open(f.downloadUrl,'_blank');
-                        }
-                      }}
-                      className={`px-1 py-0.5 border rounded text-[10px] ${f.key.startsWith('placeholder:')?'border-orange-300 text-orange-600':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                      title={f.name}
-                    >{f.name.slice(0,18)}</button>
-                  ))}
-                  {p.files && p.files.length>4 && <span className="text-[10px] text-gray-400">+{p.files.length-4}</span>}
+              <div className="flex flex-col gap-2 mt-auto">
+                {/* Thumbnails / Preview-Images je Datei */}
+                <div className="grid grid-cols-2 gap-2">
+                  {(p.files||[]).map(f=>{
+                    const previews: string[] = Array.isArray((f as any).previewImages) ? (f as any).previewImages : [];
+                    const isPdf = (f.contentType||'').includes('pdf') || /\.pdf$/i.test(f.name||'');
+                    return (
+                      <div key={f.key} className="border rounded p-2 flex gap-2 items-center">
+                        {previews.length>0 ? (
+                          <div className="relative w-16 h-20 overflow-hidden rounded border bg-white">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={previews[0]} alt={f.name} className="absolute inset-0 w-full h-full object-cover" />
+                            {previews.length>1 && <span className="absolute bottom-0 right-0 bg-black/60 text-white text-[9px] px-1 rounded-tl">{previews.length}p</span>}
+                          </div>
+                        ) : (
+                          <div className="w-16 h-20 flex items-center justify-center text-[10px] text-gray-400 bg-gray-50 border rounded">kein Bild</div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] font-medium truncate" title={f.name}>{f.name}</div>
+                          <div className="flex gap-1 mt-1">
+                            {f.downloadUrl && (
+                              <button
+                                onClick={()=>{ try{ const a=document.createElement('a'); a.href=f.downloadUrl; a.setAttribute('download', f.name||'download'); a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch{ window.open(f.downloadUrl,'_blank'); } }}
+                                className="px-1 py-0.5 border rounded text-[10px] bg-gray-50 hover:bg-gray-100"
+                              >Download</button>
+                            )}
+                            {isPdf && previews.length===0 && (
+                              <button
+                                onClick={()=> regeneratePreview(p._id, f.key, f.name)}
+                                disabled={genKey===f.key}
+                                className="px-1 py-0.5 border rounded text-[10px] bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50"
+                              >{genKey===f.key? 'Erzeuge…':'Vorschau erzeugen'}</button>
+                            )}
+                            {isPdf && (
+                              <button
+                                onClick={()=> setPdfUrl(f.downloadUrl)}
+                                className="px-1 py-0.5 border rounded text-[10px] bg-white hover:bg-gray-50"
+                              >Ansehen</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {/* PDF-Vorschau entfernt (nicht benötigt) */}
               </div>
             </div>
           ))}
