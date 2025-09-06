@@ -84,6 +84,22 @@ export default function FussballTeamLobbyPage(){
     }
   },[lobby?.status, lobby?.id, router]);
 
+  const isHost = (()=>{
+    const uid = String((session as any)?.user?.id || (session as any)?.user?._id || '');
+    return uid && lobby?.hostUserId && String(lobby.hostUserId)===uid;
+  })();
+
+  async function start(){
+    if(!lobby) return;
+    setError(undefined);
+    try {
+      const r = await fetch(`/api/fussball-team/lobbies/${lobby.id}/start`, { method:'POST' });
+      const j = await r.json();
+      if(!j.success){ setError(j.error||'Start fehlgeschlagen'); }
+      else { setLobby(j.lobby); }
+    } catch(e:any){ setError(String(e)); }
+  }
+
   if(lobby){
     const leftPlayers = (lobby.players||[]).filter((p:any)=> p.side==='left');
     const rightPlayers = (lobby.players||[]).filter((p:any)=> p.side==='right');
@@ -133,7 +149,7 @@ export default function FussballTeamLobbyPage(){
                 </ul>
               </div>
             </div>
-            {lobby.status==='waiting' && <div className="text-xs text-amber-600">Warte auf beide Teams…</div>}
+            {lobby.status==='waiting' && <div className="text-xs text-amber-600">Warte auf Start durch Ersteller…</div>}
             {lobby.status==='active' && <div className="text-xs text-green-600">Spiel startet…</div>}
             <div className="text-[10px] text-gray-500 mt-1">Lobby ID: <span className="font-mono select-all">{lobby.id}</span></div>
             {lobby.status==='active' && (
@@ -142,6 +158,9 @@ export default function FussballTeamLobbyPage(){
           </div>
           <div className="flex gap-3 flex-wrap items-center">
             <button onClick={leave} className="px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm">Verlassen</button>
+            {isHost && lobby.status==='waiting' && (
+              <button onClick={start} className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm">Start</button>
+            )}
             {/* Ready/Autostart entfernt – Spiel startet automatisch wenn beide Seiten besetzt sind */}
             {error && <span className="text-xs text-red-600">{error}</span>}
           </div>

@@ -87,11 +87,8 @@ export async function joinLobby(id: string, userId: string, username: string){
   lobby.players.push({ userId, username, joinedAt: Date.now(), side, ready:true, score:0 });
   lobby.lastActivity = Date.now();
   touchAnswer(id, userId);
-  // Startbedingung ohne Ready: je Team mindestens 1 Spieler vorhanden
-  const hasLeft = lobby.players.some(p=>p.side==='left');
-  const hasRight = lobby.players.some(p=>p.side==='right');
-  if(hasLeft && hasRight) lobby.status='active';
-  if(useDb){ try{ await dbConnect(); await TeamLobbyModel.updateOne({ id }, { $set: { players: lobby.players, lastActivity: lobby.lastActivity, status: lobby.status } }); } catch{ /* ignore */ } }
+  // Kein Autostart mehr: Start ausschließlich durch Host via explizite Aktion
+  if(useDb){ try{ await dbConnect(); await TeamLobbyModel.updateOne({ id }, { $set: { players: lobby.players, lastActivity: lobby.lastActivity } }); } catch{ /* ignore */ } }
   else { lobbies.set(id, lobby); }
   return { lobby } as const;
 }
@@ -187,6 +184,21 @@ export async function deleteLobbyByHost(id: string, userId: string){
   if(useDb){ try{ await dbConnect(); await TeamLobbyModel.deleteOne({ id, hostUserId: userId, status:'waiting' }); } catch{} }
   lobbies.delete(id);
   return { deleted:true } as const;
+}
+
+// Start nur durch Host und nur wenn beide Teams mindestens einen Spieler haben
+export async function startLobby(id: string, userId: string){
+  let lobby = await getLobby(id) as LobbyRecord | undefined; if(!lobby) return { error:'NOT_FOUND' } as const;
+  if(lobby.hostUserId !== userId) return { error:'NO_PERMISSION' } as const;
+  if(lobby.status !== 'waiting') return { error:'ALREADY_STARTED' } as const;
+  const hasLeft = lobby.players.some(p=>p.side==='left');
+  const hasRight = lobby.players.some(p=>p.side==='right');
+  if(!hasLeft || !hasRight) return { error:'NEED_BOTH_TEAMS' } as const;
+  lobby.status = 'active';
+  lobby.lastActivity = Date.now();
+  if(useDb){ try{ await dbConnect(); await TeamLobbyModel.updateOne({ id }, { $set: { status: lobby.status, lastActivity: lobby.lastActivity } }); } catch{} }
+  else { lobbies.set(id, lobby); }
+  return { lobby } as const;
 }
 
 setInterval(()=>{
