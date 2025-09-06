@@ -445,7 +445,7 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
           {activeBlocks.length>0 && currentQuestion && !(finished) && (
             <div className={`text-sm ${isFullscreen ? 'text-base leading-snug' : ''}`}>
               <div className={`text-gray-700 whitespace-pre-wrap break-words ${isFullscreen? 'text-lg font-medium': ''}`}>{currentQuestion.question}</div>
-              {foods.length === 4 && (
+              {foods.length > 0 && (
                 <ul className={`mt-2 space-y-1 ${isFullscreen? 'text-sm' : 'text-xs'}` }>
                   {foods.map((f,i)=> (
                     <li key={i} className="flex items-center gap-2">

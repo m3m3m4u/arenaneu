@@ -207,7 +207,7 @@ export default function SnakeLivePage(){
     const s = hostState;
     if(!s) return;
     // foods
-    if(Array.isArray(s.foods) && s.foods.length===4){
+    if(Array.isArray(s.foods) && s.foods.length>0){
       for(const f of s.foods){ ctx.fillStyle = f.color || '#888'; ctx.fillRect(f.x*CELL, f.y*CELL, CELL, CELL); }
     } else if(s.food){ ctx.fillStyle = '#dc2626'; ctx.fillRect(s.food.x*CELL, s.food.y*CELL, CELL, CELL); }
     // snakes
@@ -324,10 +324,10 @@ export default function SnakeLivePage(){
                   <div>Spieler A: <span className="font-semibold text-emerald-700">{hostState?.scoreA ?? 0}</span></div>
                   <div>Spieler B: <span className="font-semibold text-blue-700">{hostState?.scoreB ?? 0}</span></div>
                 </div>
-                {hostState?.currentQuestion ? (
+        {hostState?.currentQuestion ? (
                   <div className="text-sm">
                     <div className="text-gray-700 whitespace-pre-wrap break-words">{hostState.currentQuestion.question}</div>
-                    {Array.isArray(hostState.foods) && hostState.foods.length===4 && (
+          {Array.isArray(hostState.foods) && hostState.foods.length>0 && (
                       <ul className="mt-2 space-y-1 text-xs">
                         {hostState.foods.map((f:any,i:number)=> (
                           <li key={i} className="flex items-center gap-2">

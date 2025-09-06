@@ -44,7 +44,20 @@ export async function GET(req: Request){
       })) : []
     }));
   // Kategorien: immer die zentrale Liste zurückgeben (damit alle Fächer, z.B. Religion, verfügbar sind)
-  const subjects = page===1 ? (await ShopProduct.distinct('subjects', showAll ? {} : { isPublished: true })).filter(Boolean) : [];
+  // Subjects abhängig vom aktuellen Filter (aber ohne aktives Subject), damit nur Fächer mit Material angezeigt werden
+  let subjects: string[] = [];
+  if(page===1){
+    const filterForSubjects: any = { ...(showAll ? {} : { isPublished: true }) };
+    if (search) {
+      filterForSubjects.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (cat) filterForSubjects.category = cat;
+    // aktives Subject explizit NICHT einschränken, damit die Liste alle passenden Fächer enthält
+    subjects = (await ShopProduct.distinct('subjects', filterForSubjects)).filter(Boolean) as string[];
+  }
   const categories = CATEGORIES;
   return NextResponse.json({ success:true, items, page, pageSize: limit, total, categories, subjects });
   } catch (e){

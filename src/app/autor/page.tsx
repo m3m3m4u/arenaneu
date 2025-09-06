@@ -656,6 +656,15 @@ function ExercisesTab() {
                     }
                     return <span className="text-xs text-gray-500 px-2 py-1 border rounded bg-gray-50">Fragen: {qCount}</span>;
                   })()}
+                  {/* Direktes Bearbeiten ohne Kopie nur für markierte Übungen */}
+                  {lesson.isExercise && (
+                    <button
+                      onClick={() => startEdit(lesson._id)}
+                      className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+                    >
+                      ✏️ Bearbeiten
+                    </button>
+                  )}
                   <button
                     onClick={async ()=>{
                       try {

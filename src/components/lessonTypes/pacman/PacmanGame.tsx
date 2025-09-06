@@ -16,7 +16,7 @@ const DEFAULT_COLS=21; const DEFAULT_ROWS=20; const tileSize=40; const MAX_LIVES
 const PLAYER_TILE_TIME=0.93; // vorher 1.4
 const GHOST_TILE_TIMES=[1.07,1.00,1.20,1.33]; // vorher 1.6,1.5,1.8,2.0
 const GLOBAL_SPEED_SCALE=1.0; // globaler Multiplikator
-const DEBUG_VERSION='pac-flow-v3.2-hardcodedCSV';
+const DEBUG_VERSION='pac-flow-v3.3-embeddedCustom';
 
 // Hart-codiertes Board erzwingen: Wenn true, wird IMMER das unten definierte embeddedCSV verwendet
 // und es findet KEIN Laden über fetch/XLSX statt.
@@ -27,8 +27,7 @@ interface Ghost { tileX:number; tileY:number; x:number; y:number; r:number; dir:
 
 const ghostColors=['#ff4081','#40c4ff','#ff9100','#8bc34a'];
 
-// Eingebettetes Layout – HIER den Inhalt der gewünschten CSV einfügen (Semikolon-getrennt, Zeilen mit \n)
-// Beispiel unten entspricht der bisherigen Vorlage. Bitte durch die gewünschte CSV ersetzen.
+// Eingebettetes Layout – Standard "klassik". Unten kannst du ein eigenes Layout fest einbetten.
 const embeddedCSV=`1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1
 1;A;A;A;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;B;B;B;1
 1;A;A;A;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;B;B;B;1
@@ -54,6 +53,34 @@ const embeddedCSV=`1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1
 1;C;C;C;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;D;D;D;1
 1;C;C;C;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;D;D;D;1
 1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1`;
+// Hier dein neues festes Muster einfügen (Semikolon- oder Komma- oder Tab-getrennt, pro Zeile = eine Reihe).
+// Zulässige Zellen: 1=Wand, 0=Gang, A/B/C/D=Antwort-Räume, S=Steuerungsanker, G=Geister-Spawn, '.', 'E', '_' = Gänge, '#','X','W' = Wände.
+// Beispiel: const CUSTOM_EMBEDDED_CSV = `1;1;1\n1;0;1\n1;1;1`;
+const CUSTOM_EMBEDDED_CSV: string = `1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1
+1\tA\tA\tA\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\tB\tB\tB\t1
+1\tA\tA\tA\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\tB\tB\tB\t1
+1\tA\tA\tA\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\tB\tB\tB\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\tS\tS\tS\tS\tS\tS\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\tS\tS\tS\tS\tS\tS\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\tS\tS\tS\tS\tS\tS\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\tS\tS\tS\tS\tS\tS\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\t1\t0\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\t1\t0\t1\t1
+1\tC\tC\tC\t1\t0\t1\t1\t1\t1\t0\t1\t1\t1\t1\t1\t1\t1\t1\t0\t1\t1\t1\t1\t0\t1\tD\tD\tD\t1
+1\tC\tC\tC\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\tD\tD\tD\t1
+1\tC\tC\tC\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\tD\tD\tD\t1
+1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1`;
 
 export default function PacmanGame({ lesson, courseId, completedLessons, setCompletedLessons }:Props){
   const canvasRef=useRef<HTMLCanvasElement|null>(null);
@@ -123,9 +150,10 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   const initMaze=useCallback(async ()=>{
     // Wenn hart-codierter Modus aktiv ist, sofort eingebettetes CSV verwenden
     if(FORCE_EMBEDDED_BOARD){
-      const lines=embeddedCSV.split(/\r?\n/);
+      const csv = (CUSTOM_EMBEDDED_CSV && CUSTOM_EMBEDDED_CSV.trim().length>0) ? CUSTOM_EMBEDDED_CSV : embeddedCSV;
+      const lines=csv.split(/\r?\n/);
       parseLinesToMaze(lines);
-      try{ setBoardSource('embedded-hardcoded'); }catch{}
+      try{ setBoardSource((CUSTOM_EMBEDDED_CSV && CUSTOM_EMBEDDED_CSV.trim()) ? 'embedded-custom' : 'embedded-default'); }catch{}
       return;
     }
     // Bevorzugt CSV-Quelle aus Lesson-Content, Fallback: öffentliche Template-CSV
