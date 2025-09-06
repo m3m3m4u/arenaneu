@@ -28,6 +28,9 @@ export default function FussballLivePage(){
   const [loadingQs, setLoadingQs] = useState<boolean>(true);
   const [errorQs, setErrorQs] = useState<string|undefined>();
   const [history,setHistory] = useState<Array<{id:string; correct:boolean}>>([]);
+  // Team-Score und Zugseite (welches Team ist am Zug)
+  const [scores, setScores] = useState<{left:number; right:number}>({ left: 0, right: 0 });
+  const [turn, setTurn] = useState<'left'|'right'>('left');
   const [current,setCurrent] = useState<MCQuestion|undefined>();
   const [locked,setLocked] = useState(false);
   const [answerState,setAnswerState] = useState<{picked:number|null; correct:boolean|null}>({ picked:null, correct:null });
@@ -81,8 +84,18 @@ export default function FussballLivePage(){
     setLocked(true);
     const isCorrect = idx === current.correct;
     setAnswerState({ picked:idx, correct:isCorrect });
+    // Punktewertung: Bei korrekter Antwort erhält das Team am Zug einen Punkt
+    if(isCorrect){
+      setScores(s=> ({ ...s, [turn]: s[turn] + 1 } as any));
+    }
     setHistory(h=>[...h,{ id: current.id, correct: isCorrect }]);
-    setTimeout(()=>{ setLocked(false); setAnswerState({ picked:null, correct:null }); pickNext(); }, isCorrect? 800 : 1300);
+    // Nach der Antwort wechselt der Zug zum anderen Team
+    setTimeout(()=>{
+      setLocked(false);
+      setAnswerState({ picked:null, correct:null });
+      setTurn(t=> t==='left'?'right':'left');
+      pickNext();
+    }, isCorrect? 800 : 1300);
   }
 
   // Platzhalter Spielfeld: später echte Canvas / Engine
@@ -104,15 +117,19 @@ export default function FussballLivePage(){
     return ()=>{ cancelled = true; };
   },[FIELD_IMAGES, fieldIdx]);
 
-  // Nach jeweils 3 richtigen Antworten automatisch weiterblättern
-  const lastAutoAtRef = useRef(0);
+  // Bildwechsel, wenn ein Team 3 Punkte Vorsprung hat (und pro weitere 3 Vorsprung ein weiterer Schritt)
+  const lastStepQuotRef = useRef(0);
   useEffect(()=>{
-    const c = stats.correct;
-    if(c > 0 && c % 3 === 0 && c !== lastAutoAtRef.current){
-      lastAutoAtRef.current = c;
+    const lead = Math.abs(scores.left - scores.right);
+    const q = Math.floor(lead / 3);
+    if(q > lastStepQuotRef.current){
+      lastStepQuotRef.current = q;
       setFieldIdx(i => (i + 1) % FIELD_IMAGES.length);
+    } else if(q < lastStepQuotRef.current){
+      // Falls Führung schrumpft (z. B. nach Reset), Quotient zurücksetzen
+      lastStepQuotRef.current = q;
     }
-  },[stats.correct, FIELD_IMAGES.length]);
+  },[scores.left, scores.right, FIELD_IMAGES.length]);
 
   return (
     <main className="max-w-7xl mx-auto p-4 md:p-6">
@@ -122,10 +139,18 @@ export default function FussballLivePage(){
           <p className="text-xs text-gray-500">Lobby ID: <span className="font-mono">{id}</span></p>
           {exerciseTitle && <p className="text-xs text-gray-500">Übung: <span className="font-medium">{exerciseTitle}</span></p>}
         </div>
-        <div className="text-xs text-gray-500 flex gap-4">
+        <div className="text-xs text-gray-700 flex flex-wrap items-center gap-3">
           <span>Fragen: {stats.asked}</span>
           <span>Korrekt: {stats.correct}</span>
           <span>Falsch: {stats.wrong}</span>
+          <span className="ml-2 inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-100 border">
+            <span className="font-semibold">Score</span>
+            <span className="text-[11px]">Links</span>
+            <span className="px-1 rounded bg-white border font-mono">{scores.left}</span>
+            <span className="text-[11px]">Rechts</span>
+            <span className="px-1 rounded bg-white border font-mono">{scores.right}</span>
+            <span className="ml-1 text-[11px]">Zug: <b>{turn==='left'?'Links':'Rechts'}</b></span>
+          </span>
         </div>
         <div className="ml-auto text-xs"><a href="/arena/fussball2" className="text-blue-600 hover:underline">Zur Lobby</a></div>
       </header>
