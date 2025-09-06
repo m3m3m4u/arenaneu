@@ -22,6 +22,7 @@ export default function FussballLobbyPage(){
   // Entfernt: lockExercise (Auswahl sperren)
   const [exercises,setExercises] = useState<Array<{ _id:string; title:string; category?:string }>>([]);
   const [lobby,setLobby] = useState<any>(null);
+  const [durationSec, setDurationSec] = useState<number>(300);
   const [joining,setJoining] = useState(false);
   const [ready,setReady] = useState(true);
   const [error,setError] = useState<string|undefined>();
@@ -38,7 +39,7 @@ export default function FussballLobbyPage(){
   async function createLobby(){
     setCreating(true); setError(undefined);
     try {
-      const res = await fetch('/api/fussball/lobbies',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, lessonId }) });
+      const res = await fetch('/api/fussball/lobbies',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, lessonId, durationSec }) });
       const j = await res.json();
       if(!j.success){ setError(j.error||'Fehler'); } else {
         setLobby(j.lobby);
@@ -142,6 +143,16 @@ export default function FussballLobbyPage(){
               {exercises.map(ex=> <option key={ex._id} value={ex._id}>{ex.title}</option>)}
             </select>
           </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <label className="flex flex-col gap-1 text-sm col-span-1">Spieldauer
+            <select value={durationSec} onChange={e=> setDurationSec(parseInt(e.target.value,10))} className="border rounded px-2 py-1 text-sm">
+              <option value={180}>3 Minuten</option>
+              <option value={300}>5 Minuten</option>
+              <option value={600}>10 Minuten</option>
+              <option value={900}>15 Minuten</option>
+            </select>
+          </label>
         </div>
         <div className="flex gap-3 items-center">
           <button disabled={creating || !session || !lessonId} onClick={createLobby} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating? 'Erstelle…':'Spiel erstellen'}</button>

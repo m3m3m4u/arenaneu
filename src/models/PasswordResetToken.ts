@@ -10,7 +10,8 @@ export interface IPasswordResetToken extends Document {
 const PasswordResetTokenSchema = new Schema<IPasswordResetToken>({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   tokenHash: { type: String, required: true },
-  expiresAt: { type: Date, required: true, index: true },
+  // Hinweis: kein index:true hier, da unten ein TTL-Index via schema.index() gesetzt wird
+  expiresAt: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now }
 });
 

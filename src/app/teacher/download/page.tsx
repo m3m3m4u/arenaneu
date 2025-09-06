@@ -9,7 +9,9 @@ export default function TeacherDownloadShop(){
   const router = useRouter();
   const [items,setItems] = useState<Product[]>([]);
   const [subjects,setSubjects] = useState<string[]>([]);
+  const [categories,setCategories] = useState<string[]>([]);
   const [activeSubject,setActiveSubject] = useState<string>('');
+  const [activeCategory,setActiveCategory] = useState<string>('');
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState<string|null>(null);
   const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index des aktiven Preview-Bildes
@@ -119,14 +121,23 @@ export default function TeacherDownloadShop(){
   async function load(){
     setLoading(true); setError(null);
     try {
-      const qs = new URLSearchParams(); qs.set('all','1'); if(activeSubject) qs.set('subject', activeSubject);
+      const qs = new URLSearchParams();
+      qs.set('all','1');
+      // Größeres Limit, da auf der Seite keine Pagination existiert
+      qs.set('limit','50');
+      if(activeSubject) qs.set('subject', activeSubject);
+      if(activeCategory) qs.set('cat', activeCategory);
       const r = await fetch(`/api/shop/products?${qs.toString()}`);
       const d = await r.json();
-      if(r.ok && d.success){ setItems(d.items||[]); if(d.subjects) setSubjects(d.subjects); } else setError(d.error||'Fehler');
+      if(r.ok && d.success){
+        setItems(d.items||[]);
+        if(Array.isArray(d.subjects)) setSubjects(d.subjects);
+        if(Array.isArray(d.categories)) setCategories(d.categories);
+      } else setError(d.error||'Fehler');
     } catch { setError('Netzwerkfehler'); }
     setLoading(false);
   }
-  useEffect(()=>{ void load(); },[activeSubject]);
+  useEffect(()=>{ void load(); },[activeSubject, activeCategory]);
 
   // Initiale Übernahme des URL-Parameters ?subject in den lokalen Zustand (ohne useSearchParams, um Suspense-Pflicht zu vermeiden)
   useEffect(()=>{
@@ -134,6 +145,8 @@ export default function TeacherDownloadShop(){
       const sp = new URLSearchParams((typeof window!=='undefined'? window.location.search: '')||'');
       const initial = (sp.get('subject')||'').trim();
       if(initial) setActiveSubject(initial);
+  const initialCat = (sp.get('cat')||'').trim();
+  if(initialCat) setActiveCategory(initialCat);
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
@@ -144,6 +157,18 @@ export default function TeacherDownloadShop(){
     try {
       const sp = new URLSearchParams(window.location.search);
       if(subj) sp.set('subject', subj); else sp.delete('subject');
+      const qs = sp.toString();
+      const path = window.location.pathname + (qs? ('?'+qs):'');
+      router.replace(path, { scroll: false });
+    } catch {}
+  }
+
+  // Kategorie in URL spiegeln und Zustand setzen
+  function applyCategory(cat: string){
+    setActiveCategory(cat);
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if(cat) sp.set('cat', cat); else sp.delete('cat');
       const qs = sp.toString();
       const path = window.location.pathname + (qs? ('?'+qs):'');
       router.replace(path, { scroll: false });
@@ -211,10 +236,16 @@ export default function TeacherDownloadShop(){
   return (
     <main className="max-w-6xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Material-Downloads</h1>
-      <div className="flex flex-wrap gap-2 mb-6 text-sm">
+      <div className="flex flex-wrap gap-2 mb-3 text-sm">
         <button onClick={()=>applySubject('')} className={`px-3 py-1 rounded border ${!activeSubject?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>Alle Fächer</button>
         {subjects.map(s=> (
           <button key={s} onClick={()=>applySubject(s)} className={`px-3 py-1 rounded border ${activeSubject===s?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>{s}</button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2 mb-6 text-sm">
+        <button onClick={()=>applyCategory('')} className={`px-3 py-1 rounded border ${!activeCategory?'bg-sky-600 text-white border-sky-600':'bg-white hover:bg-gray-50'}`}>Alle Kategorien</button>
+        {categories.map(c=> (
+          <button key={c} onClick={()=>applyCategory(c)} className={`px-3 py-1 rounded border ${activeCategory===c?'bg-sky-600 text-white border-sky-600':'bg-white hover:bg-gray-50'}`}>{c}</button>
         ))}
       </div>
       {loading && <div className="text-sm text-gray-500">Lade…</div>}

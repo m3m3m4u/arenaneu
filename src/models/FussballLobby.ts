@@ -17,6 +17,10 @@ export interface IFussballLobby extends Document {
   lastActivity: number;
   hostUserId: string;
   status: 'waiting'|'active'|'finished'|'aborted';
+  // Spielzeit
+  durationSec: number; // Gesamtdauer in Sekunden
+  startedAt?: number;  // Startzeitpunkt (ms since epoch)
+  endsAt?: number;     // Endzeitpunkt (ms since epoch)
   players: IFussballPlayer[];
   // Spielzustand (synchronisiert)
   scores?: { left:number; right:number };
@@ -42,6 +46,9 @@ const LobbySchema = new Schema<IFussballLobby>({
   lastActivity: { type: Number, required: true, index: true },
   hostUserId: { type: String, required: true },
   status: { type: String, enum: ['waiting','active','finished','aborted'], default: 'waiting', index: true },
+  durationSec: { type: Number, default: 300 },
+  startedAt: { type: Number },
+  endsAt: { type: Number },
   players: { type: [PlayerSchema], default: [] },
   scores: { type: Object, default: { left:0, right:0 } },
   goals: { type: Object, default: { left:0, right:0 } },

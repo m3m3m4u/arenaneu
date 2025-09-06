@@ -11,7 +11,8 @@ const AntiGuessingEventSchema = new Schema<IAntiGuessingEvent>({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   class: { type: Schema.Types.ObjectId, ref: 'TeacherClass', required: true, index: true },
   teacher: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  createdAt: { type: Date, default: Date.now, index: true }
+  // Kein index:true, da der TTL-Index unten explizit per schema.index() definiert wird
+  createdAt: { type: Date, default: Date.now }
 });
 
 // Optional: TTL Index um alte Events zu purgen (z.B. nach 30 Tagen)

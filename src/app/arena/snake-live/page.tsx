@@ -16,6 +16,7 @@ export default function SnakeLivePage(){
   const [roomName, setRoomName] = useState('Snake‑Match');
   const esRef = useRef<EventSource|null>(null);
   const controlsRef = useRef<{ setDirA:(d:'up'|'down'|'left'|'right')=>void; setDirB:(d:'up'|'down'|'left'|'right')=>void; setRunning:(v:boolean)=>void; restartRound:()=>void }|null>(null);
+  const wsRef = useRef<WebSocket|null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [locked, setLocked] = useState(false);
@@ -61,8 +62,12 @@ export default function SnakeLivePage(){
   const current = useMemo(()=> exercises.find(e=> e._id===selectedId), [exercises, selectedId]);
 
   const publish = useCallback(async (id: string, msg: LiveMsg)=>{
-  // Einheitlich per SSE/HTTP publizieren
-  try{ await fetch(`/api/live/room/${id}/publish`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(msg) }); }catch{}
+    // Bevorzugt WebSocket, sonst HTTP Publish
+    try{
+      const ws = wsRef.current;
+      if(ws && ws.readyState === ws.OPEN){ ws.send(JSON.stringify(msg)); return; }
+    }catch{}
+    try{ await fetch(`/api/live/room/${id}/publish`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(msg) }); }catch{}
   },[]);
 
   // Host flow
@@ -97,15 +102,17 @@ export default function SnakeLivePage(){
     }
   },[rooms]);
 
-  // Subscribe to room events (SSE-only, stabil und einheitlich)
+  // Subscribe to room events (SSE + WebSocket fallback)
   useEffect(()=>{
     if(!room?.id || mode==='pick') return;
     let es: EventSource | null = null;
+    let ws: WebSocket | null = null;
   const onMsg = (raw: any)=>{
       try{
         const msg = typeof raw === 'string' ? JSON.parse(raw||'{}') : raw;
         if(msg?.type === 'hello'){
           if(msg?.room?.exerciseId){ setSelectedId(msg.room.exerciseId); setLocked(true); }
+          if(mode==='guest') setGuestJoined(true);
         }
         // Remote control messages
         if(msg?.type === 'control' && controlsRef.current){
@@ -143,12 +150,24 @@ export default function SnakeLivePage(){
     es.onerror = ()=>{};
     esRef.current = es;
 
+    // Zusätzlich: WebSocket-Kanal nutzen, falls verfügbar (Edge runtime)
+    try{
+      const role = mode==='host' ? 'host' : 'guest';
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/api/live/ws?room=${encodeURIComponent(room.id)}&role=${role}`);
+      ws.onmessage = (ev)=>{ try{ onMsg(ev.data); }catch{} };
+      ws.onerror = ()=>{};
+  ws.onopen = ()=>{ if(!ws) return; wsRef.current = ws; if(mode==='host' && room?.id){ try{ ws.send(JSON.stringify({ type:'hello', room:{ id: room.id, name: room.name, exerciseId: selectedId } })); }catch{} } };
+      ws.onclose = ()=>{ try{ if(wsRef.current===ws) wsRef.current = null; }catch{} };
+    }catch{}
+
     return ()=>{
       try{ esRef.current?.close(); }catch{}
       esRef.current = null;
+      try{ ws?.close(); }catch{}
   setPendingJoinId(null);
     };
-  },[room?.id, mode]);
+  },[room?.id, mode, selectedId]);
 
   // Wire game state outbound from host only (authoritative)
   const handleExpose = useCallback((api: { setDirA:(d:'up'|'down'|'left'|'right')=>void; setDirB:(d:'up'|'down'|'left'|'right')=>void; setRunning:(v:boolean)=>void; restartRound:()=>void; })=>{

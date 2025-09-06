@@ -39,6 +39,10 @@ export default function FussballLivePage(){
   const [scores, setScores] = useState<{left:number; right:number}>({ left: 0, right: 0 });
   const [goals, setGoals] = useState<{left:number; right:number}>({ left: 0, right: 0 });
   const [turn, setTurn] = useState<'left'|'right'>('left');
+  const [durationSec, setDurationSec] = useState<number|undefined>(undefined);
+  const [startedAt, setStartedAt] = useState<number|undefined>(undefined);
+  const [endsAt, setEndsAt] = useState<number|undefined>(undefined);
+  const [status, setStatus] = useState<'waiting'|'active'|'finished'|'aborted'>('active');
   const [mySide, setMySide] = useState<'left'|'right'|null>(null);
   const [current,setCurrent] = useState<MCQuestion|undefined>();
   const [locked,setLocked] = useState(false);
@@ -124,7 +128,10 @@ export default function FussballLivePage(){
     try{
       const r = await fetch(`/api/fussball/lobbies/${encodeURIComponent(id)}/answer`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ correct: isCorrect }) });
       const j = await r.json();
-      if(j?.success && j.state){ setScores(j.state.scores); setGoals(j.state.goals); setFieldIdx(j.state.fieldIdx); setTurn(j.state.turn); }
+      if(j?.success && j.state){
+        setScores(j.state.scores); setGoals(j.state.goals); setFieldIdx(j.state.fieldIdx); setTurn(j.state.turn);
+        setDurationSec(j.state.durationSec); setStartedAt(j.state.startedAt||undefined); setEndsAt(j.state.endsAt||undefined); setStatus(j.state.status||'active');
+      }
     } finally {
       setHistory(h=>[...h,{ id: current.id, correct: isCorrect }]);
       setTimeout(()=>{
@@ -170,6 +177,14 @@ export default function FussballLivePage(){
     return ()=>{ alive=false; if(t) clearTimeout(t); };
   },[id]);
 
+  // Countdown berechnen
+  const remainingMs = useMemo(()=>{
+    if(!endsAt) return null; return Math.max(0, endsAt - Date.now());
+  },[endsAt, goals.left, goals.right, scores.left, scores.right, fieldIdx, turn]);
+  useEffect(()=>{
+    if(!endsAt) return; const t = setInterval(()=>{ /* state update trigger */ setFieldIdx(f=>f); }, 1000); return ()=> clearInterval(t);
+  },[endsAt]);
+
   return (
     <main className="max-w-6xl mx-auto p-4 md:p-6">
       <header className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
@@ -194,6 +209,11 @@ export default function FussballLivePage(){
               </div>
             </div>
             <div className="hidden md:flex items-center gap-3">
+              {remainingMs!==null && (
+                <span className="px-2 py-0.5 rounded bg-gray-50 border text-xs">
+                  Zeit: {Math.floor((remainingMs||0)/60000)}:{String(Math.floor(((remainingMs||0)%60000)/1000)).padStart(2,'0')}
+                </span>
+              )}
               {mySide && (
                 <span className={"px-2 py-0.5 rounded text-xs font-semibold border " + (mySide==='left' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200')}>
                   Du bist Team {mySide==='left' ? 'ROT' : 'BLAU'}{turn===mySide ? ' • Du bist am Zug' : ''}

@@ -5,6 +5,9 @@ import FussballLobbyModel, { IFussballLobby } from '@/models/FussballLobby';
 interface LobbyRecord extends FussballLobbyConfig {
   id: string;
   lastActivity: number;
+  durationSec: number;
+  startedAt?: number;
+  endsAt?: number;
   scores?: { left:number; right:number };
   goals?: { left:number; right:number };
   fieldIdx?: number;
@@ -17,7 +20,7 @@ try { if(!process.env.MONGODB_URI) useDb = false; } catch { useDb = false; }
 
 function genId(){ return Math.random().toString(36).slice(2,10); }
 
-export async function createLobby(hostUserId: string, username: string, title: string, lessonId?: string){
+export async function createLobby(hostUserId: string, username: string, title: string, lessonId?: string, durationSec?: number){
   const id = genId();
   const rec: LobbyRecord = {
     id,
@@ -29,6 +32,7 @@ export async function createLobby(hostUserId: string, username: string, title: s
   // Host ist automatisch bereit
   players: [ { userId: hostUserId, username, joinedAt: Date.now(), side: 'left', ready: true, score:0 } ],
   lastActivity: Date.now(),
+  durationSec: Math.max(60, Math.min(60*60, Number.isFinite(durationSec as any) ? Math.floor(durationSec as number) : 300)),
   scores: { left:0, right:0 },
   goals: { left:0, right:0 },
   fieldIdx: 3,
@@ -63,9 +67,11 @@ export async function joinLobby(id: string, userId: string, username: string){
   // Start ohne Ready-Mechanik: sobald zwei Spieler vorhanden sind
   if(lobby.players.length === 2){
     lobby.status = 'active';
+    lobby.startedAt = Date.now();
+    lobby.endsAt = lobby.startedAt + (lobby.durationSec*1000);
   }
   if(useDb){
-  try { await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { players: lobby.players, lastActivity: lobby.lastActivity, status: lobby.status } }); } catch { /* ignore */ }
+  try { await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { players: lobby.players, lastActivity: lobby.lastActivity, status: lobby.status, startedAt: lobby.startedAt, endsAt: lobby.endsAt } }); } catch { /* ignore */ }
   } else {
     lobbies.set(id, lobby);
   }
@@ -127,7 +133,12 @@ export async function getState(id: string){
   const goals = lobby.goals || { left:0, right:0 };
   const fieldIdx = typeof lobby.fieldIdx==='number'? lobby.fieldIdx : 3;
   const turn = lobby.turn || 'left';
-  return { state: { scores, goals, fieldIdx, turn } } as const;
+  // Timeout prüfen
+  if(lobby.status==='active' && lobby.endsAt && Date.now() >= lobby.endsAt){
+    lobby.status = 'finished';
+    if(useDb){ try{ await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { status: lobby.status } }); } catch{} } else { lobbies.set(id, lobby); }
+  }
+  return { state: { scores, goals, fieldIdx, turn, durationSec: lobby.durationSec, startedAt: lobby.startedAt||null, endsAt: lobby.endsAt||null, status: lobby.status } } as const;
 }
 
 export async function applyAnswer(id: string, isCorrect: boolean, answeredBy: 'left'|'right'){

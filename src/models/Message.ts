@@ -26,6 +26,7 @@ const MessageSchema = new Schema<IMessage>({
   readBy: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
   hiddenFor: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
   purgedFor: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
+  // Kein index:true hier; ein expliziter Sortierindex wird unten gesetzt
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
