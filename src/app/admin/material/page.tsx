@@ -414,17 +414,17 @@ export default function AdminMaterialPage(){
             const currentImg = count? previews[idx] : undefined;
             return (
               <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
-                <div className="relative bg-gray-50 aspect-[4/3] overflow-hidden w-full">
+                <div className="relative bg-white aspect-[210/297] overflow-hidden w-full">
                   {currentImg ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={currentImg} alt={p.title} className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={currentImg} alt={p.title} className="absolute inset-0 w-full h-full object-contain" />
                   ) : (
                     <div className="text-[11px] text-gray-400">Keine Vorschau</div>
                   )}
                   {count>1 && (
                     <>
-                      <button onClick={()=>setActive(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200">‹</button>
-                      <button onClick={()=>setActive(1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200">›</button>
+                      <button onClick={()=>setActive(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200 z-10">‹</button>
+                      <button onClick={()=>setActive(1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200 z-10">›</button>
                       <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
                         {previews.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
                       </div>

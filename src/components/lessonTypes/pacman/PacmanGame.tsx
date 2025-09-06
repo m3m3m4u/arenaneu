@@ -37,6 +37,7 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   const [score,setScore]=useState(0); const [lives,setLives]=useState(MAX_LIVES);
   const [paused,setPaused]=useState(false); const [gameOver,setGameOver]=useState(false); const [finished,setFinished]=useState(false);
   const [isFullscreen,setIsFullscreen]=useState(false); const [gamePixelWidth,setGamePixelWidth]=useState<number>();
+  const [boardSource,setBoardSource]=useState<string>('');
   // Vereinheitlichter starker Fullscreen Swipe Schutz
   useFullscreenTouchLock(isFullscreen);
 
@@ -71,14 +72,18 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
       for(let c=0;c<colsRef.current;c++){
         const rawCell = (row[c]??'');
         let raw = String(rawCell).trim();
-        let ch = raw.toUpperCase();
-        // Aliase und Sonderfälle
-        if(ch==='G'){ ghostSpawnPointsRef.current.push({x:c,y:r}); ch='0'; }
-        else if(ch==='S'){ controlAnchorRef.current = controlAnchorRef.current || {tx:c,ty:r}; ch='0'; }
-  else if(ch==='') ch='1'; // leere Zelle als Wand interpretieren (CSV-Form strikt halten)
-        else if(ch==='.' || ch==='E' || ch==='O' || ch==='_') ch='0'; // Wege-Aliase
-        else if(ch==='#' || ch==='X' || ch==='W') ch='1'; // Wand-Aliase
-        else if(!['A','B','C','D','0','1'].includes(ch)) ch='1'; // Unbekannt -> Wand, um Ausreißer zu vermeiden
+  let ch = raw.toUpperCase();
+  // Aliase und Sonderfälle
+  if(ch==='G'){ ghostSpawnPointsRef.current.push({x:c,y:r}); ch='0'; }
+  else if(ch==='S'){ controlAnchorRef.current = controlAnchorRef.current || {tx:c,ty:r}; ch='0'; }
+  else if(ch==='' || /^\s+$/.test(raw)) ch='0'; // leere/Whitespace Zelle => Weg
+  else if(ch==='.' || ch==='E' || ch==='O' || ch==='_') ch='0'; // Wege-Aliase
+  else if(ch==='#' || ch==='X' || ch==='W') ch='1'; // Wand-Aliase
+  else if(ch==='1') ch='1'; // explizite Wand
+  else if(ch==='0') ch='0'; // expliziter Weg
+  else if(/^[2-9]$/.test(ch)) ch='0'; // numerische Werte !=1 als Weg behandeln
+  else if(['A','B','C','D'].includes(ch)) ch=ch; // Räume
+  else ch='0'; // Unbekanntes als Weg interpretieren
         line+=ch;
       }
       out.push(line);
@@ -87,11 +92,11 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   };
 
   const initMaze=useCallback(async ()=>{
-    const content=(lesson as any)?.content||{};
-  const url: string | undefined = content.pacmanBoardXlsxUrl || content.pacmanBoardUrl || content.boardXlsxUrl || content.pacmanBoardCsvUrl || content.boardCsvUrl || '/pacman/maze_template.csv';
+    // Erzwinge die Verwendung der öffentlichen Template-CSV
+    const url: string = '/pacman/maze_template.csv';
     if(url){
       try{
-        const res=await fetch(url);
+  const res=await fetch(url, { cache: 'no-store' });
         if(!res.ok) throw new Error('HTTP '+res.status);
         const lower=url.toLowerCase();
         if(lower.endsWith('.xlsx') || lower.endsWith('.xls')){
@@ -100,19 +105,22 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
           const wb=XLSX.read(buf,{type:'array'});
           const sheet=wb.Sheets[wb.SheetNames[0]];
           const arr:any[][]=XLSX.utils.sheet_to_json(sheet,{header:1, blankrows:false});
-          const lines=arr.map(r=> r.map(v=> (v==null?'':String(v))).join(';'));
+    const lines=arr.map(r=> r.map(v=> (v==null?'':String(v))).join(';')).map(l=> l.replace(/^\uFEFF/,''));
           parseLinesToMaze(lines);
+    try{ setBoardSource(url); }catch{}
         } else {
           const text=await res.text();
-          const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+    const lines=text.split(/\r?\n/).map(l=> l.replace(/^\uFEFF/,''));
           parseLinesToMaze(lines);
+    try{ setBoardSource(url); }catch{}
         }
         return;
       }catch(e){ console.warn('[Pacman] Board aus Datei laden fehlgeschlagen – nutze eingebettetes Layout.', e); }
     }
   // Fallback: eingebettet
-  const lines=embeddedCSV.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+  const lines=embeddedCSV.split(/\r?\n/);
   parseLinesToMaze(lines);
+  try{ setBoardSource('embedded'); }catch{}
   },[lesson]);
 
   const initQuestionPool=()=>{ questionPoolRef.current=blocks.map((_,i)=>({idx:i,weight:10})); questionStatsRef.current=blocks.map(()=>({correct:0,wrong:0,shown:0})); historyRef.current=[]; };
@@ -417,6 +425,6 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   {paused && !gameOver && !finished && (<div className="absolute inset-0 flex items-center justify-center bg-black/45 text-white text-4xl font-bold">PAUSE</div>)}
   </div>
     </div>
-    <div ref={bottomInfoRef} className="text-[0.6rem] opacity-60 text-center text-white mt-1 pb-1">Steuerung: Pfeile bewegen • Pause: P/Space • Räume mit korrekter Antwort finden!</div>
+  <div ref={bottomInfoRef} className="text-[0.6rem] opacity-60 text-center text-white mt-1 pb-1">Steuerung: Pfeile bewegen • Pause: P/Space • Räume mit korrekter Antwort finden!{boardSource? ` • Board: ${boardSource}`:''}</div>
   </div>);
 }

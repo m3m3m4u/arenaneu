@@ -138,10 +138,19 @@ export async function applyAnswer(id: string, isCorrect: boolean, answeredBy: 'l
   const target: 'left'|'right' = isCorrect ? answeredBy : (answeredBy==='left' ? 'right' : 'left');
   const scores = { left: lobby.scores?.left||0, right: lobby.scores?.right||0 };
   scores[target] += 1;
-  // Bildindex nach 3-Punkte-Vorsprung verschieben, Tor bei 1/7
-  const STEP = 3; const LEFT_GOAL_INDEX = 0; const RIGHT_GOAL_INDEX = 6; const NEUTRAL_INDEX = 3;
-  const rawLead = scores.left - scores.right;
-  const steps = Math.min(3, Math.floor(Math.abs(rawLead) / STEP));
+  // Bildindex nach Vorsprung verschieben; dynamische Schwelle bei Rückstand:
+  // Normal: 3 Punkte pro Schritt. Bei 2 Toren Rückstand: 2 Punkte pro Schritt. Bei 4 Toren Rückstand: 1 Punkt pro Schritt.
+  const LEFT_GOAL_INDEX = 0; const RIGHT_GOAL_INDEX = 6; const NEUTRAL_INDEX = 3;
+  const rawLead = scores.left - scores.right; // >0 Vorteil links, <0 Vorteil rechts
+  const goalDiff = (lobby.goals?.left||0) - (lobby.goals?.right||0);
+  const trailingSide: 'left'|'right'|null = goalDiff>0? 'right' : (goalDiff<0? 'left' : null);
+  let stepThreshold = 3;
+  if(trailingSide){
+    const deficit = Math.abs(goalDiff);
+    if(deficit >= 4) stepThreshold = 1;
+    else if(deficit >= 2) stepThreshold = 2;
+  }
+  const steps = Math.min(3, Math.floor(Math.abs(rawLead) / stepThreshold));
   let desiredIdx = NEUTRAL_INDEX;
   if(rawLead > 0) desiredIdx = Math.max(LEFT_GOAL_INDEX, NEUTRAL_INDEX - steps);
   else if(rawLead < 0) desiredIdx = Math.min(RIGHT_GOAL_INDEX, NEUTRAL_INDEX + steps);

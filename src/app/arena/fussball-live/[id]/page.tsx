@@ -189,7 +189,7 @@ export default function FussballLivePage(){
             <div className="text-sm font-semibold text-gray-600 mb-2">Frage</div>
             {current ? (
               <>
-                <div className="text-base md:text-lg font-medium mb-4">{current.text}</div>
+                <div className="text-xl md:text-2xl font-medium mb-4">{current.text}</div>
         <div className="flex flex-col gap-3">
                   {current.options.map((opt,i)=>{
                     const picked = answerState.picked===i;
@@ -323,7 +323,7 @@ function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals,
                   <div className="text-[11px] md:text-sm opacity-90 mb-1">Frage</div>
                   {current ? (
                     <>
-                      <div className="text-sm md:text-base font-medium mb-3">{current.text}</div>
+                      <div className="text-base md:text-2xl font-medium mb-3">{current.text}</div>
             <div className="flex flex-col gap-3">
                         {current.options.map((opt,i)=>{
                           const picked = answerState.picked===i;
