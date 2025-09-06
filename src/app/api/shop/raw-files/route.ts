@@ -60,18 +60,71 @@ export async function GET(req: Request){
       if(!Number.isNaN(day) && day>=1 && day<=31){ exprConds.push({ $eq: [ { $dayOfMonth: '$createdAt' }, day ] }); }
       if(exprConds.length){ (filter.$and = filter.$and||[]).push({ $expr: { $and: exprConds } }); }
     }
+    // Zugeordnet-Logik: ermittele verwendete Keys/Namen aus Produkten
+    const assignedParam = (url.searchParams.get('assigned')||'').trim().toLowerCase();
+    const prodFiles = await ShopProduct.find({}, { 'files.name':1, 'files.key':1 }).lean();
+    const usedNames = new Set<string>();
+    const usedKeys = new Set<string>();
+    const pdfBases = new Set<string>();
+    for(const p of prodFiles as any[]){
+      const files = Array.isArray(p?.files)? p.files: [];
+      for(const f of files){
+        if(f?.name) usedNames.add(String(f.name));
+        if(f?.key) usedKeys.add(String(f.key));
+        const nm = String(f?.name||'');
+        if(/\.pdf$/i.test(nm)){
+          const base = nm.replace(/\.pdf$/i,'');
+          if(base) pdfBases.add(base);
+        }
+      }
+    }
+    if(assignedParam==='1' || assignedParam==='true'){
+      const namesArr = Array.from(usedNames); const keysArr = Array.from(usedKeys);
+      const or:any[] = [];
+      if(namesArr.length) or.push({ name: { $in: namesArr } });
+      if(keysArr.length) or.push({ key: { $in: keysArr } });
+      // related: Dateien deren Name zu einem bekannten PDF-Basisnamen passt: ^base-\d+\.(png|jpe?g|webp)$
+      const bases = Array.from(pdfBases).slice(0,200);
+      if(bases.length){
+        const rxList = bases.map(b=> new RegExp('^'+b.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(?:\\d+)\\.(?:png|jpe?g|webp)$','i'));
+        or.push({ $or: rxList.map(rx=> ({ name: { $regex: rx } })) });
+      }
+      filter.$and = (filter.$and||[]).concat(or.length? [{ $or: or }]: [{ _id: { $exists:false } }]);
+    } else if(assignedParam==='0' || assignedParam==='false'){
+      const namesArr = Array.from(usedNames); const keysArr = Array.from(usedKeys);
+      const andConds:any[] = [];
+      if(namesArr.length) andConds.push({ name: { $nin: namesArr } });
+      if(keysArr.length) andConds.push({ key: { $nin: keysArr } });
+      const bases = Array.from(pdfBases).slice(0,200);
+      if(bases.length){
+        const rxList = bases.map(b=> new RegExp('^'+b.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(?:\\d+)\\.(?:png|jpe?g|webp)$','i'));
+        filter.$and = (filter.$and||[]).concat([{ $nor: rxList.map(rx=> ({ name: { $regex: rx } })) }]);
+      }
+      if(andConds.length) filter.$and = (filter.$and||[]).concat(andConds);
+    }
+
     const total=await ShopRawFile.countDocuments(filter);
     const items=await ShopRawFile.find(filter).sort({ createdAt:-1 }).skip((page-1)*limit).limit(limit).lean();
     const useShop=isShopWebdavEnabled(); const anyWebdav=useShop || isWebdavEnabled();
-    const out=items.map(it=>({
+    const out=items.map(it=>{
+      const nameStr=String(it.name||'');
+      const keyStr=String(it.key||'');
+      const assigned = usedNames.has(nameStr) || usedKeys.has(keyStr);
+      // related: PNG/JPG/WEBP mit Suffix -<num>.* deren Basis einem Produkt-PDF entspricht
+      let related=false;
+      const m = nameStr.match(/^(.*?)-(\d+)\.(png|jpe?g|webp)$/i);
+      if(m){ const base=m[1]; if(pdfBases.has(base)) related=true; }
+      return {
       id:String(it._id),
       name:it.name,
       key:it.key,
       size:it.size,
       contentType:it.contentType,
       createdAt:it.createdAt,
-      url: anyWebdav ? (useShop ? shopWebdavPublicUrl(it.key) : webdavPublicUrl(it.key)) : s3PublicUrl(it.key)
-    }));
+      url: anyWebdav ? (useShop ? shopWebdavPublicUrl(it.key) : webdavPublicUrl(it.key)) : s3PublicUrl(it.key),
+      assigned,
+      related
+    };});
     return NextResponse.json({ success:true, items: out, total, page, pageSize: limit });
   } catch(e){
     console.error('raw-files GET error', e);

@@ -3,7 +3,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { CATEGORIES } from '@/lib/categories';
 
 interface Product { _id:string; title:string; description?:string; category?:string; isPublished:boolean; files?: any[]; price?:number; }
-interface RawFile { id:string; name:string; key:string; size:number; url:string; createdAt:string; contentType?:string; }
+interface RawFile { id:string; name:string; key:string; size:number; url:string; createdAt:string; contentType?:string; assigned?:boolean; related?:boolean; }
 interface ExcelPreviewMaterial { title:string; category?:string; description?:string; price:number; files:string[]; normalizedCategory?:string; }
 
 // Neuer Admin Bereich: Produkte aus Raw-Dateien erstellen, Raw-Datei Bibliothek & Excel Import Preview
@@ -31,6 +31,7 @@ export default function AdminMaterialPage(){
   const [rawSearch, setRawSearch] = useState('');
   const [rawUploading, setRawUploading] = useState(false);
   const [rawFormat, setRawFormat] = useState('');
+  const [rawAssigned, setRawAssigned] = useState(''); // '', '1', '0'
   const [rawYear, setRawYear] = useState('');
   const [rawMonth, setRawMonth] = useState('');
   const [rawDay, setRawDay] = useState('');
@@ -60,6 +61,7 @@ export default function AdminMaterialPage(){
       qs.set('limit', String(rawPageSize));
       if(rawSearch) qs.set('q', rawSearch);
       if(rawFormat) qs.set('format', rawFormat);
+      if(rawAssigned) qs.set('assigned', rawAssigned);
       if(rawYear) qs.set('year', rawYear);
       if(rawMonth) qs.set('month', rawMonth);
       if(rawDay) qs.set('day', rawDay);
@@ -72,7 +74,7 @@ export default function AdminMaterialPage(){
         if(typeof d.pageSize === 'number' && d.pageSize>0) setRawPageSize(d.pageSize);
       }
     } catch{/*ignore*/}
-  },[rawSearch, rawFormat, rawYear, rawMonth, rawDay, rawPageSize]);
+  },[rawSearch, rawFormat, rawAssigned, rawYear, rawMonth, rawDay, rawPageSize]);
 
   async function load(){
     setLoading(true); setError(null);
@@ -296,6 +298,11 @@ export default function AdminMaterialPage(){
               <option value="zip">ZIP</option>
               <option value="docx">DOCX</option>
             </select>
+            <select value={rawAssigned} onChange={e=>setRawAssigned(e.target.value)} className="border rounded px-2 py-1">
+              <option value="">Zuordnung: alle</option>
+              <option value="1">Nur zugeordnete</option>
+              <option value="0">Nur nicht zugeordnete</option>
+            </select>
             <input value={rawYear} onChange={e=>setRawYear(e.target.value)} placeholder="Jahr" className="border rounded px-2 py-1 w-20" />
             <input value={rawMonth} onChange={e=>setRawMonth(e.target.value)} placeholder="Monat" className="border rounded px-2 py-1 w-20" />
             <input value={rawDay} onChange={e=>setRawDay(e.target.value)} placeholder="Tag" className="border rounded px-2 py-1 w-20" />
@@ -329,12 +336,13 @@ export default function AdminMaterialPage(){
           {rawFiles.map(f=>{
             const sel = selectedRawIds.includes(f.id);
             const usedByProduct = products.some(p=> (p.files||[]).some(file=> file.key===f.key || file.name===f.name));
-            const leftColor = usedByProduct? 'border-emerald-500':'border-red-500';
-            const nameColor = usedByProduct? 'text-emerald-700':'text-red-700';
+            const assigned = f.assigned || usedByProduct;
+            const highlightGreen = assigned || (!!f.related && /\.(png)$/i.test(f.name));
+            const leftColor = highlightGreen? 'border-emerald-500':'border-gray-300';
+            const nameColor = highlightGreen? 'text-emerald-700':'text-gray-800';
             const handleDownload = ()=>{ try{ const a=document.createElement('a'); a.href=f.url; a.download=f.name||'download'; a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch { window.open(f.url,'_blank'); } };
             return (
-              <div key={f.id}
-                   className={`flex items-center gap-3 p-2 border-l-4 ${leftColor}`}>
+              <div key={f.id} className={`flex items-center gap-3 p-2 border-l-4 ${leftColor}`}>
                 {/* Auswahl für Sammellöschen */}
                 <input type="checkbox" checked={sel} onChange={(e)=>{ e.stopPropagation(); toggleRaw(f.id); }} className="shrink-0" />
                 <div className="flex-1 flex items-center gap-4 min-w-0">
@@ -346,6 +354,7 @@ export default function AdminMaterialPage(){
                   >{f.name}</button>
                   <span className="text-gray-500 shrink-0">{Math.round(f.size/1024)} KB</span>
                   <span className="text-gray-400 shrink-0">{new Date(f.createdAt).toLocaleDateString()}</span>
+                  {highlightGreen && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">zugeordnet</span>}
                 </div>
                 {/* Einzel-Löschen (falls nicht in Produkt) */}
                 <button
