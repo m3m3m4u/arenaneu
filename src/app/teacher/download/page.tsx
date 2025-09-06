@@ -1,10 +1,13 @@
 "use client";
 import { useEffect, useState, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface ProductFile { key:string; name:string; downloadUrl?:string; contentType?:string; previewImages?:string[]; }
 interface Product { _id:string; title:string; description?:string; price?:number; files?:ProductFile[]; category?:string; }
 
 export default function TeacherDownloadShop(){
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [items,setItems] = useState<Product[]>([]);
   const [subjects,setSubjects] = useState<string[]>([]);
   const [activeSubject,setActiveSubject] = useState<string>('');
@@ -126,6 +129,27 @@ export default function TeacherDownloadShop(){
   }
   useEffect(()=>{ void load(); },[activeSubject]);
 
+  // Initiale Übernahme des URL-Parameters ?subject in den lokalen Zustand
+  useEffect(()=>{
+    try {
+      const initial = (searchParams?.get('subject')||'').trim();
+      if(initial) setActiveSubject(initial);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  // Hilfsfunktion: Subjekt setzen und URL aktualisieren (ohne Scroll/Neuaufbau)
+  function applySubject(subj: string){
+    setActiveSubject(subj);
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if(subj) sp.set('subject', subj); else sp.delete('subject');
+      const qs = sp.toString();
+      const path = window.location.pathname + (qs? ('?'+qs):'');
+      router.replace(path, { scroll: false });
+    } catch {}
+  }
+
   const isPdf = (f:ProductFile)=> /\.pdf$/i.test(f.name);
   const isImage = (f:ProductFile)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name);
   function getPreviewImages(p: Product): { images: string[]; pdf?: ProductFile }{
@@ -188,9 +212,9 @@ export default function TeacherDownloadShop(){
     <main className="max-w-6xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Material-Downloads</h1>
       <div className="flex flex-wrap gap-2 mb-6 text-sm">
-        <button onClick={()=>setActiveSubject('')} className={`px-3 py-1 rounded border ${!activeSubject?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>Alle Fächer</button>
+        <button onClick={()=>applySubject('')} className={`px-3 py-1 rounded border ${!activeSubject?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>Alle Fächer</button>
         {subjects.map(s=> (
-          <button key={s} onClick={()=>setActiveSubject(s)} className={`px-3 py-1 rounded border ${activeSubject===s?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>{s}</button>
+          <button key={s} onClick={()=>applySubject(s)} className={`px-3 py-1 rounded border ${activeSubject===s?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>{s}</button>
         ))}
       </div>
       {loading && <div className="text-sm text-gray-500">Lade…</div>}
