@@ -8,8 +8,8 @@ import { buildQuestionBlocks } from '../plane/questions';
 
 interface Props { lesson: Lesson; courseId: string; completedLessons: string[]; setCompletedLessons: (v: string[] | ((p:string[])=>string[]))=>void; }
 
-// Grundabmessungen wie Vorlage
-const COLS=21; const ROWS=20; const tileSize=40; const MAX_LIVES=3; const DEFAULT_TARGET_SCORE=12;
+// Grundabmessungen (Default; werden durch Datei überschrieben)
+const DEFAULT_COLS=21; const DEFAULT_ROWS=20; const tileSize=40; const MAX_LIVES=3; const DEFAULT_TARGET_SCORE=12;
 // Ansatz v3: Kontinuierliche langsame Bewegung (Sekunden pro Tile) ohne künstliche Stopps.
 // Einfach anpassbar über PLAYER_TILE_TIME, GHOST_TILE_TIMES und optional speedFactor UI.
 // 12.08: +50% Speed => Zeiten * 2/3 (~0.666)
@@ -46,21 +46,70 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   const questionStatsRef=useRef<{correct:number;wrong:number;shown:number}[]>([]); // Statistik je Frage
   const historyRef=useRef<number[]>([]); // Verlauf zur Verteilungssteuerung
   const answerZonesRef=useRef<AnswerZone[]>([]);
-  const playerRef=useRef({tileX:10,tileY:Math.floor(ROWS/2),x:0,y:0,r:14,dir:{x:0,y:-1},nextDir:{x:0,y:-1},progress:0,tileTime:PLAYER_TILE_TIME,canTurn:true});
+  const playerRef=useRef({tileX:0,tileY:0,x:0,y:0,r:14,dir:{x:0,y:-1},nextDir:{x:0,y:-1},progress:0,tileTime:PLAYER_TILE_TIME,canTurn:true});
   const [speedFactor,setSpeedFactor]=useState(1); const speedFactorRef=useRef(1); useEffect(()=>{ speedFactorRef.current=speedFactor; },[speedFactor]);
   const ghostsRef=useRef<Ghost[]>([]); const ghostSpawnPointsRef=useRef<{x:number;y:number}[]>([]);
+  // Dynamische Board-Größe und Steuerungs-Anker aus Datei
+  const colsRef=useRef<number>(DEFAULT_COLS); const rowsRef=useRef<number>(DEFAULT_ROWS);
+  const controlAnchorRef=useRef<{tx:number;ty:number}|null>(null);
   const correctFlashRef=useRef<{x:number;y:number;w:number;h:number;start:number;duration:number}|null>(null);
   const showCorrectUntilRef=useRef(0); const lastCorrectRoomIndexRef=useRef<number|null>(null);
   const answerCooldownRef=useRef(false); const requireExitBeforeAnswerRef=useRef(false);
 
   const mazeRef=useRef<string[]>([]);
 
-  // Maze parsen
-  const initMaze=useCallback(()=>{
-    const lines=embeddedCSV.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
-    ghostSpawnPointsRef.current=[];
-    mazeRef.current=lines.map((line,rowIdx)=> line.split(/;|,/).map(c=>c.trim()).filter(c=>c.length).map((ch,colIdx)=>{ if(ch==='G'){ ghostSpawnPointsRef.current.push({x:colIdx,y:rowIdx}); return '0'; } if('ABCD01'.includes(ch)) return ch; return '1'; }).join(''));
-  },[]);
+  // Laden aus XLSX/CSV mit dynamischen Abmessungen und 'S' (Steuerungs-Anker). Fallback: eingebettetes CSV.
+  const parseLinesToMaze=(lines:string[])=>{
+    ghostSpawnPointsRef.current=[]; controlAnchorRef.current=null;
+    // Trim, split by ; or ,
+  const rows=lines.map(l=> l.split(/[;,\t]/).map(c=>c.trim()).filter(c=>c.length));
+    const rCount=rows.length; const cCount=Math.max(0, ...rows.map(r=>r.length));
+    rowsRef.current=rCount||DEFAULT_ROWS; colsRef.current=cCount||DEFAULT_COLS;
+    const out:string[]=[];
+    for(let r=0;r<rowsRef.current;r++){
+      const row=rows[r]||[]; let line='';
+      for(let c=0;c<colsRef.current;c++){
+        const raw = (row[c]||'').toUpperCase();
+        let ch = raw;
+        if(ch==='G'){ ghostSpawnPointsRef.current.push({x:c,y:r}); ch='0'; }
+  else if(ch==='S'){ controlAnchorRef.current = controlAnchorRef.current || {tx:c,ty:r}; ch='1'; }
+        else if(ch==='.') ch='0';
+        else if(!['A','B','C','D','0','1'].includes(ch)) ch='1';
+        line+=ch;
+      }
+      out.push(line);
+    }
+    mazeRef.current=out;
+  };
+
+  const initMaze=useCallback(async ()=>{
+    const content=(lesson as any)?.content||{};
+  const url: string | undefined = content.pacmanBoardXlsxUrl || content.pacmanBoardUrl || content.boardXlsxUrl || content.pacmanBoardCsvUrl || content.boardCsvUrl || '/pacman/maze_template.csv';
+    if(url){
+      try{
+        const res=await fetch(url);
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const lower=url.toLowerCase();
+        if(lower.endsWith('.xlsx') || lower.endsWith('.xls')){
+          const buf=await res.arrayBuffer();
+          const XLSX = await import('xlsx');
+          const wb=XLSX.read(buf,{type:'array'});
+          const sheet=wb.Sheets[wb.SheetNames[0]];
+          const arr:any[][]=XLSX.utils.sheet_to_json(sheet,{header:1, blankrows:false});
+          const lines=arr.map(r=> r.map(v=> (v==null?'':String(v))).join(';'));
+          parseLinesToMaze(lines);
+        } else {
+          const text=await res.text();
+          const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+          parseLinesToMaze(lines);
+        }
+        return;
+      }catch(e){ console.warn('[Pacman] Board aus Datei laden fehlgeschlagen – nutze eingebettetes Layout.', e); }
+    }
+  // Fallback: eingebettet
+  const lines=embeddedCSV.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+  parseLinesToMaze(lines);
+  },[lesson]);
 
   const initQuestionPool=()=>{ questionPoolRef.current=blocks.map((_,i)=>({idx:i,weight:10})); questionStatsRef.current=blocks.map(()=>({correct:0,wrong:0,shown:0})); historyRef.current=[]; };
   const normalizeWeights=()=>{ const BASE=10; questionPoolRef.current.forEach(q=>{ // sanft Richtung Basis ziehen
@@ -79,9 +128,9 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   const onWrong=(idx:number)=>{ const e=questionPoolRef.current.find(q=>q.idx===idx); if(e){ e.weight=Math.min(e.weight*1.35+2,80); } const s=questionStatsRef.current[idx]; if(s){ s.wrong++; }
   };
 
-  const detectRooms=()=>{ const letters=['A','B','C','D']; const info:any={}; letters.forEach(l=>info[l]={minX:Infinity,maxX:-1,minY:Infinity,maxY:-1}); const maze=mazeRef.current; for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){ const ch=maze[r][c]; if(info[ch]){const o=info[ch]; o.minX=Math.min(o.minX,c);o.maxX=Math.max(o.maxX,c);o.minY=Math.min(o.minY,r);o.maxY=Math.max(o.maxY,r);} } return letters.filter(l=>info[l].maxX>=0).map(l=>({letter:l,x:info[l].minX*tileSize,y:info[l].minY*tileSize,w:(info[l].maxX-info[l].minX+1)*tileSize,h:(info[l].maxY-info[l].minY+1)*tileSize})); };
+  const detectRooms=()=>{ const letters=['A','B','C','D']; const info:any={}; letters.forEach(l=>info[l]={minX:Infinity,maxX:-1,minY:Infinity,maxY:-1}); const maze=mazeRef.current; const ROWS=rowsRef.current, COLS=colsRef.current; for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){ const ch=maze[r][c]; if(info[ch]){const o=info[ch]; o.minX=Math.min(o.minX,c);o.maxX=Math.max(o.maxX,c);o.minY=Math.min(o.minY,r);o.maxY=Math.max(o.maxY,r);} } return letters.filter(l=>info[l].maxX>=0).map(l=>({letter:l,x:info[l].minX*tileSize,y:info[l].minY*tileSize,w:(info[l].maxX-info[l].minX+1)*tileSize,h:(info[l].maxY-info[l].minY+1)*tileSize})); };
 
-  const centerPlayer=()=>{ const p=playerRef.current; p.tileX=10; p.tileY=Math.floor(ROWS/2); p.progress=0; p.dir={x:0,y:-1}; p.nextDir={x:0,y:-1}; p.x=p.tileX*tileSize+tileSize/2; p.y=p.tileY*tileSize+tileSize/2; p.canTurn=true; };
+  const centerPlayer=()=>{ const COLS=colsRef.current, ROWS=rowsRef.current; const p=playerRef.current; p.tileX=Math.floor(COLS/2); p.tileY=Math.floor(ROWS/2); p.progress=0; p.dir={x:0,y:-1}; p.nextDir={x:0,y:-1}; p.x=p.tileX*tileSize+tileSize/2; p.y=p.tileY*tileSize+tileSize/2; p.canTurn=true; };
 
   const shuffle=<T,>(arr:T[])=>{ for(let i=arr.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; };
 
@@ -119,7 +168,7 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
     }
   };
 
-  const tileChar=(x:number,y:number)=>{ const maze=mazeRef.current; if(x<0||x>=COLS||y<0||y>=ROWS) return '1'; return maze[y][x]; };
+  const tileChar=(x:number,y:number)=>{ const maze=mazeRef.current; const COLS=colsRef.current, ROWS=rowsRef.current; if(x<0||x>=COLS||y<0||y>=ROWS) return '1'; return maze[y][x]; };
   const canEnter=(tx:number,ty:number)=> tileChar(tx,ty)!=='1';
   const ghostCanEnter=(tx:number,ty:number)=> tileChar(tx,ty)==='0';
   const ghostDirsAvailable=(tx:number,ty:number,forbid?:{x:number;y:number})=>{ const list=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]; return list.filter(d=>{ if(forbid && d.x===-forbid.x && d.y===-forbid.y) return false; return ghostCanEnter(tx+d.x,ty+d.y); }); };
@@ -163,7 +212,7 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   g.y=g.tileY*tileSize+half + g.dir.y*(rp*tileSize);
   };
 
-  const computeGhostSpawns=()=>{ const maze=mazeRef.current; const sp=ghostSpawnPointsRef.current.slice(0,4); if(sp.length) return sp; // fallback: freie 0 Felder suchen
+  const computeGhostSpawns=()=>{ const maze=mazeRef.current; const COLS=colsRef.current, ROWS=rowsRef.current; const sp=ghostSpawnPointsRef.current.slice(0,4); if(sp.length) return sp; // fallback: freie 0 Felder suchen
     const list: {x:number;y:number}[]=[]; for(let y=1;y<ROWS-1 && list.length<4;y++) for(let x=1;x<COLS-1 && list.length<4;x++) if(maze[y][x]==='0') list.push({x,y}); return list.slice(0,4); };
   const initGhosts=()=>{ const sp=computeGhostSpawns(); ghostsRef.current=sp.map((s,i)=>({tileX:s.x,tileY:s.y,x:s.x*tileSize+tileSize/2,y:s.y*tileSize+tileSize/2,r:12,dir:{x:0,y:1},progress:0,tileTime:GHOST_TILE_TIMES[i%GHOST_TILE_TIMES.length],color:ghostColors[i%ghostColors.length],type:i,straightCount:0})); };
   const resetGhosts=()=>{ const sp=computeGhostSpawns(); ghostsRef.current.forEach((g,i)=>{ const s=sp[i%sp.length]; g.tileX=s.x; g.tileY=s.y; g.x=s.x*tileSize+tileSize/2; g.y=s.y*tileSize+tileSize/2; g.progress=0; g.dir={x:0,y:1}; g.straightCount=0; }); };
@@ -240,7 +289,7 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   if(requireExitBeforeAnswerRef.current){ const letter=tileChar(p.tileX,p.tileY); const inside=answerZonesRef.current.some(z=> letter===z.letter ); if(!inside){ requireExitBeforeAnswerRef.current=false; } }
   ghostsRef.current.forEach(g=>moveGhost(g,dt)); checkGhostCollision(); };
 
-  const draw=()=>{ const canvas=canvasRef.current; if(!canvas) return; const ctx=canvas.getContext('2d'); if(!ctx) return; const maze=mazeRef.current; canvas.width=COLS*tileSize; canvas.height=ROWS*tileSize; ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,canvas.width,canvas.height); for(let r=0;r<ROWS;r++){ for(let c=0;c<COLS;c++){ const ch=maze[r][c]; if(ch==='1') continue; if(ch==='0'){ ctx.fillStyle='#1e1e1e'; ctx.fillRect(c*tileSize,r*tileSize,tileSize,tileSize); ctx.fillStyle='#303030'; ctx.beginPath(); ctx.arc(c*tileSize+tileSize/2,r*tileSize+tileSize/2,4,0,Math.PI*2); ctx.fill(); } else if(['A','B','C','D'].includes(ch)){ ctx.fillStyle='#242424'; ctx.fillRect(c*tileSize,r*tileSize,tileSize,tileSize); } } } for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(maze[r][c]==='1'){ ctx.fillStyle='#0b3d91'; ctx.fillRect(c*tileSize,r*tileSize,tileSize,tileSize); }
+  const draw=()=>{ const canvas=canvasRef.current; if(!canvas) return; const ctx=canvas.getContext('2d'); if(!ctx) return; const maze=mazeRef.current; const COLS=colsRef.current, ROWS=rowsRef.current; canvas.width=COLS*tileSize; canvas.height=ROWS*tileSize; ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,canvas.width,canvas.height); for(let r=0;r<ROWS;r++){ for(let c=0;c<COLS;c++){ const ch=maze[r][c]; if(ch==='1') continue; if(ch==='0'){ ctx.fillStyle='#1e1e1e'; ctx.fillRect(c*tileSize,r*tileSize,tileSize,tileSize); ctx.fillStyle='#303030'; ctx.beginPath(); ctx.arc(c*tileSize+tileSize/2,r*tileSize+tileSize/2,4,0,Math.PI*2); ctx.fill(); } else if(['A','B','C','D'].includes(ch)){ ctx.fillStyle='#242424'; ctx.fillRect(c*tileSize,r*tileSize,tileSize,tileSize); } } } for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(maze[r][c]==='1'){ ctx.fillStyle='#0b3d91'; ctx.fillRect(c*tileSize,r*tileSize,tileSize,tileSize); }
     // answer zones (ohne Raster – zusammenhängende Fläche + ein Rahmen)
     answerZonesRef.current.forEach(z=>{ if(!z.tileCoords.length) return; const minTx=Math.min(...z.tileCoords.map(t=>t.tx)); const maxTx=Math.max(...z.tileCoords.map(t=>t.tx)); const minTy=Math.min(...z.tileCoords.map(t=>t.ty)); const maxTy=Math.max(...z.tileCoords.map(t=>t.ty));
       // Fläche: einzelne Tiles füllen (ohne Stroke) für unregelmäßige Formen
@@ -257,7 +306,7 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
     ctx.font='10px monospace'; ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.fillText(`${DEBUG_VERSION} sf=${speedFactorRef.current.toFixed(2)}`,4,canvas.height-6);
   };
 
-  useEffect(()=>{ initMaze(); initGhosts(); if(!questionPoolRef.current.length) initQuestionPool(); loadQuestion(); centerPlayer(); let last=performance.now(); const loop=(ts:number)=>{ const dt=Math.min(0.05,(ts-last)/1000); last=ts; update(dt); draw(); requestAnimationFrame(loop); }; requestAnimationFrame(loop); },[]); // eslint-disable-line
+  useEffect(()=>{ let cancelled=false; (async()=>{ await initMaze(); if(cancelled) return; initGhosts(); if(!questionPoolRef.current.length) initQuestionPool(); loadQuestion(); centerPlayer(); let last=performance.now(); const loop=(ts:number)=>{ const dt=Math.min(0.05,(ts-last)/1000); last=ts; update(dt); draw(); if(!cancelled) requestAnimationFrame(loop); }; requestAnimationFrame(loop); })(); return ()=>{ cancelled=true; }; },[initMaze]); // eslint-disable-line
 
   // Vollbild
   const toggleFullscreen=async()=>{ const el=wrapperRef.current; if(!el) return; if(!document.fullscreenElement){
@@ -267,7 +316,7 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   useEffect(()=>{ const h=()=>setIsFullscreen(!!document.fullscreenElement); document.addEventListener('fullscreenchange',h); return ()=> document.removeEventListener('fullscreenchange',h); },[]);
 
   // Resize ähnlich SpaceImpact
-  useEffect(()=>{ function apply(){ const canvas=canvasRef.current; if(!canvas) return; const ratio=(COLS*tileSize)/(ROWS*tileSize); const vw=window.innerWidth; const vh=window.innerHeight; const hudH=hudRef.current? hudRef.current.getBoundingClientRect().height:0; const bottomH=bottomInfoRef.current? bottomInfoRef.current.getBoundingClientRect().height:0; const margin= isFullscreen? 8:16; const availH=Math.max(160,vh - hudH - bottomH - margin); let targetH=availH; let targetW=targetH*ratio; const containerW=wrapperRef.current? wrapperRef.current.getBoundingClientRect().width:vw; if(targetW>containerW){ targetW=containerW; targetH=targetW/ratio; } if(targetW<480){ targetW=480; targetH=targetW/ratio; } canvas.style.width=Math.round(targetW)+'px'; canvas.style.height=Math.round(targetH)+'px'; setGamePixelWidth(Math.round(targetW)); } apply(); window.addEventListener('resize',apply); const ro1=new ResizeObserver(apply); if(hudRef.current) ro1.observe(hudRef.current); const ro2=new ResizeObserver(apply); if(bottomInfoRef.current) ro2.observe(bottomInfoRef.current); return ()=>{ window.removeEventListener('resize',apply); ro1.disconnect(); ro2.disconnect(); }; },[isFullscreen,questionText]);
+  useEffect(()=>{ function apply(){ const canvas=canvasRef.current; if(!canvas) return; const COLS=colsRef.current, ROWS=rowsRef.current; const ratio=(COLS*tileSize)/(ROWS*tileSize); const vw=window.innerWidth; const vh=window.innerHeight; const hudH=hudRef.current? hudRef.current.getBoundingClientRect().height:0; const bottomH=bottomInfoRef.current? bottomInfoRef.current.getBoundingClientRect().height:0; const margin= isFullscreen? 8:16; const availH=Math.max(160,vh - hudH - bottomH - margin); let targetH=availH; let targetW=targetH*ratio; const containerW=wrapperRef.current? wrapperRef.current.getBoundingClientRect().width:vw; if(targetW>containerW){ targetW=containerW; targetH=targetW/ratio; } if(targetW<480){ targetW=480; targetH=targetW/ratio; } canvas.style.width=Math.round(targetW)+'px'; canvas.style.height=Math.round(targetH)+'px'; setGamePixelWidth(Math.round(targetW)); } apply(); window.addEventListener('resize',apply); const ro1=new ResizeObserver(apply); if(hudRef.current) ro1.observe(hudRef.current); const ro2=new ResizeObserver(apply); if(bottomInfoRef.current) ro2.observe(bottomInfoRef.current); return ()=>{ window.removeEventListener('resize',apply); ro1.disconnect(); ro2.disconnect(); }; },[isFullscreen,questionText]);
 
   // Abschluss markieren
   useEffect(()=>{ if(!finished && score>=targetScore){ setFinished(true); if(!completedLessons.includes(lesson._id)){ (async()=>{ try{ const username=session?.user?.username; await finalizeLesson({ username, lessonId:lesson._id, courseId, type:lesson.type, earnedStar:lesson.type!=="markdown"}); setCompletedLessons(prev=> prev.includes(lesson._id)? prev:[...prev,lesson._id]); } catch{} })(); } } },[score,targetScore,finished,completedLessons,lesson._id,lesson.type,courseId,session?.user?.username,setCompletedLessons]);
@@ -293,6 +342,7 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
           <div className={isFullscreen? 'text-[1.45rem] font-semibold text-white leading-snug whitespace-pre-wrap pr-2':'text-[1.25rem] font-semibold text-white leading-snug whitespace-pre-wrap pr-2'}>{questionText||'—'}</div>
           <div className={`flex items-start gap-3 flex-wrap text-white font-semibold ${isFullscreen? 'text-[0.85rem]':'text-[0.72rem]'}`}>
             {/* D-Pad Pfeilsteuerung für Touchgeräte */}
+            {controlAnchorRef.current==null && (
             <div className="flex flex-col items-center select-none mr-2">
               <button onClick={()=>setDir(0,-1)} onTouchStart={(e)=>touchSetDir(e,0,-1)} className="px-3 py-2 rounded bg-[#394a63] hover:bg-[#455b79] active:bg-[#50678a] text-white text-sm" aria-label="Nach oben">▲</button>
               <div className="flex gap-2 mt-1">
@@ -301,6 +351,7 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
                 <button onClick={()=>setDir(1,0)} onTouchStart={(e)=>touchSetDir(e,1,0)} className="px-3 py-2 rounded bg-[#394a63] hover:bg-[#455b79] active:bg-[#50678a] text-white text-sm" aria-label="Nach rechts">▶</button>
               </div>
             </div>
+            )}
             <span>Punkte: <span className="font-bold">{score}</span>/<span className="opacity-80">{targetScore}</span></span>
             <span className="flex items-center gap-1">Leben: {Array.from({length:MAX_LIVES}).map((_,i)=>(<span key={i} className={i<lives? 'text-red-400':'text-gray-600'}>❤</span>))}</span>
             <button onClick={()=> setPaused(p=>!p)} className={`rounded border font-semibold tracking-wide transition ${isFullscreen? 'px-5 py-2 text-[0.9rem]':'px-3 py-1 text-[0.65rem]'} ${paused? 'bg-lime-400 text-[#102] border-lime-500':'bg-[#2d3d55] text-white border-[#456282] hover:bg-[#38506e]'}`}>{paused? 'Weiter':'Pause'}</button>
@@ -317,25 +368,50 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   {finished && (<div className="text-green-400 text-sm font-semibold">✔ Ziel erreicht</div>)}
       </div>
     </div>
-    <div className="relative flex-1 flex items-center justify-center" style={{width: gamePixelWidth? gamePixelWidth:'100%'}}>
+    <div className="flex-1 flex items-center justify-center" style={{width: gamePixelWidth? gamePixelWidth:'100%'}}>
+      <div className="relative" style={{ width: gamePixelWidth? gamePixelWidth:'100%', height: gamePixelWidth? Math.round(gamePixelWidth * (rowsRef.current/colsRef.current)) : undefined }}>
       <canvas 
         ref={canvasRef} 
-        width={COLS*tileSize} 
-        height={ROWS*tileSize} 
+        width={colsRef.current*tileSize} 
+        height={rowsRef.current*tileSize} 
         className={isFullscreen? 'block mx-auto rounded border-2 border-[#2c3e50] bg-black':'block mx-auto rounded-[10px] border-2 border-[#2c3e50] shadow bg-black'}
-        onTouchStart={(e)=>{ const t=e.touches[0]; if(!t) return; const canvas=canvasRef.current; if(!canvas) return; const rect=canvas.getBoundingClientRect(); const x=t.clientX-rect.left; const y=t.clientY-rect.top; if(x<0||y<0||x>rect.width||y>rect.height) return; const p=playerRef.current; const px=p.x - rect.width/COLS*0.5; const py=p.y - rect.height/ROWS*0.5; const dx=x - px; const dy=y - py; if(Math.abs(dx) > Math.abs(dy)) playerRef.current.nextDir = { x: dx>0? 1 : -1, y: 0 }; else playerRef.current.nextDir = { x: 0, y: dy>0? 1 : -1 }; if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+        onTouchStart={(e)=>{ const t=e.touches[0]; if(!t) return; const canvas=canvasRef.current; if(!canvas) return; const rect=canvas.getBoundingClientRect(); const x=t.clientX-rect.left; const y=t.clientY-rect.top; if(x<0||y<0||x>rect.width||y>rect.height) return; const COLS=colsRef.current, ROWS=rowsRef.current; const tileW=rect.width/COLS, tileH=rect.height/ROWS; // Falls S-Anker vorhanden: D-Pad-Interaktion prüfen
+          if(controlAnchorRef.current){ const cx=(controlAnchorRef.current.tx+0.5)*tileW; const cy=(controlAnchorRef.current.ty+0.5)*tileH; const radius=Math.min(tileW,tileH)*0.9; const dx=x-cx, dy=y-cy; if(dx*dx+dy*dy <= (radius*radius)){ if(Math.abs(dx)>Math.abs(dy)) playerRef.current.nextDir = { x: dx>0?1:-1, y:0 }; else playerRef.current.nextDir = { x:0, y: dy>0?1:-1 }; if(isFullscreen){ try{ e.preventDefault(); }catch{} } return; } }
+          const p=playerRef.current; const px=p.x - tileW*0.5; const py=p.y - tileH*0.5; const dx=x - px; const dy=y - py; if(Math.abs(dx) > Math.abs(dy)) playerRef.current.nextDir = { x: dx>0? 1 : -1, y: 0 }; else playerRef.current.nextDir = { x: 0, y: dy>0? 1 : -1 }; if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
       />
-      {gameOver && !finished && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-3 p-4 text-center">
+      {controlAnchorRef.current && (
+        <div className="absolute inset-0 pointer-events-none select-none">
+          <div
+            className="absolute pointer-events-auto flex flex-col items-center justify-center"
+            style={{
+              left: `${((controlAnchorRef.current.tx+0.5)/colsRef.current)*100}%`,
+              top: `${((controlAnchorRef.current.ty+0.5)/rowsRef.current)*100}%`,
+              width: `${(1/colsRef.current)*100}%`,
+              height: `${(1/rowsRef.current)*100}%`,
+              transform: 'translate(-50%, -50%)',
+            }}
+          >
+            <button onClick={()=>setDir(0,-1)} onTouchStart={(e)=>touchSetDir(e,0,-1)} className="px-2 py-1 rounded bg-[#394a63] text-white text-[10px] mb-1">▲</button>
+            <div className="flex items-center gap-1">
+              <button onClick={()=>setDir(-1,0)} onTouchStart={(e)=>touchSetDir(e,-1,0)} className="px-2 py-1 rounded bg-[#394a63] text-white text-[10px]">◀</button>
+              <button onClick={()=>setDir(0,1)} onTouchStart={(e)=>touchSetDir(e,0,1)} className="px-2 py-1 rounded bg-[#394a63] text-white text-[10px]">▼</button>
+              <button onClick={()=>setDir(1,0)} onTouchStart={(e)=>touchSetDir(e,1,0)} className="px-2 py-1 rounded bg-[#394a63] text-white text-[10px]">▶</button>
+            </div>
+          </div>
+        </div>
+      )}
+  {gameOver && !finished && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-3 p-4 text-center">
         <div className="text-red-400 font-bold text-3xl">Game Over</div>
         <div className="text-sm">Punkte: {score}</div>
         <button onClick={restart} onTouchStart={(e)=>{ e.preventDefault(); restart(); }} className="px-5 py-2 rounded bg-red-500 hover:bg-red-600 text-white text-sm font-semibold">Neu starten</button>
       </div>)}
-      {finished && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white gap-3 p-4 text-center">
+  {finished && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white gap-3 p-4 text-center">
         <div className="text-green-400 font-bold text-3xl">✔ Ziel erreicht</div>
         <div className="text-sm">Punkte: {score}</div>
         <button onClick={restart} onTouchStart={(e)=>{ e.preventDefault(); restart(); }} className="px-5 py-2 rounded bg-green-500 hover:bg-green-600 text-white text-sm font-semibold">Nochmal</button>
       </div>)}
-      {paused && !gameOver && !finished && (<div className="absolute inset-0 flex items-center justify-center bg-black/45 text-white text-4xl font-bold">PAUSE</div>)}
+  {paused && !gameOver && !finished && (<div className="absolute inset-0 flex items-center justify-center bg-black/45 text-white text-4xl font-bold">PAUSE</div>)}
+  </div>
     </div>
     <div ref={bottomInfoRef} className="text-[0.6rem] opacity-60 text-center text-white mt-1 pb-1">Steuerung: Pfeile bewegen • Pause: P/Space • Räume mit korrekter Antwort finden!</div>
   </div>);
