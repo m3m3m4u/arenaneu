@@ -349,10 +349,14 @@ export default function AdminMaterialPage(){
                     return (
                       <div key={f.key} className="border rounded p-2 flex gap-2 items-center">
                         {previews.length>0 ? (
-                          <div className="relative w-16 h-20 overflow-hidden rounded border bg-white">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={previews[0]} alt={f.name} className="absolute inset-0 w-full h-full object-cover" />
-                            {previews.length>1 && <span className="absolute bottom-0 right-0 bg-black/60 text-white text-[9px] px-1 rounded-tl">{previews.length}p</span>}
+                          <div className="flex items-center gap-1 overflow-x-auto max-w-[180px] pr-1">
+                            {previews.slice(0,6).map((src,idx)=> (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img key={idx} src={src} alt={`${f.name} p${idx+1}`} className="w-12 h-16 object-cover rounded border bg-white flex-shrink-0" />
+                            ))}
+                            {previews.length>6 && (
+                              <span className="text-[10px] text-gray-600 px-1">+{previews.length-6}</span>
+                            )}
                           </div>
                         ) : (
                           <div className="w-16 h-20 flex items-center justify-center text-[10px] text-gray-400 bg-gray-50 border rounded">kein Bild</div>

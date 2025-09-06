@@ -155,6 +155,24 @@ export async function davMove(oldKey: string, newKey: string){
   return { url: webdavPublicUrl(newKey), key: newKey };
 }
 
+// Lädt Dateiinhalt als Uint8Array direkt von WebDAV (serverseitig, mit Auth)
+export async function davGet(key: string): Promise<Uint8Array | null> {
+  const c = conf(); if(!c) return null;
+  const target = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
+  let res: Response | null = null;
+  try {
+    res = await fetch(target, { headers: { Authorization: c.auth } });
+  } catch(e:any){
+    console.warn('[davGet] Fetch Fehler', { target, err: e?.message });
+    return null;
+  }
+  if(!res.ok){
+    console.warn('[davGet] nicht ok', { status: res.status, target });
+    return null;
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 export async function davExists(key: string){
   const c = conf(); if(!c) return false;
   const target = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;

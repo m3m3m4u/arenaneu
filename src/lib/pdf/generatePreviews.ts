@@ -5,8 +5,8 @@ export const runtime = 'nodejs';
 import dbConnect from '@/lib/db';
 import ShopProduct from '@/models/ShopProduct';
 import { isS3Enabled, s3Put, s3PublicUrl } from '@/lib/storage';
-import { isWebdavEnabled, davPut, webdavPublicUrl } from '@/lib/webdavClient';
-import { isShopWebdavEnabled, shopDavPut, shopWebdavPublicUrl, anyShopWebdavEnabled } from '@/lib/webdavShopClient';
+import { isWebdavEnabled, davPut, webdavPublicUrl, davGet } from '@/lib/webdavClient';
+import { isShopWebdavEnabled, shopDavPut, shopWebdavPublicUrl, anyShopWebdavEnabled, shopDavGet } from '@/lib/webdavShopClient';
 
 type PdfModule = typeof import('pdfjs-dist');
 
@@ -59,21 +59,36 @@ export async function generatePdfPreviewImagesForShopFile(productId: string, fil
     const maxPages = Math.max(1, Math.min(20, opts?.maxPages ?? 8));
     const dpi = Math.max(72, Math.min(300, opts?.dpi ?? 150)); // sinnvolle Web-Vorschau
 
-    // Quelle laden
-    const sourceUrl = publicUrlForKey(fileKey);
-    if (!sourceUrl) {
-      console.warn('[generatePreviews] Keine Public-URL für', fileKey);
+    // Quelle laden: bevorzugt direkt über WebDAV/S3-Client statt /medien-Proxy
+    let buf: Uint8Array | null = null;
+    if (isShopWebdavEnabled()) {
+      buf = await shopDavGet(fileKey);
+    }
+    if (!buf && isWebdavEnabled()) {
+      buf = await davGet(fileKey);
+    }
+    if (!buf && isS3Enabled()) {
+      try {
+        const url = s3PublicUrl(fileKey);
+        const r = await fetch(url);
+        if (r.ok) buf = new Uint8Array(await r.arrayBuffer());
+      } catch {}
+    }
+    if (!buf) {
+      // letzter Versuch über Public-URL (z. B. /medien Proxy)
+      const sourceUrl = publicUrlForKey(fileKey);
+      if (sourceUrl) {
+        const r = await fetch(sourceUrl).catch(()=>null as any);
+        if (r && r.ok) buf = new Uint8Array(await r.arrayBuffer());
+      }
+    }
+    if (!buf) {
+      console.warn('[generatePreviews] PDF Quelle nicht lesbar', { fileKey });
       return null;
     }
-    const res = await fetch(sourceUrl);
-    if (!res.ok) {
-      console.warn('[generatePreviews] PDF Download fehlgeschlagen', sourceUrl, res.status);
-      return null;
-    }
-    const buf = new Uint8Array(await res.arrayBuffer());
 
     // PDF laden (ohne Worker im Node-Kontext)
-    const task = (pdfjsLib as any).getDocument({ data: buf, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true });
+  const task = (pdfjsLib as any).getDocument({ data: buf, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true });
     const pdf = await task.promise;
     const numPages: number = pdf.numPages || 1;
 

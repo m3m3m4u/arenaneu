@@ -1,6 +1,6 @@
 "use client";
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
 
 interface MCQuestion { id:string; text:string; options:string[]; correct:number; }
@@ -19,6 +19,8 @@ export default function FussballLivePage(){
     '/media/spielfelder/spielfeld7.JPG',
   ], []);
   const [fieldIdx, setFieldIdx] = useState<number>(() => Math.floor(Math.random() * 7));
+  // Natürliche Bildgröße für korrektes Seitenverhältnis
+  const [fieldWH, setFieldWH] = useState<{w:number; h:number} | null>(null);
 
   // Fragen aus gewählter Übung laden
   const [questions, setQuestions] = useState<MCQuestion[]>([]);
@@ -91,6 +93,27 @@ export default function FussballLivePage(){
     return { asked, wrong, correct: asked - wrong };
   },[history]);
 
+  // Bildseitenverhältnis anhand des aktuellen Feldbilds bestimmen
+  useEffect(()=>{
+    const src = FIELD_IMAGES[fieldIdx % FIELD_IMAGES.length];
+    let cancelled = false;
+  const img = new window.Image();
+    img.onload = () => { if(!cancelled){ setFieldWH({ w: img.naturalWidth || 16, h: img.naturalHeight || 9 }); } };
+    img.onerror = () => { if(!cancelled){ setFieldWH({ w: 16, h: 9 }); } };
+    img.src = src;
+    return ()=>{ cancelled = true; };
+  },[FIELD_IMAGES, fieldIdx]);
+
+  // Nach jeweils 3 richtigen Antworten automatisch weiterblättern
+  const lastAutoAtRef = useRef(0);
+  useEffect(()=>{
+    const c = stats.correct;
+    if(c > 0 && c % 3 === 0 && c !== lastAutoAtRef.current){
+      lastAutoAtRef.current = c;
+      setFieldIdx(i => (i + 1) % FIELD_IMAGES.length);
+    }
+  },[stats.correct, FIELD_IMAGES.length]);
+
   return (
     <main className="max-w-7xl mx-auto p-4 md:p-6">
       <header className="mb-4 flex flex-col md:flex-row md:items-end gap-2 md:gap-6">
@@ -146,9 +169,12 @@ export default function FussballLivePage(){
             Gewichtete Wiederholung aktiv: Falsch beantwortete Fragen tauchen wahrscheinlicher erneut auf. Diese Logik ist lokal – später serverseitig synchronisiert.
           </div>
         </div>
-        {/* Rechte Spalte: Spielfeld mit Foto-Hintergrund */}
-        <div className="relative border rounded bg-black shadow-inner aspect-[16/9] overflow-hidden">
-          <Image src={FIELD_IMAGES[fieldIdx % FIELD_IMAGES.length]} alt="Spielfeld" fill priority sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover" />
+        {/* Rechte Spalte: Spielfeld mit Foto-Hintergrund im Original-Seitenverhältnis */}
+        <div
+          className="relative border rounded bg-black shadow-inner overflow-hidden"
+          style={{ aspectRatio: fieldWH ? `${fieldWH.w}/${fieldWH.h}` : '16/9' }}
+        >
+          <Image src={FIELD_IMAGES[fieldIdx % FIELD_IMAGES.length]} alt="Spielfeld" fill priority sizes="(max-width: 1024px) 100vw, 50vw" className="object-contain" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
           <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/50 text-white backdrop-blur">
             Spielfeld: {fieldIdx + 1}/{FIELD_IMAGES.length}
