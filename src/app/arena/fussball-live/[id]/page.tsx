@@ -143,7 +143,7 @@ export default function FussballLivePage(){
   },[id]);
 
   return (
-    <main className="max-w-7xl mx-auto p-4 md:p-6">
+    <main className="max-w-6xl mx-auto p-4 md:p-6">
       <header className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold">⚽ Fußball Match</h1>
@@ -153,16 +153,24 @@ export default function FussballLivePage(){
       {/* Großer Spielstand (Tore) – einzige Anzeige */}
           <div className="w-full bg-white border rounded shadow-sm p-3 flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <div className="text-center">
+              <div className={"text-center rounded-lg px-3 py-1 " + (turn==='left' ? 'ring-4 ring-red-500/70 shadow-[0_0_0_4px_rgba(239,68,68,0.15)]' : '')}>
         <div className="text-[11px] text-gray-500">Tore Rot</div>
         <div className="text-3xl md:text-5xl font-extrabold leading-none text-red-600">{goals.left}</div>
                 <div className="text-[11px] text-gray-400 mt-1">Punkte: {scores.left}</div>
+                {turn==='left' && (<div className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-red-700">
+                  <span className="animate-pulse">●</span>
+                  <span>Am Zug</span>
+                </div>)}
               </div>
               <div className="text-2xl font-bold text-gray-400">:</div>
-              <div className="text-center">
+              <div className={"text-center rounded-lg px-3 py-1 " + (turn==='right' ? 'ring-4 ring-blue-500/70 shadow-[0_0_0_4px_rgba(59,130,246,0.15)]' : '')}>
         <div className="text-[11px] text-gray-500">Tore Blau</div>
         <div className="text-3xl md:text-5xl font-extrabold leading-none text-blue-600">{goals.right}</div>
                 <div className="text-[11px] text-gray-400 mt-1">Punkte: {scores.right}</div>
+                {turn==='right' && (<div className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-blue-700">
+                  <span className="animate-pulse">●</span>
+                  <span>Am Zug</span>
+                </div>)}
               </div>
             </div>
             <div className="hidden md:flex items-center gap-3">
@@ -227,6 +235,7 @@ export default function FussballLivePage(){
           locked={locked}
           answerState={answerState}
           onAnswer={answer}
+          turn={turn}
         />
       </div>
     </main>
@@ -236,7 +245,7 @@ export default function FussballLivePage(){
 // (Das frühere SVG-Pitch wurde durch Foto-Hintergründe ersetzt)
 
 // Komponente: Spielfeld mit 40% kleinerer Darstellung und Vollbildmodus
-function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals, scores, current, locked, answerState, onAnswer }:{ images:string[]; fieldIdx:number; fieldWH:{w:number;h:number}|null; questions:MCQuestion[]; correctCounts:Record<string,{asked:number; wrong:number}>; goals:{left:number;right:number}; scores:{left:number;right:number}; current:MCQuestion|undefined; locked:boolean; answerState:{picked:number|null; correct:boolean|null}; onAnswer:(idx:number)=>void }){
+function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals, scores, current, locked, answerState, onAnswer, turn }:{ images:string[]; fieldIdx:number; fieldWH:{w:number;h:number}|null; questions:MCQuestion[]; correctCounts:Record<string,{asked:number; wrong:number}>; goals:{left:number;right:number}; scores:{left:number;right:number}; current:MCQuestion|undefined; locked:boolean; answerState:{picked:number|null; correct:boolean|null}; onAnswer:(idx:number)=>void; turn:'left'|'right' }){
   const containerRef = useRef<HTMLDivElement|null>(null);
   const [isFs,setIsFs]=useState(false);
   // TOR-Overlay für 5 Sekunden einblenden, wenn sich die Tore erhöhen
@@ -302,16 +311,24 @@ function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals,
             <div style={{height:'25%'}} className="flex items-center justify-between px-4 md:px-6">
               <button onClick={exitFs} className="text-xs px-2 py-1 border rounded bg-white/10 hover:bg-white/20 text-white">Vollbild beenden</button>
               <div className="flex items-center gap-8">
-                <div className="text-center">
+                <div className={"text-center rounded-lg px-3 py-1 " + (turn==='left' ? 'ring-4 ring-red-400/80' : '')}>
                   <div className="text-[11px] text-white/80">Tore Rot</div>
                   <div className="text-4xl md:text-6xl font-extrabold leading-none text-red-400">{goals.left}</div>
                   <div className="text-[11px] text-white/70 mt-1">Punkte: {scores.left}</div>
+                  {turn==='left' && (<div className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-red-200">
+                    <span className="animate-pulse">●</span>
+                    <span>Am Zug</span>
+                  </div>)}
                 </div>
                 <div className="text-2xl md:text-3xl font-bold text-white/70">:</div>
-                <div className="text-center">
+                <div className={"text-center rounded-lg px-3 py-1 " + (turn==='right' ? 'ring-4 ring-blue-400/80' : '')}>
                   <div className="text-[11px] text-white/80">Tore Blau</div>
                   <div className="text-4xl md:text-6xl font-extrabold leading-none text-blue-400">{goals.right}</div>
                   <div className="text-[11px] text-white/70 mt-1">Punkte: {scores.right}</div>
+                  {turn==='right' && (<div className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-blue-200">
+                    <span className="animate-pulse">●</span>
+                    <span>Am Zug</span>
+                  </div>)}
                 </div>
               </div>
               <div className="w-16" />
