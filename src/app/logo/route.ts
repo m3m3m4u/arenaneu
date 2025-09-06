@@ -1,15 +1,10 @@
-import { readFile } from "fs/promises";
-
-export const revalidate = 60 * 60 * 24 * 365; // 1 Jahr
+export const revalidate = 31536000; // 1 Jahr, als Literal
 
 export async function GET() {
-  // Lies die bestehende Datei aus dem Repo (keine Node-Typen nötig)
-  const fileUrl = new URL("../LA_Logo.png", import.meta.url);
-  const file = await readFile(fileUrl);
-  const blob = new Blob([new Uint8Array(file)], { type: "image/png" });
-  return new Response(blob, {
+  // Platzhalter-Route (nicht mehr verwendet). Liefert 204 No Content.
+  return new Response(null, {
+    status: 204,
     headers: {
-      "Content-Type": "image/png",
       "Cache-Control": "public, max-age=31536000, immutable",
     },
   });
