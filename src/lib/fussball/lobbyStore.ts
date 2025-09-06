@@ -108,12 +108,12 @@ export async function listOpenLobbies(){
     try {
       await dbConnect();
       const docs = await FussballLobbyModel.find({ status:'waiting', createdAt: { $gt: now - MAX_LOBBY_AGE_MS } }).sort({ createdAt: -1 }).lean();
-      return docs.map((l:any)=> ({ id: l.id, title: l.title, lessonId: l.lessonId, players: (l.players||[]).map((p:any)=>({userId:p.userId,username:p.username,side:p.side,ready:p.ready})), createdAt: l.createdAt }));
+      return docs.map((l:any)=> ({ id: l.id, title: l.title, lessonId: l.lessonId, hostUserId: l.hostUserId, players: (l.players||[]).map((p:any)=>({userId:p.userId,username:p.username,side:p.side,ready:p.ready})), createdAt: l.createdAt }));
     } catch { /* fall back */ }
   }
   return Array.from(lobbies.values())
     .filter(l=> l.status==='waiting' && now - l.createdAt < MAX_LOBBY_AGE_MS)
-    .map(l=> ({ id: l.id, title: l.title, lessonId: l.lessonId, players: l.players.map(p=>({userId:p.userId,username:p.username,side:p.side,ready:p.ready})), createdAt: l.createdAt }));
+    .map(l=> ({ id: l.id, title: l.title, lessonId: l.lessonId, hostUserId: l.hostUserId, players: l.players.map(p=>({userId:p.userId,username:p.username,side:p.side,ready:p.ready})), createdAt: l.createdAt }));
 }
 
 export function setTitle(id: string, userId: string, title: string){
@@ -171,6 +171,17 @@ export async function applyAnswer(id: string, isCorrect: boolean, answeredBy: 'l
   if(useDb){ try{ await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { scores: lobby.scores, goals: lobby.goals, fieldIdx: lobby.fieldIdx, turn: lobby.turn, lastActivity: lobby.lastActivity } }); } catch{}
   } else { lobbies.set(id, lobby); }
   return { state: { scores: lobby.scores!, goals: lobby.goals!, fieldIdx: lobby.fieldIdx!, turn: lobby.turn! } } as const;
+}
+
+export async function deleteLobbyByHost(id: string, userId: string){
+  const lobby = await getLobby(id) as LobbyRecord | undefined; if(!lobby) return { error:'NOT_FOUND' } as const;
+  if(lobby.hostUserId !== userId) return { error:'NO_PERMISSION' } as const;
+  if(lobby.status !== 'waiting') return { error:'NOT_ALLOWED' } as const;
+  if(useDb){
+    try { await dbConnect(); await FussballLobbyModel.deleteOne({ id, hostUserId: userId, status:'waiting' }); } catch { /* ignore */ }
+  }
+  lobbies.delete(id);
+  return { deleted:true } as const;
 }
 
 // Periodic cleanup

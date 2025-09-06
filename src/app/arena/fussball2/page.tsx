@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
-interface LobbyListItem { id:string; title:string; lessonId?:string; players:{userId:string;username:string;side:string;ready:boolean}[]; createdAt:number; }
+interface LobbyListItem { id:string; title:string; lessonId?:string; hostUserId?:string; players:{userId:string;username:string;side:string;ready:boolean}[]; createdAt:number; }
 
 interface LobbyApiResponse { success:boolean; lobbies: LobbyListItem[] }
 
@@ -58,6 +58,16 @@ export default function FussballLobbyPage(){
     try { const r=await fetch(`/api/fussball/lobbies/${id}/join`, { method:'POST' }); const j=await r.json(); if(!j.success) setError(j.error||'Join fehlgeschlagen'); else setLobby(j.lobby); }
     catch(e:any){ setError(String(e)); }
     finally { setJoining(false); }
+  }
+
+  async function deleteLobby(id:string){
+    setError(undefined);
+    try {
+      const r = await fetch(`/api/fussball/lobbies/${id}/delete`, { method:'POST' });
+      const j = await r.json();
+      if(!j.success){ setError(j.error||'Löschen fehlgeschlagen'); }
+      await loadList();
+    } catch(e:any){ setError(String(e)); }
   }
 
   async function toggleReady(){
@@ -168,7 +178,12 @@ export default function FussballLobbyPage(){
                 <div className="text-[11px] text-gray-500 truncate">Spieler: {l.players.map((p)=>p.username).join(', ')||'—'}</div>
                 {l.lessonId && <div className="text-[10px] text-indigo-600 truncate">Übung: {exercises.find(e=> e._id===l.lessonId)?.title || l.lessonId}</div>}
               </div>
-              <button disabled={!session || joining} onClick={()=> join(l.id)} className="px-3 py-1.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">{joining? '…':'Beitreten'}</button>
+              <div className="flex items-center gap-2">
+                <button disabled={!session || joining} onClick={()=> join(l.id)} className="px-3 py-1.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">{joining? '…':'Beitreten'}</button>
+                {session && (String((session as any)?.user?.id || (session as any)?.user?._id) === String(l.hostUserId)) && (
+                  <button onClick={()=> deleteLobby(l.id)} className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white text-xs">Löschen</button>
+                )}
+              </div>
             </div>
           )): <div className="text-xs text-gray-500">{loadingList? 'Lade…':'Keine offenen Lobbys'}</div>}
         </div>
