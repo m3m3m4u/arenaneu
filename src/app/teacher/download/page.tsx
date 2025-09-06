@@ -40,7 +40,7 @@ export default function TeacherDownloadShop(){
           throw new Error('pdfjs getDocument nicht verfügbar');
         }
   // Lokaler Worker (gleiche Origin) um CSP einzuhalten
-  try { (pdfjs as any).GlobalWorkerOptions.workerSrc = '/api/pdf-worker'; } catch {}
+  try { (pdfjs as any).GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'; } catch {}
         let pdf: any;
         try {
           // Primär: direkt über URL

@@ -22,7 +22,7 @@ export default function PdfThumbs({ url, maxPages=4, onOpen, className }: PdfThu
         }
   if(pdfjsLib.GlobalWorkerOptions){
           // Lokalen Worker ausliefern, um CSP (script-src 'self') einzuhalten
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/api/pdf-worker', window.location.origin).toString();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/pdf.worker.min.mjs', window.location.origin).toString();
         }
         console.debug('[PdfThumbs] Lade PDF', url);
   const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true, withCredentials: false });

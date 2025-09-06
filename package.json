@@ -18,7 +18,8 @@
     "ci": "npm run lint && npm run typecheck && npm run build",
     "dev:clean": "powershell -NoProfile -Command \"$ErrorActionPreference='SilentlyContinue'; Set-Location -LiteralPath 'c:\\Users\\Noteb\\lernarena neuste'; $ports=@(3000,3001); foreach($port in $ports){ $procId=(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess); if($procId){ try{ Stop-Process -Id $procId -Force -ErrorAction Stop }catch{} } }; if (Test-Path '.next'){ try{ Remove-Item -Recurse -Force '.next' }catch{} }; npm run dev\"",
     "vercel-build": "next build",
-    "prepare": "node scripts/setup-git-hooks.js"
+    "prepare": "node scripts/setup-git-hooks.js",
+    "postinstall": "node scripts/copy-pdf-worker.js"
   },
   "dependencies": {
     "@fastify/busboy": "^2.1.1",

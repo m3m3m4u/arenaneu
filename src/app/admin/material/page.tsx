@@ -388,7 +388,7 @@ export default function AdminMaterialPage(){
                                     // On-the-fly PdfThumbs verwenden
                                     const mod:any = await import('@/components/media/PdfThumbs');
                                     const pdfjs: any = await import('pdfjs-dist');
-                                    pdfjs.GlobalWorkerOptions.workerSrc = new URL('/api/pdf-worker', window.location.origin).toString();
+                                    pdfjs.GlobalWorkerOptions.workerSrc = new URL('/pdf.worker.min.mjs', window.location.origin).toString();
                                     const task = pdfjs.getDocument({ url: f.downloadUrl, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true });
                                     const pdf = await task.promise;
                                     const page = await pdf.getPage(1);

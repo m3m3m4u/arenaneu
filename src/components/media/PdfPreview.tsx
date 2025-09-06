@@ -37,7 +37,7 @@ export default function PdfPreview({ url, onClose }: PdfPreviewProps){
         }
         // Worker setzen (Fallback CDN falls bundler Pfad nicht passt)
         if(pdfjsLib.GlobalWorkerOptions){
-          pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/api/pdf-worker', window.location.origin).toString();
+          pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/pdf.worker.min.mjs', window.location.origin).toString();
         }
         const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true, withCredentials: false });
         const pdf = await task.promise;

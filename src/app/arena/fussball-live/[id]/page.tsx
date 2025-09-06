@@ -90,10 +90,12 @@ export default function FussballLivePage(){
     setLocked(true);
     const isCorrect = idx === current.correct;
     setAnswerState({ picked:idx, correct:isCorrect });
-    // Punktewertung: Bei korrekter Antwort erhält das Team am Zug einen Punkt
-    if(isCorrect){
-      setScores(s=> ({ ...s, [turn]: s[turn] + 1 } as any));
-    }
+    // Punktewertung: richtig -> Punkt für Team am Zug; falsch -> Punkt für das andere Team
+    setScores(s=>{
+      const other = turn==='left' ? 'right' : 'left';
+      const target: 'left'|'right' = isCorrect ? turn : other;
+      return { ...s, [target]: s[target] + 1 };
+    });
     setHistory(h=>[...h,{ id: current.id, correct: isCorrect }]);
     // Nach der Antwort wechselt der Zug zum anderen Team
     setTimeout(()=>{
@@ -152,33 +154,42 @@ export default function FussballLivePage(){
 
   return (
     <main className="max-w-7xl mx-auto p-4 md:p-6">
-      <header className="mb-4 flex flex-col md:flex-row md:items-end gap-2 md:gap-6">
-        <div>
+      <header className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold">⚽ Fußball Match</h1>
           <p className="text-xs text-gray-500">Lobby ID: <span className="font-mono">{id}</span></p>
           {exerciseTitle && <p className="text-xs text-gray-500">Übung: <span className="font-medium">{exerciseTitle}</span></p>}
         </div>
-        <div className="text-xs text-gray-700 flex flex-wrap items-center gap-3">
-          <span>Fragen: {stats.asked}</span>
-          <span>Korrekt: {stats.correct}</span>
-          <span>Falsch: {stats.wrong}</span>
-          <span className="ml-2 inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-100 border">
-            <span className="font-semibold">Score</span>
-            <span className="text-[11px]">Links</span>
-            <span className="px-1 rounded bg-white border font-mono">{scores.left}</span>
-            <span className="text-[11px]">Rechts</span>
-            <span className="px-1 rounded bg-white border font-mono">{scores.right}</span>
-            <span className="ml-1 text-[11px]">Zug: <b>{turn==='left'?'Links':'Rechts'}</b></span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-2 py-1 rounded bg-green-50 border border-green-200 text-green-800">
-            <span className="font-semibold">Tore</span>
-            <span className="text-[11px]">Links</span>
-            <span className="px-1 rounded bg-white border font-mono">{goals.left}</span>
-            <span className="text-[11px]">Rechts</span>
-            <span className="px-1 rounded bg-white border font-mono">{goals.right}</span>
-          </span>
+        <div className="md:col-span-2">
+          {/* Großer Spielstand (Tore) – einzige Anzeige */}
+          <div className="w-full bg-white border rounded shadow-sm p-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600">Zug:</span>
+              <span className="px-2 py-0.5 rounded bg-gray-100 border text-sm">{turn==='left' ? 'Links' : 'Rechts'}</span>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <div className="text-[11px] text-gray-500">Tore Links</div>
+                <div className="text-3xl md:text-5xl font-extrabold leading-none">{goals.left}</div>
+                <div className="text-[11px] text-gray-400 mt-1">Punkte: {scores.left}</div>
+              </div>
+              <div className="text-2xl font-bold text-gray-400">:</div>
+              <div className="text-center">
+                <div className="text-[11px] text-gray-500">Tore Rechts</div>
+                <div className="text-3xl md:text-5xl font-extrabold leading-none">{goals.right}</div>
+                <div className="text-[11px] text-gray-400 mt-1">Punkte: {scores.right}</div>
+              </div>
+            </div>
+            <div className="hidden md:flex items-center gap-3">
+              <span className="text-[11px] text-gray-500">Fragen</span>
+              <span className="px-2 py-0.5 rounded bg-gray-50 border text-xs">{stats.asked}</span>
+              <span className="text-[11px] text-gray-500">Korrekt</span>
+              <span className="px-2 py-0.5 rounded bg-green-50 border text-xs">{stats.correct}</span>
+              <span className="text-[11px] text-gray-500">Falsch</span>
+              <span className="px-2 py-0.5 rounded bg-red-50 border text-xs">{stats.wrong}</span>
+            </div>
+          </div>
         </div>
-        <div className="ml-auto text-xs"><a href="/arena/fussball2" className="text-blue-600 hover:underline">Zur Lobby</a></div>
       </header>
       {loadingQs && (
         <div className="mb-4 p-2 rounded bg-gray-50 border text-xs text-gray-600">Lade Fragen aus Übung…</div>
