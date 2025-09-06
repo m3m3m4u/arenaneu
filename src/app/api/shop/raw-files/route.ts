@@ -21,6 +21,29 @@ function sanitizeName(n: string){
   return base.slice(0,180);
 }
 
+// Helfer: NFC-Normalisierung und Umlaute-Alternativen erzeugen
+function toNFC(s: string){
+  try { return s.normalize('NFC'); } catch { return s; }
+}
+function buildUmlautAlt(s: string){
+  // deutsche Transkription: ä->ae, ö->oe, ü->ue, ß->ss
+  return s
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue')
+    .replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue')
+    .replace(/ß/g,'ss');
+}
+function buildUmlautReverse(s: string){
+  // einfache Heuristik: ae->ä, oe->ö, ue->ü, ss->ß
+  // Achtung: kann False-Positives erzeugen, aber nur für Matching verwendet
+  return s
+    .replace(/ae/g,'ä').replace(/oe/g,'ö').replace(/ue/g,'ü')
+    .replace(/Ae/g,'Ä').replace(/Oe/g,'Ö').replace(/Ue/g,'Ü')
+    .replace(/ss/g,'ß');
+}
+function escapeRegex(lit: string){
+  return lit.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&');
+}
+
 export async function GET(req: Request){
   try {
     await dbConnect();
@@ -60,18 +83,18 @@ export async function GET(req: Request){
       if(!Number.isNaN(day) && day>=1 && day<=31){ exprConds.push({ $eq: [ { $dayOfMonth: '$createdAt' }, day ] }); }
       if(exprConds.length){ (filter.$and = filter.$and||[]).push({ $expr: { $and: exprConds } }); }
     }
-    // Zugeordnet-Logik: ermittele verwendete Keys/Namen aus Produkten
+    // Zugeordnet-Logik: ermittele verwendete Keys/Namen aus Produkten (NFC-normalisiert)
     const assignedParam = (url.searchParams.get('assigned')||'').trim().toLowerCase();
     const prodFiles = await ShopProduct.find({}, { 'files.name':1, 'files.key':1 }).lean();
-    const usedNames = new Set<string>();
+    const usedNames = new Set<string>(); // NFC-normalisierte Namen
     const usedKeys = new Set<string>();
-    const pdfBases = new Set<string>();
+    const pdfBases = new Set<string>(); // NFC-Basisnamen (ohne .pdf)
     for(const p of prodFiles as any[]){
       const files = Array.isArray(p?.files)? p.files: [];
       for(const f of files){
-        if(f?.name) usedNames.add(String(f.name));
+        if(f?.name) usedNames.add(toNFC(String(f.name)));
         if(f?.key) usedKeys.add(String(f.key));
-        const nm = String(f?.name||'');
+        const nm = toNFC(String(f?.name||''));
         if(/\.pdf$/i.test(nm)){
           const base = nm.replace(/\.pdf$/i,'');
           if(base) pdfBases.add(base);
@@ -83,10 +106,18 @@ export async function GET(req: Request){
       const or:any[] = [];
       if(namesArr.length) or.push({ name: { $in: namesArr } });
       if(keysArr.length) or.push({ key: { $in: keysArr } });
-      // related: Dateien deren Name zu einem bekannten PDF-Basisnamen passt: ^base-\d+\.(png|jpe?g|webp)$
+      // related: Dateien deren Name zu einem bekannten PDF-Basisnamen passt
+      // Erlaube Trenner -, _, Leerzeichen sowie optional "Seite"/"Page" und Klammern um die Zahl
       const bases = Array.from(pdfBases).slice(0,200);
       if(bases.length){
-        const rxList = bases.map(b=> new RegExp('^'+b.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(?:\\d+)\\.(?:png|jpe?g|webp)$','i'));
+        const rxList = bases.map(b=>{
+          const bNFC = toNFC(b);
+          const baseEsc = escapeRegex(bNFC);
+          const altEsc = escapeRegex(buildUmlautAlt(bNFC));
+          const baseGroup = altEsc !== baseEsc ? `(?:${baseEsc}|${altEsc})` : baseEsc;
+          // ^(base|baseAlt)[-_\s]*(?:seite|page)?[-_\s]*(?:\(?\d+\)?)\.(png|jpe?g|webp)$
+          return new RegExp(`^${baseGroup}[-_\s]*(?:seite|page)?[-_\s]*(?:\\(?\\d+\\)?|\\d+)\\.(?:png|jpe?g|webp)$`,'i');
+        });
         or.push({ $or: rxList.map(rx=> ({ name: { $regex: rx } })) });
       }
       filter.$and = (filter.$and||[]).concat(or.length? [{ $or: or }]: [{ _id: { $exists:false } }]);
@@ -97,7 +128,13 @@ export async function GET(req: Request){
       if(keysArr.length) andConds.push({ key: { $nin: keysArr } });
       const bases = Array.from(pdfBases).slice(0,200);
       if(bases.length){
-        const rxList = bases.map(b=> new RegExp('^'+b.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(?:\\d+)\\.(?:png|jpe?g|webp)$','i'));
+        const rxList = bases.map(b=>{
+          const bNFC = toNFC(b);
+          const baseEsc = escapeRegex(bNFC);
+          const altEsc = escapeRegex(buildUmlautAlt(bNFC));
+          const baseGroup = altEsc !== baseEsc ? `(?:${baseEsc}|${altEsc})` : baseEsc;
+          return new RegExp(`^${baseGroup}[-_\s]*(?:seite|page)?[-_\s]*(?:\\(?\\d+\\)?|\\d+)\\.(?:png|jpe?g|webp)$`,'i');
+        });
         filter.$and = (filter.$and||[]).concat([{ $nor: rxList.map(rx=> ({ name: { $regex: rx } })) }]);
       }
       if(andConds.length) filter.$and = (filter.$and||[]).concat(andConds);
@@ -107,13 +144,21 @@ export async function GET(req: Request){
     const items=await ShopRawFile.find(filter).sort({ createdAt:-1 }).skip((page-1)*limit).limit(limit).lean();
     const useShop=isShopWebdavEnabled(); const anyWebdav=useShop || isWebdavEnabled();
     const out=items.map(it=>{
-      const nameStr=String(it.name||'');
+      const nameStr=toNFC(String(it.name||''));
       const keyStr=String(it.key||'');
       const assigned = usedNames.has(nameStr) || usedKeys.has(keyStr);
-      // related: PNG/JPG/WEBP mit Suffix -<num>.* deren Basis einem Produkt-PDF entspricht
+      // related: PNG/JPG/WEBP mit Trenner (-,_,Leerzeichen) und optional "Seite/Page" oder Klammern um die Zahl
       let related=false;
-      const m = nameStr.match(/^(.*?)-(\d+)\.(png|jpe?g|webp)$/i);
-      if(m){ const base=m[1]; if(pdfBases.has(base)) related=true; }
+      const m = nameStr.match(/^(.*?)[-_\s]*(?:seite|page)?[-_\s]*(\(?\d+\)?)[-_\s]*\.(png|jpe?g|webp)$/i);
+      if(m){
+        const base = toNFC(m[1]);
+        const baseAlt = buildUmlautAlt(base);
+        const baseRev = buildUmlautReverse(base);
+        const numPart = String(m[2]||'').replace(/[()]/g,'');
+        if(/^[0-9]+$/.test(numPart)){
+          if(pdfBases.has(base) || pdfBases.has(baseAlt) || pdfBases.has(baseRev)) related=true;
+        }
+      }
       return {
       id:String(it._id),
       name:it.name,

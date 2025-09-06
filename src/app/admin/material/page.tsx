@@ -221,18 +221,38 @@ export default function AdminMaterialPage(){
   // Helper wie im Lehrer-Shop: Preview-Bilder aus Dateien ableiten
   const isPdf = (f:any)=> /\.pdf$/i.test(f?.name||'') || (f?.contentType||'').includes('pdf');
   const isImage = (f:any)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f?.name||'');
+  const toNFC = (s:string)=>{ try{ return s.normalize('NFC'); }catch{ return s; } };
+  const buildUmlautAlt = (s:string)=> s
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue')
+    .replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue')
+    .replace(/ß/g,'ss');
+  const esc = (s:string)=> s.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&');
+  function buildImageRegex(baseRaw:string){
+    const base = toNFC(baseRaw);
+    const baseEsc = esc(base);
+    const altEsc = esc(buildUmlautAlt(base));
+    const baseGroup = altEsc!==baseEsc? `(?:${baseEsc}|${altEsc})` : baseEsc;
+    // ^base[-_\s]*(?:seite|page)?[-_\s]*(?:\(?([0-9]+)\)?)[-_\s]*\.(png|jpe?g|webp)$
+    return new RegExp(`^${baseGroup}[-_\\s]*(?:seite|page)?[-_\\s]*(?:\\(?([0-9]+)\\)?)[-_\\s]*\\.(?:png|jpe?g|webp)$`,'i');
+  }
   function getPreviewImages(p: Product): { images: string[]; pdf?: any }{
     const files = (p.files||[]).filter((f:any)=> !String(f.key||'').startsWith('placeholder:'));
     const pdf = files.find(isPdf);
     const images = files.filter(isImage);
     if(pdf){
-      const base = String(pdf.name||'').replace(/\.(pdf)$/i,'');
+      const base = toNFC(String(pdf.name||'').replace(/\.(pdf)$/i,''));
+      const rx = buildImageRegex(base);
       const relImgs = images
-        .filter((img:any)=> new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i').test(img.name||''))
-        .map((img:any)=> ({ url: img.downloadUrl, idx: parseInt((String(img.name||'').match(/-(\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
-        .filter(x=> !!x.url)
+        .map((img:any)=>{
+          const nm = String(img.name||'');
+          const m = nm.match(rx);
+          if(!m) return null as { url:string; idx:number } | null;
+          const idx = parseInt(m[1]||'0',10);
+          return Number.isFinite(idx) && img.downloadUrl? { url: img.downloadUrl as string, idx }: null;
+        })
+        .filter((x: { url:string; idx:number } | null): x is { url:string; idx:number } => !!x)
         .sort((a,b)=> a.idx-b.idx)
-        .map(x=> x.url!)
+        .map(x=> x.url)
       ;
       if(relImgs.length) return { images: relImgs, pdf };
       const filePreviews = Array.isArray((pdf as any).previewImages)? (pdf as any).previewImages: [];
@@ -244,15 +264,15 @@ export default function AdminMaterialPage(){
         pendingBasesRef.current.add(base);
         (async()=>{
           try{
-            const qs = new URLSearchParams(); qs.set('q', base); qs.set('limit','100');
+            const qs = new URLSearchParams(); qs.set('q', base); qs.set('limit','200');
             const r = await fetch(`/api/shop/raw-files?${qs.toString()}`, { cache:'no-store' });
             const d = await r.json();
             if(r.ok && d.success){
-              const matcher = new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i');
+              const rx2 = buildImageRegex(base);
               const list = (d.items||[])
                 .map((it:any)=> ({ name: String(it.name||''), url: it.url }))
-                .filter((it:any)=> matcher.test(it.name) && it.url)
-                .map((it:any)=> ({ url: it.url, idx: parseInt((it.name.match(/-(\\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
+                .map((it:any)=>{ const m=it.name.match(rx2); if(!m) return null as { url:string; idx:number } | null; const idx=parseInt(m[1]||'0',10); return Number.isFinite(idx)&&it.url? { url: it.url as string, idx }: null; })
+                .filter((x: { url:string; idx:number } | null): x is { url:string; idx:number } => !!x)
                 .sort((a:any,b:any)=> a.idx-b.idx)
                 .map((x:any)=> x.url as string);
               if(list.length){ setRawPreviews(prev=> ({ ...prev, [base]: list })); }
