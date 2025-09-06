@@ -16,7 +16,7 @@ const DEFAULT_COLS=21; const DEFAULT_ROWS=20; const tileSize=40; const MAX_LIVES
 const PLAYER_TILE_TIME=0.93; // vorher 1.4
 const GHOST_TILE_TIMES=[1.07,1.00,1.20,1.33]; // vorher 1.6,1.5,1.8,2.0
 const GLOBAL_SPEED_SCALE=1.0; // globaler Multiplikator
-const DEBUG_VERSION='pac-flow-v3.1-fast50-hardcodedCSV';
+const DEBUG_VERSION='pac-flow-v3.2-hardcodedCSV';
 
 // Hart-codiertes Board erzwingen: Wenn true, wird IMMER das unten definierte embeddedCSV verwendet
 // und es findet KEIN Laden über fetch/XLSX statt.

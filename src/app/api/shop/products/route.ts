@@ -43,10 +43,9 @@ export async function GET(req: Request){
   downloadUrl: f.key ? (useWebdav ? (useShopWebdav ? shopWebdavPublicUrl(f.key) : webdavPublicUrl(f.key)) : s3PublicUrl(f.key)) : undefined
       })) : []
     }));
-  // Kategorienquelle vereinheitlicht: zentrale Liste zurückgeben, gefiltert auf verwendete falls gewünscht
-  const usedCats = page===1 ? (await ShopProduct.distinct('category', showAll ? {} : { isPublished: true })).filter(Boolean) : [];
+  // Kategorien: immer die zentrale Liste zurückgeben (damit alle Fächer, z.B. Religion, verfügbar sind)
   const subjects = page===1 ? (await ShopProduct.distinct('subjects', showAll ? {} : { isPublished: true })).filter(Boolean) : [];
-  const categories = CATEGORIES.filter(c=> usedCats.includes(c));
+  const categories = CATEGORIES;
   return NextResponse.json({ success:true, items, page, pageSize: limit, total, categories, subjects });
   } catch (e){
     console.error('ShopProduct GET error', e);
