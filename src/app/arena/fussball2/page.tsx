@@ -19,7 +19,7 @@ export default function FussballLobbyPage(){
   const [creating,setCreating] = useState(false);
   const [title,setTitle] = useState('');
   const [lessonId,setLessonId] = useState('');
-  const [lockExercise,setLockExercise] = useState(false);
+  // Entfernt: lockExercise (Auswahl sperren)
   const [exercises,setExercises] = useState<Array<{ _id:string; title:string; category?:string }>>([]);
   const [lobby,setLobby] = useState<any>(null);
   const [joining,setJoining] = useState(false);
@@ -136,7 +136,7 @@ export default function FussballLobbyPage(){
 
   return (
     <main className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex flex-col gap-8">
-      <h1 className="text-2xl font-bold flex items-center gap-3">⚽ Fußball Matchmaking <span className="text-sm font-normal text-gray-500">(Prototyp)</span></h1>
+      <h1 className="text-2xl font-bold flex items-center gap-3">⚽ Fußballspiel anlegen</h1>
       <section className="rounded border bg-white shadow p-4 flex flex-col gap-4 max-w-5xl">
         <h2 className="text-lg font-semibold">Neues Spiel erstellen</h2>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -145,20 +145,10 @@ export default function FussballLobbyPage(){
           </label>
           <div className="flex flex-col gap-1 text-sm col-span-2">
             <span>Übung auswählen (Pflicht)</span>
-            {!lockExercise && (
-              <select value={lessonId} onChange={e=>setLessonId(e.target.value)} className="border rounded px-2 py-1 text-sm">
-                <option value="">— bitte auswählen —</option>
-                {exercises.map(ex=> <option key={ex._id} value={ex._id}>{ex.title}</option>)}
-              </select>
-            )}
-            {lockExercise && (
-              <div className="text-xs text-gray-700">{selectedExercise?.title || '—'}</div>
-            )}
-            <div className="flex gap-2 items-center mt-1">
-              <label className="text-xs flex items-center gap-1 cursor-pointer select-none"><input type="checkbox" checked={lockExercise} onChange={e=>setLockExercise(e.target.checked)} /> Auswahl sperren</label>
-              {lessonId && !lockExercise && <button onClick={()=>setLockExercise(true)} className="text-[10px] px-2 py-0.5 border rounded bg-gray-50 hover:bg-gray-100">Sperren</button>}
-              {lockExercise && <button onClick={()=>setLockExercise(false)} className="text-[10px] px-2 py-0.5 border rounded bg-gray-50 hover:bg-gray-100">Ändern</button>}
-            </div>
+            <select value={lessonId} onChange={e=>setLessonId(e.target.value)} className="border rounded px-2 py-1 text-sm">
+              <option value="">— bitte auswählen —</option>
+              {exercises.map(ex=> <option key={ex._id} value={ex._id}>{ex.title}</option>)}
+            </select>
           </div>
         </div>
         <div className="flex gap-3 items-center">
@@ -169,7 +159,7 @@ export default function FussballLobbyPage(){
         </div>
       </section>
       <section className="rounded border bg-white shadow p-4 flex flex-col gap-4 max-w-5xl">
-        <h2 className="text-lg font-semibold">Offene Lobbys</h2>
+        <h2 className="text-lg font-semibold">Offene Spiele</h2>
         <div className="flex flex-col gap-3">
           {list.length? list.map((l:LobbyListItem)=>(
             <div key={l.id} className="border rounded p-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
@@ -185,7 +175,7 @@ export default function FussballLobbyPage(){
                 )}
               </div>
             </div>
-          )): <div className="text-xs text-gray-500">{loadingList? 'Lade…':'Keine offenen Lobbys'}</div>}
+          )): <div className="text-xs text-gray-500">{loadingList? 'Lade…':'Keine offenen Spiele'}</div>}
         </div>
       </section>
     </main>

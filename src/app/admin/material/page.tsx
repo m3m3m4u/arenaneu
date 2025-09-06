@@ -367,6 +367,7 @@ export default function AdminMaterialPage(){
         </div>
         {excelPreview && (
           <div className="text-[11px] overflow-auto">
+            <p className="mb-2 text-gray-600">Hinweis: Beim Excel-Import werden Leerzeichen und Unterstriche in Dateinamen gleich behandelt.</p>
             <p className="mb-1 font-medium">Preview ({excelPreview.length} Materialien)</p>
             <table className="w-full text-[11px] border">
               <thead className="bg-gray-50">

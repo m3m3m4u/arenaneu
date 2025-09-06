@@ -19,9 +19,28 @@ function normalizeFileNameForMatch(name:string){
     .normalize('NFKD') // Umlaute trennen
     .replace(/[\u0300-\u036f]/g,'') // kombinierende Zeichen entfernen
     .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
-    .replace(/[^a-z0-9_.-]+/g,'-') // alles Nicht-Erlaubte zu '-'
+    // Leerzeichen und Unterstriche gleich behandeln
+    .replace(/[\s_]+/g,'-')
+    // übrige unerlaubte Zeichen zu '-'
+    .replace(/[^a-z0-9.-]+/g,'-')
     .replace(/-+/g,'-')
-    .replace(/^[-_.]+|[-_.]+$/g,'');
+    .replace(/^[\-\.]+|[\-\.]+$/g,'');
+}
+
+// Erzeuge Namensvarianten, um in der DB breiter zu suchen (Leerzeichen ↔ Unterstrich)
+function buildNameCandidates(names: string[]): string[]{
+  const set = new Set<string>();
+  for(const n of names){
+    const original = String(n||'');
+    const spaceToUnderscore = original.replace(/\s+/g,'_');
+    const underscoreToSpace = original.replace(/_+/g,' ');
+    const bothToDash = original.replace(/[\s_]+/g,'-');
+    set.add(original);
+    set.add(spaceToUnderscore);
+    set.add(underscoreToSpace);
+    set.add(bothToDash);
+  }
+  return Array.from(set);
 }
 
 // Erwartet multipart/form-data mit field "file" (Excel: .xlsx / .xls / .csv)
@@ -52,10 +71,11 @@ export async function POST(req: Request){
     if(token && !previewMode){
       const cached = previewCache.get(token);
       if(!cached) return NextResponse.json({ success:false, error:'Preview abgelaufen oder Token ungültig' }, { status:400 });
-      const { materials } = cached;
+  const { materials } = cached;
       // Commit Logik mit erweitertem Dateinamen-Matching
-      const allNames = [...new Set(materials.flatMap(m=> m.files))];
-      const rawFiles = await ShopRawFile.find({ name: { $in: allNames } }).lean();
+  const allNames = [...new Set(materials.flatMap(m=> m.files))];
+  const candidateNames = buildNameCandidates(allNames);
+  const rawFiles = await ShopRawFile.find({ name: { $in: candidateNames } }).lean();
       const rawMapExact = new Map<string, any>();
       const rawMapNorm = new Map<string, any>();
       rawFiles.forEach(r=>{
@@ -180,8 +200,9 @@ export async function POST(req: Request){
     // Wir können hier keine Dateinamen->Key Zuordnung ohne Index kennen. Vereinfachung: wir versuchen, vorhandene Produkte nicht zu duplizieren (gleicher Titel).
     // Für Datei-Verknüpfungen: Admin lädt zuerst Dateien (Medien-ähnlich) in einen Ordner /shop/uploads/raw/<filename>. Wir suchen diese Keys.
     // RawFile Matching: erweitert (exact + normalisiert)
-    const allNames = [...new Set(materials.flatMap(m=> m.files))];
-    const rawFiles = await ShopRawFile.find({ name: { $in: allNames } }).lean();
+  const allNames = [...new Set(materials.flatMap(m=> m.files))];
+  const candidateNames = buildNameCandidates(allNames);
+  const rawFiles = await ShopRawFile.find({ name: { $in: candidateNames } }).lean();
     const rawMapExact = new Map<string, any>();
     const rawMapNorm = new Map<string, any>();
     rawFiles.forEach(r=>{
