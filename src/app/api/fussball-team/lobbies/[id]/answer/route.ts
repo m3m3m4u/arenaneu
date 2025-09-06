@@ -16,7 +16,7 @@ export async function POST(req:Request, { params }:{ params:{ id:string }} ){
   if(!lobby) return NextResponse.json({ success:false, error:'NOT_FOUND' }, { status:404 });
   const me = (lobby.players||[]).find((p:any)=> p.userId===String(userId));
   if(!me) return NextResponse.json({ success:false, error:'NOT_IN_LOBBY' }, { status:403 });
-  const res = await applyAnswer(params.id, correct, me.side);
+  const res = await applyAnswer(params.id, correct, me.side, String(userId));
   if('error' in res) return NextResponse.json({ success:false, error: res.error }, { status:400 });
   return NextResponse.json({ success:true, state: res.state });
 }

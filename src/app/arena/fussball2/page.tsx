@@ -23,7 +23,7 @@ export default function FussballLobbyPage(){
   const [exercises,setExercises] = useState<Array<{ _id:string; title:string; category?:string }>>([]);
   const [lobby,setLobby] = useState<any>(null);
   const [joining,setJoining] = useState(false);
-  const [ready,setReady] = useState(false);
+  const [ready,setReady] = useState(true);
   const [error,setError] = useState<string|undefined>();
   const router = useRouter();
 
@@ -42,11 +42,8 @@ export default function FussballLobbyPage(){
       const j = await res.json();
       if(!j.success){ setError(j.error||'Fehler'); } else {
         setLobby(j.lobby);
-        // Host automatisch bereit (Server setzt ready=true)
-        const meId = (session as any)?.user?.id || (session as any)?.user?._id;
-        if(meId && j.lobby.players?.find((p:any)=> p.userId===String(meId) && p.ready)){
-          setReady(true);
-        }
+  // Sofort bereit ohne Klick
+  setReady(true);
       }
   loadList();
     } catch(e:any){ setError(String(e)); }
@@ -70,11 +67,7 @@ export default function FussballLobbyPage(){
     } catch(e:any){ setError(String(e)); }
   }
 
-  async function toggleReady(){
-    if(!lobby) return; setError(undefined);
-    try { const r=await fetch(`/api/fussball/lobbies/${lobby.id}/ready`,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ready: !ready }) }); const j=await r.json(); if(!j.success) setError(j.error||'Ready fehlgeschlagen'); else { setLobby(j.lobby); setReady(!ready); } }
-    catch(e:any){ setError(String(e)); }
-  }
+  // Ready-Toggle entfällt
 
   async function leave(){
     if(!lobby) return;
@@ -125,8 +118,7 @@ export default function FussballLobbyPage(){
           </div>
           <div className="flex gap-3 flex-wrap items-center">
             <button onClick={leave} className="px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm">Verlassen</button>
-            <button onClick={toggleReady} className={`px-3 py-1.5 rounded text-sm font-semibold ${ready? 'bg-green-600 text-white hover:bg-green-700':'bg-amber-500 text-black hover:bg-amber-400'}`}>{ready? 'Bereit ✓':'Bereit?'}</button>
-            <button disabled className="px-3 py-1.5 rounded bg-indigo-500 text-white text-sm opacity-60 cursor-not-allowed">Start (später automatisch)</button>
+            {/* Ready/Autostart entfernt – Spiel startet automatisch sobald 2 Spieler da sind */}
             {error && <span className="text-xs text-red-600">{error}</span>}
           </div>
         </div>
@@ -152,7 +144,7 @@ export default function FussballLobbyPage(){
           </div>
         </div>
         <div className="flex gap-3 items-center">
-          <button disabled={creating || !session || !lessonId} onClick={createLobby} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating? 'Erstelle…':'Lobby erstellen'}</button>
+          <button disabled={creating || !session || !lessonId} onClick={createLobby} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating? 'Erstelle…':'Spiel erstellen'}</button>
           {!session && <span className="text-xs text-red-600">Login benötigt</span>}
           {!lessonId && <span className="text-xs text-red-600">Bitte eine Übung wählen</span>}
           {error && <span className="text-xs text-red-600">{error}</span>}

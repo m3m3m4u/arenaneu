@@ -21,7 +21,7 @@ export default function FussballTeamLobbyPage(){
   const [exercises,setExercises] = useState<Array<{ _id:string; title:string; category?:string }>>([]);
   const [lobby,setLobby] = useState<any>(null);
   const [joining,setJoining] = useState(false);
-  const [ready,setReady] = useState(false);
+  const [ready,setReady] = useState(true);
   const [error,setError] = useState<string|undefined>();
   const router = useRouter();
 
@@ -38,11 +38,9 @@ export default function FussballTeamLobbyPage(){
       const res = await fetch('/api/fussball-team/lobbies',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, lessonId }) });
       const j = await res.json();
       if(!j.success){ setError(j.error||'Fehler'); } else {
-        setLobby(j.lobby);
-        const meId = (session as any)?.user?.id || (session as any)?.user?._id;
-        if(meId && j.lobby.players?.find((p:any)=> p.userId===String(meId) && p.ready)){
-          setReady(true);
-        }
+  setLobby(j.lobby);
+  // Sofort bereit ohne Benutzeraktion
+  setReady(true);
       }
       loadList();
     } catch(e:any){ setError(String(e)); }
@@ -66,11 +64,7 @@ export default function FussballTeamLobbyPage(){
     } catch(e:any){ setError(String(e)); }
   }
 
-  async function toggleReady(){
-    if(!lobby) return; setError(undefined);
-    try { const r=await fetch(`/api/fussball-team/lobbies/${lobby.id}/ready`,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ready: !ready }) }); const j=await r.json(); if(!j.success) setError(j.error||'Ready fehlgeschlagen'); else { setLobby(j.lobby); setReady(!ready); } }
-    catch(e:any){ setError(String(e)); }
-  }
+  // Ready-Toggle entfällt
 
   async function leave(){
     if(!lobby) return;
@@ -91,6 +85,8 @@ export default function FussballTeamLobbyPage(){
   },[lobby?.status, lobby?.id, router]);
 
   if(lobby){
+    const leftPlayers = (lobby.players||[]).filter((p:any)=> p.side==='left');
+    const rightPlayers = (lobby.players||[]).filter((p:any)=> p.side==='right');
     return (
       <main className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex flex-col gap-6">
         <h1 className="text-2xl font-bold">⚽ Fußball Team Lobby</h1>
@@ -105,11 +101,38 @@ export default function FussballTeamLobbyPage(){
               <div className="text-sm text-gray-800">{selectedExercise?.title || exercises.find(e=> e._id===lobby.lessonId)?.title || lobby.lessonId}</div>
             </div>
           )}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="text-sm font-semibold text-gray-600">Spieler</div>
-            <ul className="text-sm flex flex-col gap-1">
-              {lobby.players.map((p:any)=>(<li key={p.userId} className="flex items-center gap-2"><span className="px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] uppercase">{p.side}</span><span>{p.username}</span>{p.ready && <span className="text-green-600 font-semibold text-xs">bereit</span>}</li>))}
-            </ul>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="border rounded p-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-sm font-semibold flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-red-600"/>Team Rot</div>
+                  <div className="text-[11px] text-gray-500">{leftPlayers.length}</div>
+                </div>
+                <ul className="text-sm flex flex-col gap-1 min-h-[1.75rem]">
+                  {leftPlayers.length? leftPlayers.map((p:any)=>(
+                    <li key={p.userId} className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] uppercase">ROT</span>
+                      <span>{p.username}</span>
+                    </li>
+                  )) : <li className="text-xs text-gray-500">Noch kein Spieler</li>}
+                </ul>
+              </div>
+              <div className="border rounded p-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-sm font-semibold flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-blue-600"/>Team Blau</div>
+                  <div className="text-[11px] text-gray-500">{rightPlayers.length}</div>
+                </div>
+                <ul className="text-sm flex flex-col gap-1 min-h-[1.75rem]">
+                  {rightPlayers.length? rightPlayers.map((p:any)=>(
+                    <li key={p.userId} className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] uppercase">BLAU</span>
+                      <span>{p.username}</span>
+                    </li>
+                  )) : <li className="text-xs text-gray-500">Noch kein Spieler</li>}
+                </ul>
+              </div>
+            </div>
             {lobby.status==='waiting' && <div className="text-xs text-amber-600">Warte auf beide Teams…</div>}
             {lobby.status==='active' && <div className="text-xs text-green-600">Spiel startet…</div>}
             <div className="text-[10px] text-gray-500 mt-1">Lobby ID: <span className="font-mono select-all">{lobby.id}</span></div>
@@ -119,8 +142,7 @@ export default function FussballTeamLobbyPage(){
           </div>
           <div className="flex gap-3 flex-wrap items-center">
             <button onClick={leave} className="px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm">Verlassen</button>
-            <button onClick={toggleReady} className={`px-3 py-1.5 rounded text-sm font-semibold ${ready? 'bg-green-600 text-white hover:bg-green-700':'bg-amber-500 text-black hover:bg-amber-400'}`}>{ready? 'Bereit ✓':'Bereit?'}</button>
-            <button disabled className="px-3 py-1.5 rounded bg-indigo-500 text-white text-sm opacity-60 cursor-not-allowed">Start (später automatisch)</button>
+            {/* Ready/Autostart entfernt – Spiel startet automatisch wenn beide Seiten besetzt sind */}
             {error && <span className="text-xs text-red-600">{error}</span>}
           </div>
         </div>
@@ -132,7 +154,7 @@ export default function FussballTeamLobbyPage(){
     <main className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex flex-col gap-8">
       <h1 className="text-2xl font-bold flex items-center gap-3">⚽ Fußball Teamspiel anlegen</h1>
       <section className="rounded border bg-white shadow p-4 flex flex-col gap-4 max-w-5xl">
-        <h2 className="text-lg font-semibold">Neues Team-Spiel erstellen</h2>
+  <h2 className="text-lg font-semibold">Neues Team-Spiel erstellen</h2>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-sm col-span-1">Titel
             <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Mein Teamspiel" className="border rounded px-2 py-1 text-sm" />
@@ -146,7 +168,7 @@ export default function FussballTeamLobbyPage(){
           </div>
         </div>
         <div className="flex gap-3 items-center">
-          <button disabled={creating || !session || !lessonId} onClick={createLobby} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating? 'Erstelle…':'Lobby erstellen'}</button>
+          <button disabled={creating || !session || !lessonId} onClick={createLobby} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating? 'Erstelle…':'Spiel erstellen'}</button>
           {!session && <span className="text-xs text-red-600">Login benötigt</span>}
           {!lessonId && <span className="text-xs text-red-600">Bitte eine Übung wählen</span>}
           {error && <span className="text-xs text-red-600">{error}</span>}

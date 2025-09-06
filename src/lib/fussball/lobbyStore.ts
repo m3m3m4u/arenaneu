@@ -60,8 +60,8 @@ export async function joinLobby(id: string, userId: string, username: string){
   const side: 'left'|'right' = lobby.players.some(p=>p.side==='left') ? 'right':'left';
   lobby.players.push({ userId, username, joinedAt: Date.now(), side, ready:true, score:0 });
   lobby.lastActivity = Date.now();
-  // Wenn jetzt zwei Spieler drin sind (Host ist bereits ready), Spiel sofort starten
-  if(lobby.players.length === 2 && lobby.players.every(p=>p.ready)){
+  // Start ohne Ready-Mechanik: sobald zwei Spieler vorhanden sind
+  if(lobby.players.length === 2){
     lobby.status = 'active';
   }
   if(useDb){
@@ -76,9 +76,7 @@ export async function updateReady(id: string, userId: string, ready: boolean){
   let lobby = await getLobby(id) as LobbyRecord | undefined; if(!lobby) return { error:'NOT_FOUND' } as const;
   const p = lobby.players.find(p=>p.userId===userId); if(!p) return { error:'NOT_IN_LOBBY' } as const;
   p.ready = ready; lobby.lastActivity = Date.now();
-  if(lobby.players.length===2 && lobby.players.every(p=>p.ready) && lobby.status==='waiting'){
-    lobby.status='active';
-  }
+  // Kein Autostart mehr über Ready-Status
   if(useDb){
     try { await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { players: lobby.players, status: lobby.status, lastActivity: lobby.lastActivity } }); } catch { /* ignore */ }
   } else {

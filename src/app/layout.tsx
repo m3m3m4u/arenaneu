@@ -21,6 +21,18 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "LernArena - Interaktive Lernplattform",
   description: "Eine moderne Lernplattform mit interaktiven Kursen und Quizzes",
+  // Setze LA_Logo.png als Favicon und Apple Touch Icon
+  icons: {
+    icon: [
+      { url: "/logo", type: "image/png", sizes: "any" },
+    ],
+    shortcut: [
+      { url: "/logo", type: "image/png" },
+    ],
+    apple: [
+      { url: "/logo" },
+    ],
+  },
 };
 
 export default function RootLayout({
