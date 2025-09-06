@@ -18,7 +18,12 @@ export default function FussballLivePage(){
     '/media/spielfelder/spielfeld6.JPG',
     '/media/spielfelder/spielfeld7.JPG',
   ], []);
-  const [fieldIdx, setFieldIdx] = useState<number>(() => Math.floor(Math.random() * 7));
+  // Feldposition: 0..6 mit 3 (entspricht 4) als neutral
+  const NEUTRAL_INDEX = 3;
+  const LEFT_GOAL_INDEX = 0;
+  const RIGHT_GOAL_INDEX = 6;
+  const STEP = 3; // alle 3 Punkte Vorsprung = 1 Schritt
+  const [fieldIdx, setFieldIdx] = useState<number>(NEUTRAL_INDEX);
   // Natürliche Bildgröße für korrektes Seitenverhältnis
   const [fieldWH, setFieldWH] = useState<{w:number; h:number} | null>(null);
 
@@ -30,6 +35,7 @@ export default function FussballLivePage(){
   const [history,setHistory] = useState<Array<{id:string; correct:boolean}>>([]);
   // Team-Score und Zugseite (welches Team ist am Zug)
   const [scores, setScores] = useState<{left:number; right:number}>({ left: 0, right: 0 });
+  const [goals, setGoals] = useState<{left:number; right:number}>({ left: 0, right: 0 });
   const [turn, setTurn] = useState<'left'|'right'>('left');
   const [current,setCurrent] = useState<MCQuestion|undefined>();
   const [locked,setLocked] = useState(false);
@@ -117,19 +123,32 @@ export default function FussballLivePage(){
     return ()=>{ cancelled = true; };
   },[FIELD_IMAGES, fieldIdx]);
 
-  // Bildwechsel, wenn ein Team 3 Punkte Vorsprung hat (und pro weitere 3 Vorsprung ein weiterer Schritt)
-  const lastStepQuotRef = useRef(0);
+  // Feldposition abhängig vom aktuellen Vorsprung bewegen; bei 1/7 -> Tor und Reset
+  const handlingGoalRef = useRef(false);
   useEffect(()=>{
-    const lead = Math.abs(scores.left - scores.right);
-    const q = Math.floor(lead / 3);
-    if(q > lastStepQuotRef.current){
-      lastStepQuotRef.current = q;
-      setFieldIdx(i => (i + 1) % FIELD_IMAGES.length);
-    } else if(q < lastStepQuotRef.current){
-      // Falls Führung schrumpft (z. B. nach Reset), Quotient zurücksetzen
-      lastStepQuotRef.current = q;
+    if(handlingGoalRef.current) return;
+    const rawLead = scores.left - scores.right; // >0: links führt, <0: rechts führt
+    const steps = Math.min(3, Math.floor(Math.abs(rawLead) / STEP));
+    const desiredIdx = rawLead > 0
+      ? Math.max(LEFT_GOAL_INDEX, NEUTRAL_INDEX - steps)
+      : rawLead < 0
+        ? Math.min(RIGHT_GOAL_INDEX, NEUTRAL_INDEX + steps)
+        : NEUTRAL_INDEX;
+    // Tor erreicht?
+    if(desiredIdx === LEFT_GOAL_INDEX || desiredIdx === RIGHT_GOAL_INDEX){
+      handlingGoalRef.current = true;
+      // Tor für führendes Team verbuchen
+      setGoals(g=> desiredIdx===LEFT_GOAL_INDEX ? ({ ...g, left: g.left + 1 }) : ({ ...g, right: g.right + 1 }));
+      // Punkte zurücksetzen und Feld neutralisieren
+      setTimeout(()=>{
+        setScores({ left: 0, right: 0 });
+        setFieldIdx(NEUTRAL_INDEX);
+        handlingGoalRef.current = false;
+      }, 100); // kurzer Tick, damit UI Torzustand erkennen kann
+      return;
     }
-  },[scores.left, scores.right, FIELD_IMAGES.length]);
+    setFieldIdx(desiredIdx);
+  },[scores.left, scores.right]);
 
   return (
     <main className="max-w-7xl mx-auto p-4 md:p-6">
@@ -150,6 +169,13 @@ export default function FussballLivePage(){
             <span className="text-[11px]">Rechts</span>
             <span className="px-1 rounded bg-white border font-mono">{scores.right}</span>
             <span className="ml-1 text-[11px]">Zug: <b>{turn==='left'?'Links':'Rechts'}</b></span>
+          </span>
+          <span className="inline-flex items-center gap-2 px-2 py-1 rounded bg-green-50 border border-green-200 text-green-800">
+            <span className="font-semibold">Tore</span>
+            <span className="text-[11px]">Links</span>
+            <span className="px-1 rounded bg-white border font-mono">{goals.left}</span>
+            <span className="text-[11px]">Rechts</span>
+            <span className="px-1 rounded bg-white border font-mono">{goals.right}</span>
           </span>
         </div>
         <div className="ml-auto text-xs"><a href="/arena/fussball2" className="text-blue-600 hover:underline">Zur Lobby</a></div>
@@ -204,10 +230,7 @@ export default function FussballLivePage(){
           <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/50 text-white backdrop-blur">
             Spielfeld: {fieldIdx + 1}/{FIELD_IMAGES.length}
           </div>
-          <div className="absolute top-2 right-2 flex gap-1">
-            <button onClick={()=> setFieldIdx(i=> (i-1+FIELD_IMAGES.length)%FIELD_IMAGES.length)} className="px-2 py-1 text-[10px] rounded bg-white/70 hover:bg-white text-gray-900">◀</button>
-            <button onClick={()=> setFieldIdx(i=> (i+1)%FIELD_IMAGES.length)} className="px-2 py-1 text-[10px] rounded bg-white/70 hover:bg-white text-gray-900">▶</button>
-          </div>
+          {/* Manuelle Bildwechsel entfernt – Position ergibt sich aus Vorsprung */}
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
             {questions.map(q=>{ const statsQ = correctCounts[q.id]; const wrong = statsQ?.wrong||0; const asked = statsQ?.asked||0; return (
               <div key={q.id} className="flex flex-col items-center">
