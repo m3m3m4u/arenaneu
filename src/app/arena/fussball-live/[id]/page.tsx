@@ -75,9 +75,9 @@ export default function FussballLivePage(){
         }
         // Übung laden
         const rEx = await fetch(`/api/exercises?lessonId=${encodeURIComponent(lessonId)}`);
-        const jEx = await rEx.json();
-        if(!jEx?.success || !jEx.exercise) throw new Error('Übung nicht gefunden');
-        const mapped = toMcQuestions(jEx.exercise);
+  const jEx = await rEx.json();
+  if(!jEx?.success || !jEx.exercise) throw new Error('Übung nicht gefunden');
+  const mapped = buildQuestionsFromExercise(jEx.exercise);
         if(alive){ setExerciseTitle(mapped.title); setQuestions(mapped.items); }
       } catch(e:any){ if(alive) setErrorQs(e?.message || String(e)); }
       finally { if(alive) setLoadingQs(false); }
@@ -257,7 +257,7 @@ async function fetchLobby(lobbyId: string){
   throw new Error('Lobby nicht gefunden');
 }
 
-type ExerciseApi = { success:boolean; exercise?: { _id:string; title:string; type:string; questions?: Array<{ question:string; allAnswers?:string[]; correctAnswer?:string; correctAnswers?:string[]; wrongAnswers?:string[] }>} };
+type ExerciseApi = { success:boolean; exercise?: { _id:string; title:string; type:string; content?: any; questions?: Array<any> } };
 
 async function fetchExercise(lessonId: string){
   const r = await fetch(`/api/exercises?lessonId=${encodeURIComponent(lessonId)}`);
@@ -266,34 +266,60 @@ async function fetchExercise(lessonId: string){
   return j.exercise;
 }
 
-function toMcQuestions(exercise: NonNullable<ExerciseApi['exercise']>): { title?:string; items: MCQuestion[] }{
+function buildQuestionsFromExercise(exercise: NonNullable<ExerciseApi['exercise']>): { title?:string; items: MCQuestion[] }{
   const items: MCQuestion[] = [];
+  const title = exercise.title;
+  // 1) content.blocks (kanonisch in unseren Minigames)
+  const blocks = Array.isArray(exercise?.content?.blocks) ? exercise.content.blocks as Array<Record<string, unknown>> : [];
+  if(blocks.length){
+    blocks.forEach((b, idx)=>{
+      // Frage-Text
+      const text = String((b as any).question ?? (b as any).prompt ?? (b as any).title ?? '').trim();
+      let answersRaw: any = (b as any).answers ?? (b as any).options ?? (b as any).choices ?? (b as any).alternatives ?? (b as any).antworten;
+      if(!Array.isArray(answersRaw)) answersRaw = [];
+      const answers = (answersRaw as any[]).map(a=> typeof a==='string'? a: String((a && (a as any).text) ?? (a as any)?.answer ?? (a as any)?.value ?? (a as any)?.label ?? (a as any)?.title ?? '')).map(s=>s.trim()).filter(Boolean);
+      if(!text || answers.length < 2) return;
+      // Korrekt-Index
+  let correct = 0;
+      const flagged = (answersRaw as any[]).map(a=> Boolean((a as any)?.correct || (a as any)?.isCorrect || (a as any)?.right || (a as any)?.valid));
+      const flaggedIdx = flagged.findIndex(v=> v);
+      if(flaggedIdx>=0) correct = flaggedIdx;
+      else {
+        const cIdx = (b as any).correctIndex ?? (b as any).correct;
+        if(typeof cIdx==='number' && Number.isFinite(cIdx)) correct = Math.max(0, Math.min(answers.length-1, Math.floor(cIdx)));
+      }
+  // Begrenze auf max. 4 Optionen, stelle sicher, dass die korrekte enthalten ist
+  const limitedA = [answers[correct], ...answers.filter((_,i)=> i!==correct)].filter(Boolean);
+  const uniqueLimitedA = Array.from(new Set(limitedA)).slice(0,4);
+  const correctLimited = uniqueLimitedA.length ? 0 : 0;
+  items.push({ id:`cb${idx}`, text, options: uniqueLimitedA, correct: correctLimited });
+    });
+    return { title, items };
+  }
+  // 2) exercise.questions (MC-Pool)
   const qs = Array.isArray(exercise.questions)? exercise.questions : [];
-  qs.forEach((q, idx)=>{
+  qs.forEach((qRaw, idx)=>{
+    const q = qRaw as any;
+    const text = String(q.question ?? q.prompt ?? q.title ?? '').trim();
+    if(!text) return;
     let options: string[] = Array.isArray(q.allAnswers) && q.allAnswers.length? [...q.allAnswers] : [];
-    // Fallback-Optionen aus korrekt + falsch bauen
     if(options.length === 0){
       const pool = new Set<string>();
-      if(q.correctAnswer) pool.add(q.correctAnswer);
-      (q.correctAnswers||[]).forEach(a=> pool.add(a));
-      (q.wrongAnswers||[]).forEach(a=> pool.add(a));
+      if(q.correctAnswer) pool.add(String(q.correctAnswer));
+      (q.correctAnswers||[]).forEach((a:any)=> pool.add(String(a)));
+      (q.wrongAnswers||[]).forEach((a:any)=> pool.add(String(a)));
       options = Array.from(pool);
     }
-    if(options.length === 0) return; // Frage überspringen
-    // Korrekte Antwort bestimmen (single-choice bevorzugt)
-    let correctAnswer: string | undefined = q.correctAnswer || (q.correctAnswers && q.correctAnswers[0]) || undefined;
-    if(!correctAnswer){
-      // Wenn allAnswers existiert und erste Antwort korrekt sein soll, nimm Index 0
-      correctAnswer = options[0];
-    }
-    // Sicherstellen, dass die korrekte Antwort in den Optionen ist
-    if(!options.includes(correctAnswer)) options = [correctAnswer, ...options];
-    // Eindeutig machen
-    options = Array.from(new Set(options));
-    const correct = Math.max(0, options.indexOf(correctAnswer));
-    items.push({ id: `q${idx}`, text: q.question || `Frage ${idx+1}`, options, correct });
+  if(options.length < 2) return;
+  let correctAnswer: string = String(q.correctAnswer || (q.correctAnswers && q.correctAnswers[0]) || options[0] || '');
+  // Stelle sicher, dass correctAnswer enthalten ist und begrenze auf 4
+  const base = Array.from(new Set([correctAnswer, ...options].filter(Boolean)));
+  const limited = base.slice(0,4);
+  // Korrektindex neu auf 0 setzen (da correctAnswer vorn einsortiert)
+  const correct = limited.length ? 0 : 0;
+  items.push({ id:`q${idx}`, text, options: limited, correct });
   });
-  return { title: exercise.title, items };
+  return { title, items };
 }
 
 // Ende

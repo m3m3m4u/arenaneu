@@ -32,11 +32,8 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
   const [marking,setMarking]=useState(false);
   const [isFullscreen,setIsFullscreen]=useState(false);
   const [gamePixelWidth,setGamePixelWidth]=useState<number|undefined>(undefined);
-  // Touch handling refs
-  // Touch Move State: nur Bewegung (kein Auto-Shoot mehr über Hold). Schießen erfolgt über separaten Feuer-Button.
-  const touchStateRef=useRef<{dragging:boolean;startY:number;shipStartY:number;touchId:number|null;moved:boolean;startTime:number}>(
-    {dragging:false,startY:0,shipStartY:0,touchId:null,moved:false,startTime:0}
-  );
+  // Touch: Tap obere/untere Hälfte für Up/Down-Impuls, kein Drag mehr
+  const lastTapRef=useRef<number>(0);
 
   const blocks=buildQuestionBlocks(lesson);
   const targetScore=Number((lesson.content as LessonContent | undefined)?.targetScore)||DEFAULT_TARGET_SCORE;
@@ -104,32 +101,18 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
   // Vereinheitlichter starker Fullscreen Swipe Schutz (inkl. Edge Gesten)
   useFullscreenTouchLock(isFullscreen);
 
-  // Touch Steuerung: Drag vertikal bewegt Schiff (kein Schießen mehr per Tap/Hold)
+  // Touch Steuerung: Tap oben/unten
   useEffect(()=>{
     const canvas=canvasRef.current; if(!canvas) return;
     const onTouchStart=(ev:TouchEvent)=>{
       if(!running || paused || gameOver || finished) return; const t=ev.changedTouches[0]; if(!t) return;
-      const state=touchStateRef.current; if(state.touchId!=null) return; state.touchId=t.identifier; state.dragging=true; state.moved=false; state.startTime=performance.now();
-      const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; state.startY=y; state.shipStartY=shipRef.current.y;
+      const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; const half=rect.height/2;
+      if(y<half){ inputRef.current.up=true; inputRef.current.down=false; setTimeout(()=>{ inputRef.current.up=false; }, 140); }
+      else { inputRef.current.down=true; inputRef.current.up=false; setTimeout(()=>{ inputRef.current.down=false; }, 140); }
+      ev.preventDefault();
     };
-    const onTouchMove=(ev:TouchEvent)=>{
-      const state=touchStateRef.current; if(state.touchId==null||!state.dragging) return; for(const t of Array.from(ev.changedTouches)){
-        if(t.identifier!==state.touchId) continue; const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; const dy=y-state.startY; if(Math.abs(dy)>4) state.moved=true; shipRef.current.y=Math.max(shipRef.current.r,Math.min(H-shipRef.current.r,state.shipStartY+dy)); ev.preventDefault(); break; }
-    };
-    const finishInteraction=(ev:TouchEvent)=>{
-      const state=touchStateRef.current; if(state.touchId==null) return; for(const t of Array.from(ev.changedTouches)){
-        if(t.identifier!==state.touchId) continue; state.touchId=null; state.dragging=false; break; }
-    };
-    canvas.addEventListener('touchstart',onTouchStart,{passive:true});
-    canvas.addEventListener('touchmove',onTouchMove,{passive:false});
-    canvas.addEventListener('touchend',finishInteraction,{passive:false});
-    canvas.addEventListener('touchcancel',finishInteraction,{passive:false});
-    return ()=>{
-      canvas.removeEventListener('touchstart',onTouchStart);
-      canvas.removeEventListener('touchmove',onTouchMove as any);
-      canvas.removeEventListener('touchend',finishInteraction as any);
-      canvas.removeEventListener('touchcancel',finishInteraction as any);
-    };
+    canvas.addEventListener('touchstart',onTouchStart,{passive:false});
+    return ()=>{ canvas.removeEventListener('touchstart',onTouchStart as any); };
   },[running,paused,gameOver,finished]);
 
   useEffect(()=>{ const canvas=canvasRef.current; if(!canvas) return; const ctx=canvas.getContext('2d'); if(!ctx) return; const sys=window.devicePixelRatio||1; const dpr=Math.max(sys,FORCE_MIN_DPR); canvas.width=W*dpr; canvas.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.imageSmoothingEnabled=true; (ctx as unknown as { imageSmoothingQuality?: string }).imageSmoothingQuality='high'; },[]);
@@ -348,7 +331,7 @@ export default function SpaceImpactGame({ lesson, courseId, completedLessons, se
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-4 p-4 text-center">
             <h2 className="text-2xl font-bold">🛸 Space Impact</h2>
             <p className="text-xs max-w-xs">Tastatur: ↑ / ↓ bewegen, Leertaste schießt. Touch: Ziehen = bewegen, Feuer-Button rechts unten zum Schießen (halten = Dauerfeuer). Triff die richtige Antwort-Kugel.</p>
-            <button onClick={start} className="px-6 py-2 rounded bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold">Start (Enter)</button>
+            <button onClick={start} onTouchStart={(e)=>{ e.preventDefault(); start(); }} className="px-6 py-2 rounded bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold">Start (Enter)</button>
             <p className="text-[10px] opacity-70">Ziel: {targetScore} Punkte</p>
           </div>
         )}

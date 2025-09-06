@@ -305,16 +305,22 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
       </div>
     </div>
     <div className="relative flex-1 flex items-center justify-center" style={{width: gamePixelWidth? gamePixelWidth:'100%'}}>
-      <canvas ref={canvasRef} width={COLS*tileSize} height={ROWS*tileSize} className={isFullscreen? 'block mx-auto rounded border-2 border-[#2c3e50] bg-black':'block mx-auto rounded-[10px] border-2 border-[#2c3e50] shadow bg-black'} />
+      <canvas 
+        ref={canvasRef} 
+        width={COLS*tileSize} 
+        height={ROWS*tileSize} 
+        className={isFullscreen? 'block mx-auto rounded border-2 border-[#2c3e50] bg-black':'block mx-auto rounded-[10px] border-2 border-[#2c3e50] shadow bg-black'}
+        onTouchStart={(e)=>{ const t=e.touches[0]; if(!t) return; const canvas=canvasRef.current; if(!canvas) return; const rect=canvas.getBoundingClientRect(); const x=t.clientX-rect.left; const y=t.clientY-rect.top; if(x<0||y<0||x>rect.width||y>rect.height) return; const p=playerRef.current; const px=p.x - rect.width/COLS*0.5; const py=p.y - rect.height/ROWS*0.5; const dx=x - px; const dy=y - py; if(Math.abs(dx) > Math.abs(dy)) playerRef.current.nextDir = { x: dx>0? 1 : -1, y: 0 }; else playerRef.current.nextDir = { x: 0, y: dy>0? 1 : -1 }; if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      />
       {gameOver && !finished && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-3 p-4 text-center">
         <div className="text-red-400 font-bold text-3xl">Game Over</div>
         <div className="text-sm">Punkte: {score}</div>
-        <button onClick={restart} className="px-5 py-2 rounded bg-red-500 hover:bg-red-600 text-white text-sm font-semibold">Neu starten</button>
+        <button onClick={restart} onTouchStart={(e)=>{ e.preventDefault(); restart(); }} className="px-5 py-2 rounded bg-red-500 hover:bg-red-600 text-white text-sm font-semibold">Neu starten</button>
       </div>)}
       {finished && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white gap-3 p-4 text-center">
         <div className="text-green-400 font-bold text-3xl">✔ Ziel erreicht</div>
         <div className="text-sm">Punkte: {score}</div>
-        <button onClick={restart} className="px-5 py-2 rounded bg-green-500 hover:bg-green-600 text-white text-sm font-semibold">Nochmal</button>
+        <button onClick={restart} onTouchStart={(e)=>{ e.preventDefault(); restart(); }} className="px-5 py-2 rounded bg-green-500 hover:bg-green-600 text-white text-sm font-semibold">Nochmal</button>
       </div>)}
       {paused && !gameOver && !finished && (<div className="absolute inset-0 flex items-center justify-center bg-black/45 text-white text-4xl font-bold">PAUSE</div>)}
     </div>

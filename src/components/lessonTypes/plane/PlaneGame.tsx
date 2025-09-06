@@ -100,7 +100,8 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const bgReadyRef = useRef(false);
   // Touch/Swipe
-  const touchStartRef = useRef<{x:number;y:number;time:number}|null>(null);
+  // Touch: kein Swipe/Drag mehr – Tap obere/untere Bildschirmhälfte => Up/Down Impuls
+  const lastTapRef = useRef<number>(0);
 
   // Frage-Reihenfolge
   const questionOrderRef = useRef<number[]>([]);
@@ -486,14 +487,12 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
     <div
       ref={wrapperRef}
       className={isFullscreen ? 'fixed inset-0 z-50 bg-black overflow-hidden' : 'w-full py-4'}
-      onTouchStart={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } const t=e.touches[0]; touchStartRef.current={ x:t.clientX, y:t.clientY, time: performance.now() }; }}
-      onTouchMove={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } if(!touchStartRef.current) return; const t=e.touches[0]; const dy=t.clientY - touchStartRef.current.y; if(isFullscreen && Math.abs(dy)>10){ try{ e.preventDefault(); }catch{} } }}
-      onTouchEnd={(e)=>{ const s=touchStartRef.current; if(!s) return; const t=(e.changedTouches&&e.changedTouches[0])? e.changedTouches[0] : (e.touches[0]||null); if(!t){ touchStartRef.current=null; return; } const dx=t.clientX-s.x; const dy=t.clientY-s.y; const adx=Math.abs(dx), ady=Math.abs(dy); if(ady>36 && ady>adx){ if(dy<0){
-            keysRef.current.ArrowUp = true; keysRef.current.ArrowDown = false; setTimeout(()=>{ keysRef.current.ArrowUp=false; }, 140);
-          } else {
-            keysRef.current.ArrowDown = true; keysRef.current.ArrowUp = false; setTimeout(()=>{ keysRef.current.ArrowDown=false; }, 140);
-          } }
-          touchStartRef.current=null; }}
+      onTouchStart={(e)=>{ const t=e.touches[0]; if(!t) return; const canvas=canvasRef.current; if(!canvas) return; const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; const half = rect.height/2; if(y<0||y>rect.height) return; // Tap-to-start
+        if(!running && !gameOver && !finished){ start(); }
+        if(!paused){ if(y < half){ keysRef.current.ArrowUp=true; keysRef.current.ArrowDown=false; setTimeout(()=>{ keysRef.current.ArrowUp=false; }, 160); } else { keysRef.current.ArrowDown=true; keysRef.current.ArrowUp=false; setTimeout(()=>{ keysRef.current.ArrowDown=false; }, 160); } }
+        if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      onTouchMove={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      onTouchEnd={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
       onWheel={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
       style={{touchAction: isFullscreen ? 'none' : 'manipulation'}}
     >
@@ -555,7 +554,7 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/55 text-center text-white p-4">
             <h2 className="text-2xl font-bold mb-3">✈️ Flugzeug Quiz</h2>
             <p className="mb-3 max-w-sm text-xs sm:text-sm">Steuere mit ↑ / ↓ durch die richtige Antwort-Wolke. Enter oder Button startet.</p>
-            <button onClick={start} className="px-5 py-2 rounded bg-amber-400 hover:bg-amber-500 text-black font-semibold text-xs shadow">Start (Enter)</button>
+            <button onClick={start} onTouchStart={(e)=>{ e.preventDefault(); start(); }} className="px-5 py-2 rounded bg-amber-400 hover:bg-amber-500 text-black font-semibold text-xs shadow">Start (Enter)</button>
             <p className="mt-4 text-[10px] text-white/70">Punkte-Ziel: {targetScore}</p>
           </div>
         )}
