@@ -57,7 +57,8 @@ export default function FussballLivePage(){
     setCurrent(weights[weights.length-1].q);
   },[questions, correctCounts]);
 
-  useEffect(()=>{ if(questions.length) pickNext(); },[pickNext, questions.length]);
+  // Nur initial oder wenn keine aktuelle Frage vorhanden ist automatisch wählen
+  useEffect(()=>{ if(questions.length && !current) pickNext(); },[questions.length, current, pickNext]);
 
   // Übung aus Lobby laden und Fragen setzen
   useEffect(()=>{
@@ -85,17 +86,17 @@ export default function FussballLivePage(){
     return ()=>{ alive=false; };
   },[id]);
 
+  const answeringRef = useRef(false);
   function answer(idx:number){
-    if(!current || locked) return;
+    if(!current || answeringRef.current) return;
+    answeringRef.current = true;
     setLocked(true);
     const isCorrect = idx === current.correct;
     setAnswerState({ picked:idx, correct:isCorrect });
     // Punktewertung: richtig -> Punkt für Team am Zug; falsch -> Punkt für das andere Team
-    setScores(s=>{
-      const other = turn==='left' ? 'right' : 'left';
-      const target: 'left'|'right' = isCorrect ? turn : other;
-      return { ...s, [target]: s[target] + 1 };
-    });
+  // exactly one team gets a point per answer
+  const target: 'left'|'right' = isCorrect ? turn : (turn==='left' ? 'right' : 'left');
+  setScores(prev=> ({ ...prev, [target]: prev[target] + 1 }));
     setHistory(h=>[...h,{ id: current.id, correct: isCorrect }]);
     // Nach der Antwort wechselt der Zug zum anderen Team
     setTimeout(()=>{
@@ -103,6 +104,7 @@ export default function FussballLivePage(){
       setAnswerState({ picked:null, correct:null });
       setTurn(t=> t==='left'?'right':'left');
       pickNext();
+      answeringRef.current = false;
     }, isCorrect? 800 : 1300);
   }
 

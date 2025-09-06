@@ -21,6 +21,37 @@ export async function GET(req: Request){
     const limit=Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit')||'50',10)));
     const search=(url.searchParams.get('q')||'').trim().toLowerCase();
     const filter:any={}; if(search){ filter.name={ $regex: search.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), $options:'i' }; }
+    // Format-Filter (Dateiendung oder contentType)
+    const format=(url.searchParams.get('format')||'').trim().toLowerCase();
+    if(format){
+      const esc = format.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const or:any[] = [ { name: { $regex: new RegExp(`\\.${esc}$`, 'i') } } ];
+      or.push({ contentType: { $regex: new RegExp(`${esc}$`, 'i') } });
+      filter.$and = (filter.$and||[]).concat([{ $or: or }]);
+    }
+    // Datum-Filter: Tag/Monat/Jahr
+    const year = parseInt(url.searchParams.get('year')||'',10);
+    const month = parseInt(url.searchParams.get('month')||'',10);
+    const day = parseInt(url.searchParams.get('day')||'',10);
+    if(year && month && day){
+      const start = new Date(year, month-1, day, 0,0,0,0);
+      const end = new Date(year, month-1, day+1, 0,0,0,0);
+      filter.createdAt = { $gte: start, $lt: end };
+    } else if(year && month){
+      const start = new Date(year, month-1, 1, 0,0,0,0);
+      const end = new Date(year, month, 1, 0,0,0,0);
+      filter.createdAt = { $gte: start, $lt: end };
+    } else if(year){
+      const start = new Date(year, 0, 1, 0,0,0,0);
+      const end = new Date(year+1, 0, 1, 0,0,0,0);
+      filter.createdAt = { $gte: start, $lt: end };
+    } else {
+      // Monat/Tag ohne Jahr via $expr
+      const exprConds:any[] = [];
+      if(!Number.isNaN(month) && month>=1 && month<=12){ exprConds.push({ $eq: [ { $month: '$createdAt' }, month ] }); }
+      if(!Number.isNaN(day) && day>=1 && day<=31){ exprConds.push({ $eq: [ { $dayOfMonth: '$createdAt' }, day ] }); }
+      if(exprConds.length){ (filter.$and = filter.$and||[]).push({ $expr: { $and: exprConds } }); }
+    }
     const total=await ShopRawFile.countDocuments(filter);
     const items=await ShopRawFile.find(filter).sort({ createdAt:-1 }).skip((page-1)*limit).limit(limit).lean();
     const useShop=isShopWebdavEnabled(); const anyWebdav=useShop || isWebdavEnabled();

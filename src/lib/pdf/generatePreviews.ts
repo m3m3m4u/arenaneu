@@ -1,4 +1,5 @@
-// Server-seitige PDF->Bild Vorschau-Generierung für Shop-Dateien
+// DEPRECATED: Serverseitige PDF->Bild Vorschau-Generierung für Shop-Dateien
+// Diese Utility wird nicht mehr aufgerufen. Manuelle Bild-Uploads werden bevorzugt.
 // Hinweis: Benötigt die optionale Abhängigkeit "canvas" (node-canvas)
 export const runtime = 'nodejs';
 

@@ -134,10 +134,10 @@ export default function FussballLobbyPage(){
             <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Mein Fußballspiel" className="border rounded px-2 py-1 text-sm" />
           </label>
           <div className="flex flex-col gap-1 text-sm col-span-2">
-            <span>Übung auswählen (optional)</span>
+            <span>Übung auswählen (Pflicht)</span>
             {!lockExercise && (
               <select value={lessonId} onChange={e=>setLessonId(e.target.value)} className="border rounded px-2 py-1 text-sm">
-                <option value="">— keine Übung —</option>
+                <option value="">— bitte auswählen —</option>
                 {exercises.map(ex=> <option key={ex._id} value={ex._id}>{ex.title}</option>)}
               </select>
             )}
@@ -152,8 +152,9 @@ export default function FussballLobbyPage(){
           </div>
         </div>
         <div className="flex gap-3 items-center">
-          <button disabled={creating || !session} onClick={createLobby} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating? 'Erstelle…':'Lobby erstellen'}</button>
+          <button disabled={creating || !session || !lessonId} onClick={createLobby} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating? 'Erstelle…':'Lobby erstellen'}</button>
           {!session && <span className="text-xs text-red-600">Login benötigt</span>}
+          {!lessonId && <span className="text-xs text-red-600">Bitte eine Übung wählen</span>}
           {error && <span className="text-xs text-red-600">{error}</span>}
         </div>
       </section>

@@ -29,6 +29,10 @@ export default function AdminMaterialPage(){
   const [rawTotal, setRawTotal] = useState(0);
   const [rawSearch, setRawSearch] = useState('');
   const [rawUploading, setRawUploading] = useState(false);
+  const [rawFormat, setRawFormat] = useState('');
+  const [rawYear, setRawYear] = useState('');
+  const [rawMonth, setRawMonth] = useState('');
+  const [rawDay, setRawDay] = useState('');
   const [selectedRawIds, setSelectedRawIds] = useState<string[]>([]);
   const [rawDeletingId, setRawDeletingId] = useState<string|null>(null);
 
@@ -40,19 +44,24 @@ export default function AdminMaterialPage(){
   const [excelToken, setExcelToken] = useState<string|null>(null);
   // PDF Preview
   const [pdfUrl,setPdfUrl] = useState<string|null>(null);
-  // Generierung von Datei-Vorschauen
-  const [genKey, setGenKey] = useState<string|null>(null);
-  const [clientThumbs, setClientThumbs] = useState<Record<string,string>>({}); // key->dataURL/URL
 
   const toggleRaw = (id:string)=> setSelectedRawIds(ids=> ids.includes(id)? ids.filter(x=>x!==id): [...ids,id]);
 
   const loadRaw = useCallback(async(page=1)=>{
     try {
-      const r = await fetch(`/api/shop/raw-files?page=${page}&limit=30&q=${encodeURIComponent(rawSearch)}`);
+      const qs = new URLSearchParams();
+      qs.set('page', String(page));
+      qs.set('limit','30');
+      if(rawSearch) qs.set('q', rawSearch);
+      if(rawFormat) qs.set('format', rawFormat);
+      if(rawYear) qs.set('year', rawYear);
+      if(rawMonth) qs.set('month', rawMonth);
+      if(rawDay) qs.set('day', rawDay);
+      const r = await fetch(`/api/shop/raw-files?${qs.toString()}`);
       const d = await r.json();
       if(r.ok && d.success){ setRawFiles(d.items); setRawTotal(d.total); setRawPage(d.page); }
     } catch{/*ignore*/}
-  },[rawSearch]);
+  },[rawSearch, rawFormat, rawYear, rawMonth, rawDay]);
 
   async function load(){
     setLoading(true); setError(null);
@@ -77,7 +86,7 @@ export default function AdminMaterialPage(){
     const form = new FormData(); form.append('file', file);
     setUploadingProductFile(id);
     try {
-      const r = await fetch(`/api/shop/products/${id}/files?syncPreview=1`, { method:'POST', body: form });
+      const r = await fetch(`/api/shop/products/${id}/files`, { method:'POST', body: form });
       const d = await r.json();
       if(!(r.ok && d.success)){ alert(d.error||'Upload fehlgeschlagen'); }
       else await load();
@@ -94,27 +103,7 @@ export default function AdminMaterialPage(){
     } catch { alert('Netzwerkfehler'); }
   }
 
-  async function regeneratePreview(productId: string, key: string, name?: string){
-    try {
-      setGenKey(key);
-      const r = await fetch(`/api/shop/products/${productId}/files/preview`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ key, name })
-      });
-      const d = await r.json();
-      if(!(r.ok && d.success)){
-        alert(d.error || 'Vorschau-Generierung fehlgeschlagen');
-      } else {
-        // Nach kurzer Pause refresh, damit DB-Änderungen sichtbar werden
-        setTimeout(()=> load(), 300);
-      }
-    } catch {
-      alert('Netzwerkfehler');
-    } finally {
-      setGenKey(null);
-    }
-  }
+  // Automatische Preview-Erzeugung entfernt
 
   async function uploadRawFile(file: File){
     setRawUploading(true);
@@ -125,6 +114,22 @@ export default function AdminMaterialPage(){
       if(!(r.ok && d.success)) alert(d.error||'Raw Upload fehlgeschlagen'); else loadRaw(rawPage);
     } catch { alert('Netzwerkfehler'); }
     setRawUploading(false);
+  }
+
+  async function uploadRawFiles(files: FileList){
+    const list = Array.from(files||[]);
+    if(!list.length) return;
+    setRawUploading(true);
+    for(const f of list){
+      try {
+        const form = new FormData(); form.append('file', f);
+        const r = await fetch('/api/shop/raw-files', { method:'POST', body: form });
+        // eslint-disable-next-line no-empty
+        await r.json().catch(()=>({}));
+      } catch {/* ignore single failures */}
+    }
+    setRawUploading(false);
+    loadRaw(1);
   }
 
   async function deleteRawFile(id:string){
@@ -220,12 +225,25 @@ export default function AdminMaterialPage(){
       {tab==='manage' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <h2 className="font-semibold">Raw-Dateien</h2>
-          <div className="flex gap-2 items-center text-xs">
+          <div className="flex gap-2 items-center text-xs flex-wrap">
             <input value={rawSearch} onChange={e=>setRawSearch(e.target.value)} placeholder="Suche" className="border rounded px-2 py-1" />
-            <button onClick={()=>loadRaw(1)} className="px-2 py-1 border rounded bg-gray-50 hover:bg-gray-100">Suche</button>
+            <select value={rawFormat} onChange={e=>setRawFormat(e.target.value)} className="border rounded px-2 py-1">
+              <option value="">Format: alle</option>
+              <option value="pdf">PDF</option>
+              <option value="png">PNG</option>
+              <option value="jpg">JPG</option>
+              <option value="jpeg">JPEG</option>
+              <option value="webp">WEBP</option>
+              <option value="zip">ZIP</option>
+              <option value="docx">DOCX</option>
+            </select>
+            <input value={rawYear} onChange={e=>setRawYear(e.target.value)} placeholder="Jahr" className="border rounded px-2 py-1 w-20" />
+            <input value={rawMonth} onChange={e=>setRawMonth(e.target.value)} placeholder="Monat" className="border rounded px-2 py-1 w-20" />
+            <input value={rawDay} onChange={e=>setRawDay(e.target.value)} placeholder="Tag" className="border rounded px-2 py-1 w-20" />
+            <button onClick={()=>loadRaw(1)} className="px-2 py-1 border rounded bg-gray-50 hover:bg-gray-100">Filter</button>
             <label className="cursor-pointer px-2 py-1 border rounded bg-indigo-50 hover:bg-indigo-100">
               + Upload
-              <input type="file" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadRawFile(f); e.target.value=''; }} />
+              <input multiple type="file" className="hidden" onChange={e=>{ const fl=e.target.files; if(fl && fl.length) uploadRawFiles(fl); e.target.value=''; }} />
             </label>
             {selectedRawIds.length>0 && (
               <button onClick={deleteSelectedRaw} className="px-2 py-1 border rounded bg-red-50 hover:bg-red-100 text-red-700" title="Ausgewählte löschen">Löschen ({selectedRawIds.length})</button>
@@ -233,6 +251,12 @@ export default function AdminMaterialPage(){
             {rawUploading && <span>Upload…</span>}
           </div>
         </div>
+        {/* Drag & Drop Zone */}
+        <div
+          onDragOver={e=>{ e.preventDefault(); e.stopPropagation(); }}
+          onDrop={e=>{ e.preventDefault(); e.stopPropagation(); const files=e.dataTransfer?.files; if(files && files.length){ uploadRawFiles(files); } }}
+          className="mb-2 p-3 rounded border-2 border-dashed border-gray-300 text-center text-xs text-gray-600 bg-gray-50 hover:bg-gray-100"
+        >Dateien hierher ziehen zum Hochladen (Mehrfach-Upload)</div>
         <div className="grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {rawFiles.map(f=>{
             const sel = selectedRawIds.includes(f.id);
@@ -345,19 +369,27 @@ export default function AdminMaterialPage(){
                 {/* Thumbnails / Preview-Images je Datei */}
                 <div className="grid grid-cols-2 gap-2">
                   {(p.files||[]).map(f=>{
-                    const previews: string[] = Array.isArray((f as any).previewImages) ? (f as any).previewImages : [];
-                    const clientThumb = clientThumbs[f.key];
+                    // Manuelle Vorschaubilder anhand Namensschema <PDF-Basis>-<n>.png|jpg|webp suchen
                     const isPdf = (f.contentType||'').includes('pdf') || /\.pdf$/i.test(f.name||'');
+                    const base = f.name.replace(/\.(pdf)$/i,'');
+                    const relImages = (p.files||[])
+                      .filter((of:any)=> /\.(png|jpe?g|webp)$/i.test(of.name||''))
+                      .filter((of:any)=> new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i').test(of.name||''))
+                      .map((of:any)=> ({ url: of.downloadUrl, idx: parseInt((of.name.match(/-(\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
+                      .filter(x=> !!x.url)
+                      .sort((a,b)=> a.idx-b.idx)
+                      .map(x=> x.url as string);
+                    const previews: string[] = relImages.length ? relImages : (Array.isArray((f as any).previewImages) ? (f as any).previewImages : []);
                     return (
                       <div key={f.key} className="border rounded p-2 flex gap-2 items-center">
-                        {previews.length>0 || clientThumb ? (
+                        {previews.length>0 ? (
                           <div className="flex items-center gap-1 overflow-x-auto max-w-[180px] pr-1">
-                            {(clientThumb ? [clientThumb, ...previews] : previews).slice(0,6).map((src,idx)=> (
+                            {previews.slice(0,6).map((src,idx)=> (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img key={idx} src={src} alt={`${f.name} p${idx+1}`} className="w-12 h-16 object-cover rounded border bg-white flex-shrink-0" />
                             ))}
-                            {(previews.length + (clientThumb?1:0))>6 && (
-                              <span className="text-[10px] text-gray-600 px-1">+{(previews.length + (clientThumb?1:0))-6}</span>
+                            {previews.length>6 && (
+                              <span className="text-[10px] text-gray-600 px-1">+{previews.length-6}</span>
                             )}
                           </div>
                         ) : (
@@ -371,43 +403,6 @@ export default function AdminMaterialPage(){
                                 onClick={()=>{ try{ const a=document.createElement('a'); a.href=f.downloadUrl; a.setAttribute('download', f.name||'download'); a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch{ window.open(f.downloadUrl,'_blank'); } }}
                                 className="px-1 py-0.5 border rounded text-[10px] bg-gray-50 hover:bg-gray-100"
                               >Download</button>
-                            )}
-                            {isPdf && previews.length===0 && (
-                              <button
-                                onClick={()=> regeneratePreview(p._id, f.key, f.name)}
-                                disabled={genKey===f.key}
-                                className="px-1 py-0.5 border rounded text-[10px] bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50"
-                              >{genKey===f.key? 'Erzeuge…':'Vorschau erzeugen'}</button>
-                            )}
-                            {isPdf && previews.length===0 && f.downloadUrl && (
-                              <button
-                                onClick={async()=>{
-                                  // Clientseitige Thumbs: rendere 1 Seite und speichere serverseitig als previewImages[0]
-                                  // Dynamischer Import, um Bundle zu schonen
-                                  try{
-                                    // On-the-fly PdfThumbs verwenden
-                                    const mod:any = await import('@/components/media/PdfThumbs');
-                                    const pdfjs: any = await import('pdfjs-dist');
-                                    pdfjs.GlobalWorkerOptions.workerSrc = new URL('/pdf.worker.min.mjs', window.location.origin).toString();
-                                    const task = pdfjs.getDocument({ url: f.downloadUrl, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true });
-                                    const pdf = await task.promise;
-                                    const page = await pdf.getPage(1);
-                                    const viewport = page.getViewport({ scale: 0.3 });
-                                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); if(!ctx) return;
-                                    canvas.width = viewport.width; canvas.height = viewport.height;
-                                    await (page as any).render({ canvasContext: ctx, canvas, viewport }).promise;
-                                    const dataUrl = canvas.toDataURL('image/png');
-                                    setClientThumbs(t=> ({ ...t, [f.key]: dataUrl }));
-                                    // Server speichern (speichert in DB als previewImages[0])
-                                    try {
-                                      await fetch('/api/shop/product-thumbnail', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ key: f.key, productId: p._id, dataUrl }) });
-                                      // Reload Produktliste, damit echte URL erscheint
-                                      setTimeout(()=> load(), 300);
-                                    } catch{}
-                                  }catch(e){ console.warn('Client-Thumb fehlgeschlagen', e); }
-                                }}
-                                className="px-1 py-0.5 border rounded text-[10px] bg-amber-50 hover:bg-amber-100"
-                              >Client-Preview</button>
                             )}
                             {isPdf && (
                               <button

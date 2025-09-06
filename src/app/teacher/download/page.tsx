@@ -13,7 +13,6 @@ export default function TeacherDownloadShop(){
   const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index der aktiven Datei (für Karussell)
   // Thumbnails für PDF (erste Seite) – key => dataURL | 'error'
   const [thumbs,setThumbs] = useState<Record<string,string>>({});
-  const savedRef = useRef<Record<string,boolean>>({});
   // Einfache Warteschlange, um gleichzeitige PDF-Decodes zu begrenzen
   const queueRef = useRef<string[]>([]);
   const busyRef = useRef(false);
@@ -77,11 +76,7 @@ export default function TeacherDownloadShop(){
   octx.drawImage(pageCanvas, dx, dy, drawW, drawH);
   const url = out.toDataURL('image/png');
   setThumbs(t=> ({ ...t, [k]: url }));
-  // Asynchron zum Server speichern (einmalig)
-  if(!savedRef.current[k]){
-    savedRef.current[k]=true;
-    void fetch('/api/shop/product-thumbnail', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ key: file.key, productId: findProductIdByFileKey(file.key), dataUrl: url }) }).catch(()=>{});
-  }
+  // Keine serverseitige Speicherung mehr
       } catch (e){
         console.warn('PDF Thumbnail Fehler', file?.name, e);
         setThumbs(t=> ({ ...t, [k]: 'error' }));
@@ -127,10 +122,25 @@ export default function TeacherDownloadShop(){
   const isPdf = (f:ProductFile)=> /\.pdf$/i.test(f.name);
   const isImage = (f:ProductFile)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name);
   function previewFiles(p:Product){
-    // Echte Dateien (keine Platzhalter) die PDF oder Bild sind
-    return (p.files||[]) 
-      .filter(f=> !f.key?.startsWith('placeholder:'))
-      .filter(f=> isPdf(f) || isImage(f));
+    // Für PDFs: zeige zuerst manuelle Bilder im Schema <PDF-Basis>-<n>.(png|jpg|webp) in aufsteigender Reihenfolge
+    const all = (p.files||[]).filter(f=> !f.key?.startsWith('placeholder:'));
+    const pdfs = all.filter(isPdf);
+    const images = all.filter(isImage);
+    if(pdfs.length){
+      const pdf = pdfs[0];
+      const base = pdf.name.replace(/\.(pdf)$/i,'');
+      const relImgs = images
+        .filter(img=> new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i').test(img.name))
+        .map(img=> ({ f: img, idx: parseInt((img.name.match(/-(\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
+        .sort((a,b)=> a.idx-b.idx)
+        .map(x=> x.f);
+      if(relImgs.length){
+        return [pdf, ...relImgs];
+      }
+      return [pdf];
+    }
+    // sonst: beliebige Bilder anzeigen
+    return images;
   }
 
   function setActive(pId:string, dir:number){
@@ -161,7 +171,7 @@ export default function TeacherDownloadShop(){
           return (
             <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
               <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2">
-                {/* PDF oder Bild Vorschau */}
+                {/* PDF oder Bild Vorschau (manuelle Bilder bevorzugt) */}
                 {current && current.downloadUrl ? (
                   isPdf(current) ? (
                     <div className="w-full h-full flex items-center justify-center">

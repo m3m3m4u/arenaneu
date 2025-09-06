@@ -50,10 +50,14 @@ export async function joinLobby(id: string, userId: string, username: string){
   if(lobby.players.find(p=>p.userId===userId)) return { lobby } as const;
   if(lobby.players.length >= 2) return { error: 'FULL' } as const;
   const side: 'left'|'right' = lobby.players.some(p=>p.side==='left') ? 'right':'left';
-  lobby.players.push({ userId, username, joinedAt: Date.now(), side, ready:false, score:0 });
+  lobby.players.push({ userId, username, joinedAt: Date.now(), side, ready:true, score:0 });
   lobby.lastActivity = Date.now();
+  // Wenn jetzt zwei Spieler drin sind (Host ist bereits ready), Spiel sofort starten
+  if(lobby.players.length === 2 && lobby.players.every(p=>p.ready)){
+    lobby.status = 'active';
+  }
   if(useDb){
-    try { await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { players: lobby.players, lastActivity: lobby.lastActivity } }); } catch { /* ignore */ }
+    try { await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { players: lobby.players, lastActivity: lobby.lastActivity, status: lobby.status } }); } catch { /* ignore */ }
   } else {
     lobbies.set(id, lobby);
   }
