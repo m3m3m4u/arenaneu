@@ -1,13 +1,12 @@
 "use client";
 import { useEffect, useState, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 interface ProductFile { key:string; name:string; downloadUrl?:string; contentType?:string; previewImages?:string[]; }
 interface Product { _id:string; title:string; description?:string; price?:number; files?:ProductFile[]; category?:string; }
 
 export default function TeacherDownloadShop(){
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [items,setItems] = useState<Product[]>([]);
   const [subjects,setSubjects] = useState<string[]>([]);
   const [activeSubject,setActiveSubject] = useState<string>('');
@@ -129,10 +128,11 @@ export default function TeacherDownloadShop(){
   }
   useEffect(()=>{ void load(); },[activeSubject]);
 
-  // Initiale Übernahme des URL-Parameters ?subject in den lokalen Zustand
+  // Initiale Übernahme des URL-Parameters ?subject in den lokalen Zustand (ohne useSearchParams, um Suspense-Pflicht zu vermeiden)
   useEffect(()=>{
     try {
-      const initial = (searchParams?.get('subject')||'').trim();
+      const sp = new URLSearchParams((typeof window!=='undefined'? window.location.search: '')||'');
+      const initial = (sp.get('subject')||'').trim();
       if(initial) setActiveSubject(initial);
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
