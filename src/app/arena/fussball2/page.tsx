@@ -98,7 +98,7 @@ export default function FussballLobbyPage(){
 
   if(lobby){
     return (
-      <main className="w-full px-4 md:px-8 py-4 flex flex-col gap-6">
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex flex-col gap-6">
         <h1 className="text-2xl font-bold">⚽ Fußball Lobby</h1>
         <div className="rounded border bg-white shadow p-4 flex flex-col gap-4 max-w-5xl">
           <div>
@@ -135,7 +135,7 @@ export default function FussballLobbyPage(){
   }
 
   return (
-    <main className="w-full px-4 md:px-8 py-4 flex flex-col gap-8">
+    <main className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex flex-col gap-8">
       <h1 className="text-2xl font-bold flex items-center gap-3">⚽ Fußball Matchmaking <span className="text-sm font-normal text-gray-500">(Prototyp)</span></h1>
       <section className="rounded border bg-white shadow p-4 flex flex-col gap-4 max-w-5xl">
         <h2 className="text-lg font-semibold">Neues Spiel erstellen</h2>
