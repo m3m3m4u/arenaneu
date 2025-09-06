@@ -271,8 +271,15 @@ export default function AutoGame({ lesson, courseId, completedLessons, setComple
         for(let l=0;l<LANES;l++) if(laneCooldownRef.current[l]>0) laneCooldownRef.current[l]-=dt;
         // obstacles
         obstaclesRef.current.forEach(o=>{ o.y += OBSTACLE_SPEED_BASE * dt; if(o.removed){ o.alpha -= dt*2.2; } });
-        // collisions
-        const carRect = { left:carXRef.current- (LANE_WIDTH*0.7)/2, right:carXRef.current+(LANE_WIDTH*0.7)/2, top:carYRef.current-100/2, bottom:carYRef.current+100/2 };
+        // collisions (Auto 40% größer, Seitenverhältnis aus Bild)
+        const baseWForRect = LANE_WIDTH*0.7*1.4;
+        let rectW = baseWForRect;
+        let rectH = baseWForRect*1.5;
+        if(carImgRef.current && carImgRef.current.naturalWidth && carImgRef.current.naturalHeight){
+          const ar = carImgRef.current.naturalHeight / carImgRef.current.naturalWidth; // H/W
+          rectH = baseWForRect * ar;
+        }
+        const carRect = { left:carXRef.current- rectW/2, right:carXRef.current+rectW/2, top:carYRef.current-rectH/2, bottom:carYRef.current+rectH/2 };
         for(const o of obstaclesRef.current){ if(o.removed) continue; const ox = laneCenter(o.lane) - OBSTACLE_WIDTH/2; const oy=o.y; const oRect = { left:ox, right:ox+OBSTACLE_WIDTH, top:oy, bottom:oy+OBSTACLE_HEIGHT }; if(!(carRect.right<oRect.left||carRect.left>oRect.right||carRect.bottom<oRect.top||carRect.top>oRect.bottom)){
             if(o.isCorrect && !o.hit){
               o.hit=true; o.removed=true; scoreUpdater(1,true);
@@ -342,7 +349,8 @@ export default function AutoGame({ lesson, courseId, completedLessons, setComple
       ctx.setLineDash([]);
     }
   function drawCar(ctx:CanvasRenderingContext2D){
-    const baseW = LANE_WIDTH*0.7;
+    // 40% größer
+    const baseW = LANE_WIDTH*0.7*1.4;
     // Behalte Original-Seitenverhältnis von auto3.png bei
     let targetW = baseW; let targetH = baseW*1.5;
     if(carImgRef.current && carImgRef.current.naturalWidth && carImgRef.current.naturalHeight){

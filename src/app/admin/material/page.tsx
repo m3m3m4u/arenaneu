@@ -414,7 +414,7 @@ export default function AdminMaterialPage(){
             const currentImg = count? previews[idx] : undefined;
             return (
               <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
-                <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2">
+                <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2 w-[80%] mx-auto">
                   {currentImg ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={currentImg} alt={p.title} className="max-w-full max-h-full object-contain rounded shadow-sm transform scale-50 origin-center" />
@@ -455,7 +455,7 @@ export default function AdminMaterialPage(){
                   <h3 className="font-semibold text-base leading-tight line-clamp-2" title={p.title}>{p.title}</h3>
                   {p.description && <p className="text-xs text-gray-600 whitespace-pre-line line-clamp-4">{p.description}</p>}
                   <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-500">
-                    {typeof p.price==='number' && <span className="font-medium text-gray-700">{p.price.toFixed(2)} €</span>}
+                    {typeof p.price==='number' && <span className="font-medium text-gray-700">{p.price.toFixed(2)} € {count>0 && <span className="font-normal text-gray-500">• {count} Seiten</span>}</span>}
                     <span>{(p.files||[]).filter((f:any)=>!String(f.key||'').startsWith('placeholder:')).length} Datei{((p.files||[]).filter((f:any)=>!String(f.key||'').startsWith('placeholder:')).length)!==1?'en':''}</span>
                   </div>
                 </div>

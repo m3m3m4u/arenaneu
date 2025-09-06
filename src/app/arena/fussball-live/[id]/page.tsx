@@ -150,18 +150,18 @@ export default function FussballLivePage(){
           {exerciseTitle && <p className="text-xs text-gray-500">Übung: <span className="font-medium">{exerciseTitle}</span></p>}
         </div>
         <div className="md:col-span-2">
-          {/* Großer Spielstand (Tore) – einzige Anzeige */}
+      {/* Großer Spielstand (Tore) – einzige Anzeige */}
           <div className="w-full bg-white border rounded shadow-sm p-3 flex items-center justify-between">
             <div className="flex items-center gap-6">
               <div className="text-center">
-                <div className="text-[11px] text-gray-500">Tore Links</div>
-                <div className="text-3xl md:text-5xl font-extrabold leading-none">{goals.left}</div>
+        <div className="text-[11px] text-gray-500">Tore Rot</div>
+        <div className="text-3xl md:text-5xl font-extrabold leading-none text-red-600">{goals.left}</div>
                 <div className="text-[11px] text-gray-400 mt-1">Punkte: {scores.left}</div>
               </div>
               <div className="text-2xl font-bold text-gray-400">:</div>
               <div className="text-center">
-                <div className="text-[11px] text-gray-500">Tore Rechts</div>
-                <div className="text-3xl md:text-5xl font-extrabold leading-none">{goals.right}</div>
+        <div className="text-[11px] text-gray-500">Tore Blau</div>
+        <div className="text-3xl md:text-5xl font-extrabold leading-none text-blue-600">{goals.right}</div>
                 <div className="text-[11px] text-gray-400 mt-1">Punkte: {scores.right}</div>
               </div>
             </div>
@@ -268,57 +268,70 @@ function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts, goals,
       </div>
       <div
         ref={containerRef}
-        className="relative border rounded bg-black shadow-inner overflow-hidden mx-auto"
-        style={{ aspectRatio: aspect, width: isFs? '100%' : `${Math.round(100*scale)}%` }}
+        className={"relative border rounded bg-black shadow-inner overflow-hidden mx-auto " + (isFs? 'fixed inset-0 z-50 rounded-none border-0 mx-0':'')}
+        style={isFs? { width: '100%', height: '100%' } : { aspectRatio: aspect, width: `${Math.round(100*scale)}%` }}
       >
-        <Image src={images[fieldIdx % images.length]} alt="Spielfeld" fill priority sizes="100vw" className="object-contain" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
-        {/* Im Vollbild zusätzlich Fragen & Spielstand einblenden */}
+        {!isFs && (
+          <>
+            <Image src={images[fieldIdx % images.length]} alt="Spielfeld" fill priority sizes="100vw" className="object-contain" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
+          </>
+        )}
         {isFs && (
-          <div className="absolute inset-0 p-3 md:p-4 flex flex-col gap-3 pointer-events-none">
-            {/* Spielstand */}
-            <div className="self-start bg-black/55 text-white rounded shadow border border-white/10 backdrop-blur px-3 py-2 text-[11px] md:text-sm pointer-events-auto">
-              <div className="flex items-center gap-4">
+          <div className="absolute inset-0 flex flex-col text-white">
+            {/* Oben: 25% Score/Infos */}
+            <div style={{height:'25%'}} className="flex items-center justify-between px-4 md:px-6">
+              <button onClick={exitFs} className="text-xs px-2 py-1 border rounded bg-white/10 hover:bg-white/20 text-white">Vollbild beenden</button>
+              <div className="flex items-center gap-8">
                 <div className="text-center">
-                  <div className="text-[10px] text-white/80">Tore Links</div>
-                  <div className="text-xl md:text-3xl font-extrabold leading-none">{goals.left}</div>
-                  <div className="text-[10px] text-white/70 mt-0.5">Punkte: {scores.left}</div>
+                  <div className="text-[11px] text-white/80">Tore Rot</div>
+                  <div className="text-4xl md:text-6xl font-extrabold leading-none text-red-400">{goals.left}</div>
+                  <div className="text-[11px] text-white/70 mt-1">Punkte: {scores.left}</div>
                 </div>
-                <div className="text-lg md:text-2xl font-bold text-white/80">:</div>
+                <div className="text-2xl md:text-3xl font-bold text-white/70">:</div>
                 <div className="text-center">
-                  <div className="text-[10px] text-white/80">Tore Rechts</div>
-                  <div className="text-xl md:text-3xl font-extrabold leading-none">{goals.right}</div>
-                  <div className="text-[10px] text-white/70 mt-0.5">Punkte: {scores.right}</div>
+                  <div className="text-[11px] text-white/80">Tore Blau</div>
+                  <div className="text-4xl md:text-6xl font-extrabold leading-none text-blue-400">{goals.right}</div>
+                  <div className="text-[11px] text-white/70 mt-1">Punkte: {scores.right}</div>
                 </div>
               </div>
+              <div className="w-16" />
             </div>
-            {/* Frage */}
-            <div className="mt-auto max-w-xl bg-black/55 text-white rounded shadow border border-white/10 backdrop-blur p-3 md:p-4 pointer-events-auto">
-              <div className="text-[11px] md:text-sm opacity-90 mb-1">Frage</div>
-              {current ? (
-                <>
-                  <div className="text-sm md:text-base font-medium mb-3">{current.text}</div>
-                  <div className="flex flex-col gap-2">
-                    {current.options.map((opt,i)=>{
-                      const picked = answerState.picked===i;
-                      const showCorrect = answerState.correct!==null;
-                      const isCorrect = i===current.correct;
-                      const base='text-left px-3 py-2 rounded border text-[12px] md:text-sm transition-colors';
-                      let cls=base+' border-white/20 bg-white/10 hover:bg-white/15 text-white';
-                      if(showCorrect){
-                        if(isCorrect) cls=base+' border-green-500 bg-green-600/20 text-green-200 font-semibold';
-                        else if(picked && !isCorrect) cls=base+' border-red-500 bg-red-600/20 text-red-200';
-                        else cls=base+' border-white/10 bg-white/5 text-white/70';
-                      } else if(picked){
-                        cls=base+' border-blue-400 bg-blue-500/20 text-blue-100';
-                      }
-                      return <button key={i} disabled={locked || showCorrect} onClick={()=>onAnswer(i)} className={cls}>{opt}</button>;
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className="text-[12px] text-white/80">Keine Frage</div>
-              )}
+            {/* Unten: 75% – links Fragen, rechts Spielfeld */}
+            <div style={{height:'75%'}} className="grid grid-cols-2 gap-4 px-4 md:px-6 pb-4">
+              <div className="h-full overflow-auto">
+                <div className="bg-white/10 border border-white/15 rounded p-3 md:p-4">
+                  <div className="text-[11px] md:text-sm opacity-90 mb-1">Frage</div>
+                  {current ? (
+                    <>
+                      <div className="text-sm md:text-base font-medium mb-3">{current.text}</div>
+                      <div className="flex flex-col gap-2">
+                        {current.options.map((opt,i)=>{
+                          const picked = answerState.picked===i;
+                          const showCorrect = answerState.correct!==null;
+                          const isCorrect = i===current.correct;
+                          const base='text-left px-3 py-2 rounded border text-[12px] md:text-sm transition-colors';
+                          let cls=base+' border-white/20 bg-white/10 hover:bg-white/15 text-white';
+                          if(showCorrect){
+                            if(isCorrect) cls=base+' border-green-500 bg-green-600/20 text-green-200 font-semibold';
+                            else if(picked && !isCorrect) cls=base+' border-red-500 bg-red-600/20 text-red-200';
+                            else cls=base+' border-white/10 bg-white/5 text-white/70';
+                          } else if(picked){
+                            cls=base+' border-blue-400 bg-blue-500/20 text-blue-100';
+                          }
+                          return <button key={i} disabled={locked || showCorrect} onClick={()=>onAnswer(i)} className={cls}>{opt}</button>;
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[12px] text-white/80">Keine Frage</div>
+                  )}
+                </div>
+              </div>
+              <div className="h-full relative">
+                <Image src={images[fieldIdx % images.length]} alt="Spielfeld" fill priority sizes="100vw" className="object-contain" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
+              </div>
             </div>
           </div>
         )}
