@@ -93,6 +93,8 @@ export function useSnakeLogic({ lesson, courseId, completedLessons, setCompleted
   const [showHelp, setShowHelp] = useState(false);
   const [marking, setMarking] = useState(false);
 
+  const manhattan = useCallback((a: Point, b: Point) => Math.abs(a.x-b.x)+Math.abs(a.y-b.y), []);
+
   // Guards
   const questionIdRef = useRef(0);
   const lastScoredQuestionIdRef = useRef(-1);
@@ -103,19 +105,50 @@ export function useSnakeLogic({ lesson, courseId, completedLessons, setCompleted
   const pickNextQuestion = useCallback(()=>{ if(!blocks.length) return null; const idx=Math.floor(Math.random()*blocks.length); return blocks[idx]; },[blocks]);
 
   const placeAnswerFoods = useCallback((q: QuestionBlock, exclude: Point[] = []) => {
-    const used: Array<{x:number;y:number}> = [...exclude.map(p=>({x:p.x,y:p.y}))];
     const bodySnapshot = exclude.length ? exclude : snake;
-    const randPos = () => { while(true){ const x=Math.floor(Math.random()*(COLS-2))+1; const y=Math.floor(Math.random()*(ROWS-2))+1; if(!used.some(p=>p.x===x&&p.y===y) && !bodySnapshot.some(s=>s.x===x&&s.y===y)) return {x,y}; } };
+    const used: Array<{x:number;y:number}> = [...exclude.map(p=>({x:p.x,y:p.y}))];
+    const head = bodySnapshot[0];
+    const front = head ? { x: head.x + dirRef.current.x, y: head.y + dirRef.current.y } : null;
+    const isOccupied = (x:number,y:number)=> used.some(p=>p.x===x&&p.y===y) || bodySnapshot.some(s=>s.x===x&&s.y===y);
+    const isUnsafe = (x:number,y:number)=>{
+      if(front && x===front.x && y===front.y) return true;
+      if(head && manhattan({x,y}, head) <= 1) return true;
+      return false;
+    };
+    const randPos = () => {
+      let tries = 0;
+      while(tries < 500){
+        const x=Math.floor(Math.random()*(COLS-2))+1; const y=Math.floor(Math.random()*(ROWS-2))+1;
+        if(!isOccupied(x,y) && !isUnsafe(x,y)) return {x,y};
+        tries++;
+      }
+      // Fallback: ignoriere Unsafe-Regel, aber nicht belegt
+      while(true){ const x=Math.floor(Math.random()*(COLS-2))+1; const y=Math.floor(Math.random()*(ROWS-2))+1; if(!isOccupied(x,y)) return {x,y}; }
+    };
     const indices = q.answers.map((_,i)=>i);
     const shuffled = shuffle(indices);
     const foodsLocal: Food[] = [];
     shuffled.slice(0,4).forEach((ai,i)=>{ const pos=randPos(); used.push(pos); foodsLocal.push({ x:pos.x,y:pos.y,color:COLORS[i%COLORS.length],answer:q.answers[ai], correct: ai===q.correct }); });
-    const head = bodySnapshot[0];
-    if(foodsLocal.some(f=>f.x===head.x && f.y===head.y)) return placeAnswerFoods(q, bodySnapshot);
     setFoods(foodsLocal);
-  },[snake, shuffle]);
+  },[snake, shuffle, manhattan]);
 
-  const placeFood = useCallback((body: Point[]) => { while(true){ const p={ x:Math.floor(Math.random()*COLS), y:Math.floor(Math.random()*ROWS)}; if(!body.some(b=>b.x===p.x && b.y===p.y)){ setFood(p); return; } } },[]);
+  const placeFood = useCallback((body: Point[]) => {
+    const head = body[0];
+    const front = head ? { x: head.x + dirRef.current.x, y: head.y + dirRef.current.y } : null;
+    let attempts = 0; let chosen: Point | null = null;
+    while(attempts < 400){
+      const p={ x:Math.floor(Math.random()*(COLS-2))+1, y:Math.floor(Math.random()*(ROWS-2))+1 };
+      const occupied = body.some(b=>b.x===p.x && b.y===p.y);
+      const unsafe = (front && p.x===front.x && p.y===front.y) || (head && manhattan(p, head) <= 1);
+      if(!occupied && !unsafe){ chosen = p; break; }
+      attempts++;
+    }
+    if(!chosen){
+      // Fallback: nur nicht-occupied
+      while(true){ const p={ x:Math.floor(Math.random()*(COLS-2))+1, y:Math.floor(Math.random()*(ROWS-2))+1 }; if(!body.some(b=>b.x===p.x && b.y===p.y)){ chosen = p; break; } }
+    }
+    setFood(chosen!);
+  },[manhattan]);
 
   // Keyboard
   useEffect(()=>{ const handle=(e:KeyboardEvent)=>{ if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); if(e.key===' '){ if(!finished && !gameOver) setRunning(r=>!r); return; } if(!running||finished||gameOver) return; if(e.key==='ArrowUp' && dirRef.current.y!==1) setDir({x:0,y:-1}); else if(e.key==='ArrowDown' && dirRef.current.y!==-1) setDir({x:0,y:1}); else if(e.key==='ArrowLeft' && dirRef.current.x!==1) setDir({x:-1,y:0}); else if(e.key==='ArrowRight' && dirRef.current.x!==-1) setDir({x:1,y:0}); }; window.addEventListener('keydown',handle); return ()=>window.removeEventListener('keydown',handle); },[running, finished, gameOver]);

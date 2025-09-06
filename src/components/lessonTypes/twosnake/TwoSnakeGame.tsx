@@ -164,6 +164,8 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
   useEffect(()=>{ dirARef.current = dirA; }, [dirA]);
   useEffect(()=>{ dirBRef.current = dirB; }, [dirB]);
 
+  const manhattan = useCallback((a: Point, b: Point) => Math.abs(a.x-b.x)+Math.abs(a.y-b.y), []);
+
   const randFree = useCallback((occupied: Point[]): Point => {
     while(true){
       const p = { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
@@ -173,18 +175,58 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
 
   const placeClassicFood = useCallback(()=>{
     const occ = [...snakeA, ...snakeB];
-    setFood(randFree(occ));
-  },[randFree, snakeA, snakeB]);
+    const headA = snakeA[0]; const headB = snakeB[0];
+    const frontA = headA ? { x: headA.x + dirARef.current.x, y: headA.y + dirARef.current.y } : null;
+    const frontB = headB ? { x: headB.x + dirBRef.current.x, y: headB.y + dirBRef.current.y } : null;
+    const isUnsafe = (p: Point) => {
+      if(frontA && p.x===frontA.x && p.y===frontA.y) return true;
+      if(frontB && p.x===frontB.x && p.y===frontB.y) return true;
+      if(headA && manhattan(p, headA) <= 1) return true;
+      if(headB && manhattan(p, headB) <= 1) return true;
+      return false;
+    };
+    // try avoid unsafe; relax if needed
+    let attempts = 0; let chosen: Point | null = null;
+    while(attempts < 400){
+      const p = randFree(occ);
+      // keep inside inner bounds to avoid immediate wall-touch on small screens
+      const inInner = p.x>=1 && p.x<COLS-1 && p.y>=1 && p.y<ROWS-1;
+      if(inInner && !isUnsafe(p)){ chosen = p; break; }
+      attempts++;
+    }
+    if(!chosen){ chosen = randFree(occ); }
+    setFood(chosen);
+  },[randFree, snakeA, snakeB, manhattan]);
 
   const placeAnswerFoods = useCallback((q: QuestionBlock)=>{
     const used: Point[] = [...snakeA, ...snakeB];
-    const randPos = ()=>{ while(true){ const x=Math.floor(Math.random()*(COLS-2))+1; const y=Math.floor(Math.random()*(ROWS-2))+1; if(!used.some(p=>p.x===x&&p.y===y)) return {x,y}; } };
+    const headA = snakeA[0]; const headB = snakeB[0];
+    const frontA = headA ? { x: headA.x + dirARef.current.x, y: headA.y + dirARef.current.y } : null;
+    const frontB = headB ? { x: headB.x + dirBRef.current.x, y: headB.y + dirBRef.current.y } : null;
+    const isOccupied = (x:number,y:number)=> used.some(p=> p.x===x && p.y===y);
+    const unsafe = (x:number,y:number)=>{
+      if(frontA && x===frontA.x && y===frontA.y) return true;
+      if(frontB && x===frontB.x && y===frontB.y) return true;
+      if(headA && manhattan({x,y}, headA) <= 1) return true;
+      if(headB && manhattan({x,y}, headB) <= 1) return true;
+      return false;
+    };
+    const randPos = ()=>{
+      let tries = 0;
+      while(tries < 500){
+        const x=Math.floor(Math.random()*(COLS-2))+1; const y=Math.floor(Math.random()*(ROWS-2))+1;
+        if(!isOccupied(x,y) && !unsafe(x,y)) return {x,y};
+        tries++;
+      }
+      // Fallback: nur belegte vermeiden
+      while(true){ const x=Math.floor(Math.random()*(COLS-2))+1; const y=Math.floor(Math.random()*(ROWS-2))+1; if(!isOccupied(x,y)) return {x,y}; }
+    };
     const idx = q.answers.map((_,i)=>i);
     const shuffled = idx.map(v=>[Math.random(),v] as const).sort((a,b)=>a[0]-b[0]).map(([,v])=>v).slice(0,4);
     const fs: Food[] = [];
     shuffled.forEach((ai,i)=>{ const pos = randPos(); used.push(pos); fs.push({ x:pos.x, y:pos.y, color: COLORS[i%COLORS.length], answer: q.answers[ai], correct: ai === q.correct }); });
     setFoods(fs);
-  },[snakeA, snakeB]);
+  },[snakeA, snakeB, manhattan]);
 
   // Init foods
   useEffect(()=>{

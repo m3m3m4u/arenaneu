@@ -9,7 +9,30 @@ interface ExcelPreviewMaterial { title:string; category?:string; description?:st
 // Neuer Admin Bereich: Produkte aus Raw-Dateien erstellen, Raw-Datei Bibliothek & Excel Import Preview
 export default function AdminMaterialPage(){
   const [products, setProducts] = useState<Product[]>([]);
-  const [tab, setTab] = useState<'manage'|'excel'|'preview'>('manage');
+  const [tab, setTab] = useState<'manage'|'excel'|'preview'|'stats'>('manage');
+  // Stats
+  const [topDownloads, setTopDownloads] = useState<Array<{ productId:string; title:string; count:number; last:string }>>([]);
+  const [daily, setDaily] = useState<Array<{ _id:string; count:number }>>([]);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string|null>(null);
+  const [statsSince, setStatsSince] = useState<string>('');
+  const [statsUntil, setStatsUntil] = useState<string>('');
+  const loadStats = useCallback(async()=>{
+    setStatsLoading(true); setStatsError(null);
+    try{
+      const qs = new URLSearchParams();
+      if(statsSince) qs.set('since', statsSince);
+      if(statsUntil) qs.set('until', statsUntil);
+      qs.set('limit','100');
+      const r1 = await fetch('/api/shop/admin/downloads?'+qs.toString());
+      const d1 = await r1.json();
+      const r2 = await fetch('/api/shop/admin/downloads?by=day&'+qs.toString());
+      const d2 = await r2.json();
+      if(!(r1.ok && d1.success)) setStatsError(d1.error||'Fehler'); else setTopDownloads((d1.items||[]).map((x:any)=> ({ productId:String(x.productId), title:String(x.title||''), count:Number(x.count||0), last: x.last ? new Date(x.last).toISOString() : '' })));
+      if(!(r2.ok && d2.success)) {/* ignore */} else setDaily(d2.rows||[]);
+    } catch{ setStatsError('Netzwerkfehler'); }
+    setStatsLoading(false);
+  },[statsSince, statsUntil]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string|null>(null);
   const [creating, setCreating] = useState(false);
@@ -295,7 +318,8 @@ export default function AdminMaterialPage(){
           {[
             {id:'manage', label:'Materialien'},
             {id:'excel', label:'Excel Import'},
-            {id:'preview', label:'Shop Vorschau'}
+            {id:'preview', label:'Shop Vorschau'},
+            {id:'stats', label:'Statistik'}
           ].map(t=> (
             <button key={t.id} onClick={()=>setTab(t.id as any)} className={`px-3 py-1.5 rounded border ${tab===t.id? 'bg-blue-600 text-white border-blue-600':'bg-white hover:bg-gray-50'}`}>{t.label}</button>
           ))}
@@ -450,6 +474,58 @@ export default function AdminMaterialPage(){
           </div>
         )}
   </section>}
+
+  {tab==='stats' && (
+    <section className="bg-white border rounded shadow-sm p-5 space-y-4">
+      <div className="flex items-end gap-3 flex-wrap">
+        <div>
+          <label className="block text-xs text-gray-600">Seit</label>
+          <input type="date" value={statsSince} onChange={e=>setStatsSince(e.target.value)} className="border rounded px-2 py-1" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-600">Bis</label>
+          <input type="date" value={statsUntil} onChange={e=>setStatsUntil(e.target.value)} className="border rounded px-2 py-1" />
+        </div>
+        <button onClick={loadStats} className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50">Aktualisieren</button>
+        {statsLoading && <span className="text-sm text-gray-500">Lade…</span>}
+        {statsError && <span className="text-sm text-red-600">{statsError}</span>}
+      </div>
+      <div>
+        <h3 className="font-semibold mb-2">Top Downloads</h3>
+        <div className="border rounded divide-y">
+          <div className="grid grid-cols-6 text-xs font-medium text-gray-600 bg-gray-50 p-2">
+            <div className="col-span-4">Material</div>
+            <div className="text-right">Downloads</div>
+            <div className="text-right">Letzter</div>
+          </div>
+          {topDownloads.map((row)=> (
+            <div key={row.productId} className="grid grid-cols-6 p-2 text-sm">
+              <div className="col-span-4 truncate" title={row.title}>{row.title}</div>
+              <div className="text-right tabular-nums">{row.count}</div>
+              <div className="text-right text-xs text-gray-500">{row.last ? new Date(row.last).toLocaleString() : '–'}</div>
+            </div>
+          ))}
+          {!statsLoading && !topDownloads.length && (
+            <div className="p-2 text-sm text-gray-500">Keine Daten.</div>
+          )}
+        </div>
+      </div>
+      <div>
+        <h3 className="font-semibold mb-2">Downloads pro Tag</h3>
+        <div className="border rounded">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2 p-3 text-xs">
+            {daily.map(d=> (
+              <div key={d._id} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1">
+                <span>{d._id}</span>
+                <span className="font-medium">{d.count}</span>
+              </div>
+            ))}
+            {!statsLoading && !daily.length && <div className="text-gray-500">Keine Daten.</div>}
+          </div>
+        </div>
+      </div>
+    </section>
+  )}
 
   {/* Produktliste im Materialien-Tab entfernt (nicht mehr benötigt) */}
 

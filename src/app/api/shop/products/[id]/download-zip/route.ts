@@ -74,6 +74,13 @@ export async function GET(req: Request, ctx: { params: { id: string }} ){
   if(added === 0){
       return NextResponse.json({ success:false, error:'Keine Dateien abrufbar (ZIP leer)', files: files.length }, { status:502 });
     }
+  // Download Logging (nicht-blockierend)
+  try {
+    const ShopDownloadLog = (await import('@/models/ShopDownloadLog')).default;
+    const ip = (req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '') as string;
+    const userAgent = (req.headers.get('user-agent') || '') as string;
+    await ShopDownloadLog.create({ productId: String((prod as any)._id), user: session?.user?.username, role, ip, userAgent });
+  } catch {/* ignore logging errors */}
   return new Response(blob, { status:200, headers:{
       'Content-Type':'application/zip',
       'Content-Disposition':`attachment; filename="${filename}"`,
