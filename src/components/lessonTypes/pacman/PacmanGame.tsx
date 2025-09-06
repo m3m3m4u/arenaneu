@@ -16,14 +16,19 @@ const DEFAULT_COLS=21; const DEFAULT_ROWS=20; const tileSize=40; const MAX_LIVES
 const PLAYER_TILE_TIME=0.93; // vorher 1.4
 const GHOST_TILE_TIMES=[1.07,1.00,1.20,1.33]; // vorher 1.6,1.5,1.8,2.0
 const GLOBAL_SPEED_SCALE=1.0; // globaler Multiplikator
-const DEBUG_VERSION='pac-flow-v3.1-fast50';
+const DEBUG_VERSION='pac-flow-v3.1-fast50-hardcodedCSV';
+
+// Hart-codiertes Board erzwingen: Wenn true, wird IMMER das unten definierte embeddedCSV verwendet
+// und es findet KEIN Laden über fetch/XLSX statt.
+const FORCE_EMBEDDED_BOARD=true;
 
 interface AnswerZone { roomIndex:number; letter:string; x:number;y:number;w:number;h:number; tileCoords:{tx:number;ty:number}[]; text:string;correct:boolean; }
 interface Ghost { tileX:number; tileY:number; x:number; y:number; r:number; dir:{x:number;y:number}; progress:number; tileTime:number; color:string; type:number; prevDir?:{x:number;y:number}; straightCount:number; }
 
 const ghostColors=['#ff4081','#40c4ff','#ff9100','#8bc34a'];
 
-// Eingebettetes Layout (Fallback) – entspricht der aktuellen CSV-Version in /public/pacman/maze_template.csv
+// Eingebettetes Layout – HIER den Inhalt der gewünschten CSV einfügen (Semikolon-getrennt, Zeilen mit \n)
+// Beispiel unten entspricht der bisherigen Vorlage. Bitte durch die gewünschte CSV ersetzen.
 const embeddedCSV=`1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1\n1;A;A;A;A;A;1;1;1;1;1;1;1;1;1;B;B;B;B;B;1\n1;A;A;A;A;A;0;0;0;0;0;0;0;0;0;B;B;B;B;B;1\n1;A;A;A;A;A;1;0;1;1;0;1;1;0;1;B;B;B;B;B;1\n1;1;0;1;1;1;1;0;1;1;0;1;1;0;1;1;1;1;0;1;1\n1;1;0;1;1;1;1;0;1;1;0;1;1;0;1;1;1;1;0;1;1\n1;1;0;1;1;1;1;0;1;1;0;1;1;0;1;1;1;1;0;1;1\n1;1;G;0;0;0;0;0;0;0;0;S;0;0;0;0;0;G;0;1;1\n1;1;0;1;1;1;0;1;1;1;0;1;1;1;0;1;1;1;0;1;1\n1;1;0;1;1;1;0;1;1;1;0;1;1;1;0;1;1;1;0;1;1\n1;1;0;1;1;1;0;1;1;1;0;1;1;1;0;1;1;1;0;1;1\n1;1;0;1;1;1;0;1;1;1;0;1;1;1;0;1;1;1;0;1;1\n1;1;G;0;0;0;0;0;0;0;0;0;0;0;0;0;0;G;0;1;1\n1;1;0;1;1;1;1;0;1;1;0;1;1;0;1;1;1;1;0;1;1\n1;1;0;1;1;1;1;0;1;1;0;1;1;0;1;1;1;1;0;1;1\n1;1;0;1;1;1;1;0;1;1;0;1;1;0;1;1;1;1;0;1;1\n1;C;C;C;C;C;1;0;1;1;0;1;1;0;1;D;D;D;D;D;1\n1;C;C;C;C;C;0;0;0;0;0;0;0;0;0;D;D;D;D;D;1\n1;C;C;C;C;C;1;1;1;1;1;1;1;1;1;D;D;D;D;D;1\n1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1`;
 
 export default function PacmanGame({ lesson, courseId, completedLessons, setCompletedLessons }:Props){
@@ -92,6 +97,13 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
   };
 
   const initMaze=useCallback(async ()=>{
+    // Wenn hart-codierter Modus aktiv ist, sofort eingebettetes CSV verwenden
+    if(FORCE_EMBEDDED_BOARD){
+      const lines=embeddedCSV.split(/\r?\n/);
+      parseLinesToMaze(lines);
+      try{ setBoardSource('embedded-hardcoded'); }catch{}
+      return;
+    }
     // Bevorzugt CSV-Quelle aus Lesson-Content, Fallback: öffentliche Template-CSV
     const getCsvUrl = (): string => {
       try {
