@@ -21,6 +21,7 @@ export const CATEGORIES = [
   'Physik',
   'Politik',
   'Psychologie',
+  'Religion',
   'Sachunterricht',
   'Sozialkunde',
   'Spanisch',

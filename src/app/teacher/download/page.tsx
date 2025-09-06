@@ -153,10 +153,12 @@ export default function TeacherDownloadShop(){
 
   // Hilfsfunktion: Subjekt setzen und URL aktualisieren (ohne Scroll/Neuaufbau)
   function applySubject(subj: string){
-    setActiveSubject(subj);
+    // Toggle: Klick auf aktives Fach hebt Filter auf
+    const next = (activeSubject && subj === activeSubject) ? '' : subj;
+    setActiveSubject(next);
     try {
       const sp = new URLSearchParams(window.location.search);
-      if(subj) sp.set('subject', subj); else sp.delete('subject');
+      if(next) sp.set('subject', next); else sp.delete('subject');
       const qs = sp.toString();
       const path = window.location.pathname + (qs? ('?'+qs):'');
       router.replace(path, { scroll: false });
@@ -237,9 +239,13 @@ export default function TeacherDownloadShop(){
     <main className="max-w-6xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Material-Downloads</h1>
       <div className="flex flex-wrap gap-2 mb-3 text-sm">
-        <button onClick={()=>applySubject('')} className={`px-3 py-1 rounded border ${!activeSubject?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>Alle Fächer</button>
         {subjects.map(s=> (
-          <button key={s} onClick={()=>applySubject(s)} className={`px-3 py-1 rounded border ${activeSubject===s?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>{s}</button>
+          <button
+            key={s}
+            onClick={()=>applySubject(s)}
+            className={`px-3 py-1 rounded border ${activeSubject===s?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}
+            title={activeSubject===s ? 'Filter entfernen' : 'Nach Fach filtern'}
+          >{s}</button>
         ))}
       </div>
       <div className="flex flex-wrap gap-2 mb-6 text-sm">
@@ -308,7 +314,7 @@ export default function TeacherDownloadShop(){
                   a.href=`/api/shop/products/${p._id}/download-zip`;
                   a.download=`${p.title.replace(/[^a-zA-Z0-9._-]+/g,'_')}.zip`;
                   document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);
-                }} className="w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">Alle Dateien (ZIP)</button>
+                }} className="w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">Download</button>
               </div>
               <div className="flex-1 flex flex-col p-4 gap-2">
                 <h3 className="font-semibold text-base leading-tight line-clamp-2" title={p.title}>{p.title}</h3>
