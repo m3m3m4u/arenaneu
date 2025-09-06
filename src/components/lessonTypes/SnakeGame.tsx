@@ -19,8 +19,8 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
   const wrapperRef = useRef<HTMLDivElement|null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsMaxPx, setFsMaxPx] = useState<number | null>(null);
-  const touchStartRef = useRef<{x:number;y:number;time:number}|null>(null);
-  const lastTouchMoveRef = useRef<{x:number;y:number}|null>(null);
+  // Touch: Tap setzt Richtung relativ zur Kopfposition; kein Swipe mehr
+  const lastTapRef = useRef<number>(0);
   // iOS Safari Workaround: global touchmove blocker während Vollbild um Pull-Down / UI-Reveal zu minimieren
   useEffect(()=>{
     if(!isFullscreen) return;
@@ -82,7 +82,15 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
   const enterFullscreen = async ()=>{
     const el = wrapperRef.current; if(!el) return;
     try {
-      if(el.requestFullscreen){ await el.requestFullscreen(); }
+      // Versuche die UI im Fullscreen auszublenden (Safari/Chromium unterstützen teils navigationUI)
+      const anyEl: any = el as any;
+      if (anyEl.requestFullscreen) {
+        try {
+          await anyEl.requestFullscreen({ navigationUI: 'hide' } as any);
+        } catch {
+          await anyEl.requestFullscreen();
+        }
+      }
       // Safari prefixes werden hier bewusst weggelassen, Next-Ziel sind moderne Browser
       setIsFullscreen(true);
   recalcFsSize(true);
@@ -199,11 +207,29 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
       </div>
       <div
         ref={wrapperRef}
-        className={"w-full flex flex-col lg:flex-row gap-6 " + (isFullscreen ? "border-2 border-gray-300 rounded-xl p-3 bg-white" : "")}
+        className={(isFullscreen ? "fixed inset-0 z-50 bg-white overflow-hidden p-3 " : "") + "w-full flex flex-col lg:flex-row gap-6"}
         onDoubleClick={()=>{ if(document.fullscreenElement){ exitFullscreen(); } else { enterFullscreen(); } }}
-        onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current = { x:t.clientX, y:t.clientY, time: performance.now() }; lastTouchMoveRef.current={ x:t.clientX, y:t.clientY }; }}
-        onTouchMove={(e)=>{ if(!isFullscreen) return; if(!touchStartRef.current) return; const t=e.touches[0]; const dy=t.clientY - touchStartRef.current.y; if(dy>25){ try{ e.preventDefault(); }catch{} } lastTouchMoveRef.current={ x:t.clientX, y:t.clientY }; }}
-        onTouchEnd={()=>{ touchStartRef.current=null; lastTouchMoveRef.current=null; }}
+        onTouchStart={(e)=>{
+          const t=e.touches[0]; if(!t) return;
+          // Tap-to-start
+          if(!running && !finished && !gameOver){ setRunning(true); }
+          const canvas = canvasRef.current; if(!canvas) return;
+          const rect = canvas.getBoundingClientRect();
+          const rx = (t.clientX - rect.left) / rect.width;
+          const ry = (t.clientY - rect.top) / rect.height;
+          if(rx<0||rx>1||ry<0||ry>1) return;
+          const tapX = rx * COLS; const tapY = ry * ROWS;
+          const head = snake[0]; if(!head) return;
+          const dx = tapX - (head.x + 0.5);
+          const dy = tapY - (head.y + 0.5);
+          if(Math.abs(dx) > Math.abs(dy)) setDirection(dx>0? 'right' : 'left');
+          else setDirection(dy>0? 'down' : 'up');
+          lastTapRef.current = performance.now();
+          if(isFullscreen){ try{ e.preventDefault(); }catch{} }
+        }}
+        onTouchMove={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+        onTouchEnd={()=>{ /* no-op */ }}
+        onWheel={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
         style={{ touchAction: isFullscreen ? 'none' : 'manipulation' }}
       >
   <div className={(isFullscreen ? "lg:w-[420px] p-5 text-[0.95rem]" : "lg:w-80 p-4") + " w-full lg:w-auto flex-shrink-0 bg-white border rounded space-y-4 h-fit min-h-[420px]"}>
@@ -272,9 +298,9 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
         <div className="flex-1 flex justify-center">
           <div
             className="inline-block relative w-full"
-            onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current = { x:t.clientX, y:t.clientY, time: performance.now() }; }}
+            onTouchStart={(e)=>{ const t=e.touches[0]; if(!t) return; const canvas=canvasRef.current; if(!canvas) return; const rect=canvas.getBoundingClientRect(); const rx=(t.clientX-rect.left)/rect.width; const ry=(t.clientY-rect.top)/rect.height; if(rx<0||rx>1||ry<0||ry>1) return; const tapX=rx*COLS; const tapY=ry*ROWS; const head=snake[0]; if(!head) return; const dx=tapX-(head.x+0.5); const dy=tapY-(head.y+0.5); if(running && !finished && !gameOver){ if(Math.abs(dx)>Math.abs(dy)) setDirection(dx>0?'right':'left'); else setDirection(dy>0?'down':'up'); } if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
             onTouchMove={(e)=>{ if(isFullscreen){ try { e.preventDefault(); } catch {}; } }}
-            onTouchEnd={(e)=>{ const s=touchStartRef.current; if(!s) return; const t=(e.changedTouches&&e.changedTouches[0])? e.changedTouches[0] : (e.touches[0]||null); if(!t){ touchStartRef.current=null; return;} const dx=t.clientX - s.x; const dy=t.clientY - s.y; const adx=Math.abs(dx), ady=Math.abs(dy); const TH=32; if(running && !finished && !gameOver){ if(adx>TH || ady>TH){ if(adx>ady){ if(dx>0) setDirection('right'); else setDirection('left'); } else { if(dy>0) setDirection('down'); else setDirection('up'); } } } touchStartRef.current=null; }}
+            onTouchEnd={()=>{ /* no-op */ }}
             style={{touchAction:'none'}}
           >
             <canvas
@@ -291,7 +317,7 @@ export default function SnakeGame({ lesson, courseId, completedLessons, setCompl
             />
             {!running && !finished && !gameOver && score===0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm text-center p-4 gap-2">
-                <button onClick={()=> setRunning(true)} className="px-6 py-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md text-sm">Start (Leertaste)</button>
+                <button onClick={()=> setRunning(true)} onTouchStart={(e)=>{ e.preventDefault(); setRunning(true); }} className="px-6 py-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md text-sm">Start (Leertaste)</button>
                 <div className="flex gap-2">
                   {!isFullscreen ? (
                     <button onClick={enterFullscreen} className="px-3 py-1 rounded border bg-gray-50 hover:bg-white text-xs">Vollbild</button>

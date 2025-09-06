@@ -1,22 +1,28 @@
 "use client";
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface ProductFile { key:string; name:string; downloadUrl?:string; contentType?:string; previewImages?:string[]; }
 interface Product { _id:string; title:string; description?:string; price?:number; files?:ProductFile[]; category?:string; }
 
 export default function TeacherDownloadShop(){
+  const router = useRouter();
   const [items,setItems] = useState<Product[]>([]);
   const [subjects,setSubjects] = useState<string[]>([]);
   const [activeSubject,setActiveSubject] = useState<string>('');
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState<string|null>(null);
-  const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index der aktiven Datei (für Karussell)
+  const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index des aktiven Preview-Bildes
   // Thumbnails für PDF (erste Seite) – key => dataURL | 'error'
   const [thumbs,setThumbs] = useState<Record<string,string>>({});
-  const savedRef = useRef<Record<string,boolean>>({});
+  // Raw-Preview Cache: PDF-Basis -> Liste der Bild-URLs (aus Raw Files)
+  const [rawPreviews, setRawPreviews] = useState<Record<string, string[]>>({});
+  const pendingBasesRef = useRef<Set<string>>(new Set());
   // Einfache Warteschlange, um gleichzeitige PDF-Decodes zu begrenzen
   const queueRef = useRef<string[]>([]);
   const busyRef = useRef(false);
+  // Seitenanzahl je PDF-Datei (key -> numPages)
+  const [pageCounts, setPageCounts] = useState<Record<string, number>>({});
 
   async function processQueue(){
     if(busyRef.current) return; busyRef.current=true;
@@ -40,7 +46,7 @@ export default function TeacherDownloadShop(){
           throw new Error('pdfjs getDocument nicht verfügbar');
         }
   // Lokaler Worker (gleiche Origin) um CSP einzuhalten
-  try { (pdfjs as any).GlobalWorkerOptions.workerSrc = '/api/pdf-worker'; } catch {}
+  try { (pdfjs as any).GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'; } catch {}
         let pdf: any;
         try {
           // Primär: direkt über URL
@@ -56,7 +62,9 @@ export default function TeacherDownloadShop(){
             throw blobErr;
           }
         }
-        const page = await pdf.getPage(1);
+  // Seitenzahl merken
+  try { if(typeof pdf?.numPages === 'number'){ setPageCounts(pc=> ({ ...pc, [k]: pdf.numPages })); } } catch {}
+  const page = await pdf.getPage(1);
   // Erst mit moderatem Scale rendern (Qualität ausreichend für 320x240 Ziel)
   const baseViewport = page.getViewport({ scale: 0.7 });
   const pageCanvas = document.createElement('canvas');
@@ -77,11 +85,7 @@ export default function TeacherDownloadShop(){
   octx.drawImage(pageCanvas, dx, dy, drawW, drawH);
   const url = out.toDataURL('image/png');
   setThumbs(t=> ({ ...t, [k]: url }));
-  // Asynchron zum Server speichern (einmalig)
-  if(!savedRef.current[k]){
-    savedRef.current[k]=true;
-    void fetch('/api/shop/product-thumbnail', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ key: file.key, productId: findProductIdByFileKey(file.key), dataUrl: url }) }).catch(()=>{});
-  }
+  // Keine serverseitige Speicherung mehr
       } catch (e){
         console.warn('PDF Thumbnail Fehler', file?.name, e);
         setThumbs(t=> ({ ...t, [k]: 'error' }));
@@ -124,18 +128,83 @@ export default function TeacherDownloadShop(){
   }
   useEffect(()=>{ void load(); },[activeSubject]);
 
-  const isPdf = (f:ProductFile)=> /\.pdf$/i.test(f.name);
-  const isImage = (f:ProductFile)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name);
-  function previewFiles(p:Product){
-    // Echte Dateien (keine Platzhalter) die PDF oder Bild sind
-    return (p.files||[]) 
-      .filter(f=> !f.key?.startsWith('placeholder:'))
-      .filter(f=> isPdf(f) || isImage(f));
+  // Initiale Übernahme des URL-Parameters ?subject in den lokalen Zustand (ohne useSearchParams, um Suspense-Pflicht zu vermeiden)
+  useEffect(()=>{
+    try {
+      const sp = new URLSearchParams((typeof window!=='undefined'? window.location.search: '')||'');
+      const initial = (sp.get('subject')||'').trim();
+      if(initial) setActiveSubject(initial);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  // Hilfsfunktion: Subjekt setzen und URL aktualisieren (ohne Scroll/Neuaufbau)
+  function applySubject(subj: string){
+    setActiveSubject(subj);
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if(subj) sp.set('subject', subj); else sp.delete('subject');
+      const qs = sp.toString();
+      const path = window.location.pathname + (qs? ('?'+qs):'');
+      router.replace(path, { scroll: false });
+    } catch {}
   }
 
-  function setActive(pId:string, dir:number){
-    setActiveIdx(prev=>{ const cur = prev[pId]||0; const files = previewFiles(items.find(i=> i._id===pId)!); if(!files.length) return prev; const next = ( (cur+dir)%files.length + files.length ) % files.length; return { ...prev, [pId]: next }; });
+  const isPdf = (f:ProductFile)=> /\.pdf$/i.test(f.name);
+  const isImage = (f:ProductFile)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name);
+  function getPreviewImages(p: Product): { images: string[]; pdf?: ProductFile }{
+    const all = (p.files||[]).filter(f=> !f.key?.startsWith('placeholder:'));
+    const pdf = all.find(isPdf);
+    const images = all.filter(isImage);
+    if(pdf){
+      const base = pdf.name.replace(/\.(pdf)$/i,'');
+      const relImgs = images
+        .filter(img=> new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i').test(img.name))
+        .map(img=> ({ url: img.downloadUrl, idx: parseInt((img.name.match(/-(\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
+        .filter(x=> !!x.url)
+        .sort((a,b)=> a.idx-b.idx)
+        .map(x=> x.url!)
+      ;
+      if(relImgs.length) return { images: relImgs, pdf };
+      // Fallback 1: serverseitig gespeicherte previewImages am PDF
+      // Fallback: serverseitig gespeicherte previewImages am PDF
+      const filePreviews = Array.isArray(pdf.previewImages) ? pdf.previewImages : [];
+      if(filePreviews.length) return { images: filePreviews, pdf };
+      // Fallback 2: Raw-Files automatisch per Namensschema <Base>-N.(png|jpg|webp)
+      const cached = rawPreviews[base];
+      if(cached && cached.length){ return { images: cached, pdf }; }
+      // Asynchron laden, wenn noch nicht unterwegs
+      if(!pendingBasesRef.current.has(base)){
+        pendingBasesRef.current.add(base);
+        // Wir holen alle Raw-Files mit q=Base und filtern clientseitig strikt auf das Schema
+        (async()=>{
+          try{
+            const params = new URLSearchParams();
+            params.set('q', base);
+            params.set('limit','100');
+            const r = await fetch(`/api/shop/raw-files?${params.toString()}`, { cache:'no-store' });
+            const d = await r.json();
+            if(r.ok && d.success && Array.isArray(d.items)){
+              const matcher = new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i');
+              const list = d.items
+                .map((it:any)=> ({ name: String(it.name||''), url: it.url }))
+                .filter((it:any)=> matcher.test(it.name) && it.url)
+                .map((it:any)=> ({ url: it.url, idx: parseInt((it.name.match(/-(\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
+                .sort((a:any,b:any)=> a.idx-b.idx)
+                .map((x:any)=> x.url as string);
+              if(list.length){ setRawPreviews(prev=> ({ ...prev, [base]: list })); }
+            }
+          } catch {/* ignore */}
+        })();
+      }
+      return { images: [], pdf };
+    }
+    // Kein PDF: zeige vorhandene Bilder
+    const anyImgs = images.map(i=> i.downloadUrl!).filter(Boolean);
+    return { images: anyImgs };
   }
+
+  // Hinweis: Karussell-Steuerung erfolgt inline je Produktkarte
 
   function downloadFile(f:ProductFile){ if(!f.downloadUrl) return; try{ const a=document.createElement('a'); a.href=f.downloadUrl; a.download=f.name||'download'; a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch { window.open(f.downloadUrl,'_blank'); } }
 
@@ -143,64 +212,84 @@ export default function TeacherDownloadShop(){
     <main className="max-w-6xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Material-Downloads</h1>
       <div className="flex flex-wrap gap-2 mb-6 text-sm">
-        <button onClick={()=>setActiveSubject('')} className={`px-3 py-1 rounded border ${!activeSubject?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>Alle Fächer</button>
+        <button onClick={()=>applySubject('')} className={`px-3 py-1 rounded border ${!activeSubject?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>Alle Fächer</button>
         {subjects.map(s=> (
-          <button key={s} onClick={()=>setActiveSubject(s)} className={`px-3 py-1 rounded border ${activeSubject===s?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>{s}</button>
+          <button key={s} onClick={()=>applySubject(s)} className={`px-3 py-1 rounded border ${activeSubject===s?'bg-indigo-600 text-white border-indigo-600':'bg-white hover:bg-gray-50'}`}>{s}</button>
         ))}
       </div>
       {loading && <div className="text-sm text-gray-500">Lade…</div>}
       {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
       {!loading && !error && items.length===0 && <div className="text-sm text-gray-500">Keine Produkte vorhanden.</div>}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
         {items.map(p=>{
-          const files = previewFiles(p);
-          const idx = activeIdx[p._id]||0;
-          const current = files[idx];
-          if(current && isPdf(current)) enqueueThumb(current); // nur PDF braucht Rendering
-          const thumbKey = current?.key || '';
+          const { images, pdf } = getPreviewImages(p);
+          const previews = images;
+          const count = previews.length;
+          const idx = Math.min(activeIdx[p._id]||0, Math.max(0, count-1));
+          const setActive = (dir:number)=> setActiveIdx(prev=>{ const cur = prev[p._id]||0; if(!count) return prev; const next = ((cur+dir)%count + count) % count; return { ...prev, [p._id]: next }; });
+          // Touch-Wischen (pro Karte lokale Variablen im Closure)
+          let startX = 0, startY = 0, startT = 0; let lastDX = 0; let locked = false;
+          const onTouchStart = (e: React.TouchEvent)=>{
+            const t = e.touches[0]; startX = t.clientX; startY = t.clientY; startT = Date.now(); lastDX = 0; locked = false;
+          };
+          const onTouchMove = (e: React.TouchEvent)=>{
+            const t = e.touches[0]; const dx = t.clientX - startX; const dy = t.clientY - startY; lastDX = dx;
+            if(!locked){
+              if(Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2){ locked = true; }
+            }
+            if(locked){ e.preventDefault(); }
+          };
+          const onTouchEnd = ()=>{
+            if(!locked) return;
+            const dt = Date.now() - startT; const adx = Math.abs(lastDX);
+            if(adx > 40 || (adx > 20 && dt < 300)){
+              setActive(lastDX > 0 ? -1 : 1);
+            }
+          };
+          // Falls keine Preview-Bilder und es ein PDF gibt: Render-Fallback erster Seite (nur Anzeige)
+          const thumbKey = pdf?.key || '';
+          if(!count && pdf) enqueueThumb(pdf);
+          const currentImg = count? previews[idx] : (thumbs[thumbKey] && thumbs[thumbKey] !== 'error' ? thumbs[thumbKey] : undefined);
+          // Seitenanzahl anzeigen: bevorzugt Anzahl Preview-Bilder, sonst pdfjs numPages falls geladen
+          const totalPages = count || (thumbKey ? pageCounts[thumbKey] : undefined) || undefined;
           return (
             <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
-              <div className="relative bg-gray-50 aspect-[4/3] flex items-center justify-center p-2">
-                {/* PDF oder Bild Vorschau */}
-                {current && current.downloadUrl ? (
-                  isPdf(current) ? (
-                    <div className="w-full h-full flex items-center justify-center">
-                      {thumbs[thumbKey] && thumbs[thumbKey] !== 'error' && (
-                        <img src={thumbs[thumbKey]} alt={current.name} className="max-w-full max-h-full object-contain rounded shadow-sm" />
-                      )}
-                      {!thumbs[thumbKey] && <span className="text-[11px] text-gray-500">Lade Vorschau…</span>}
-                      {thumbs[thumbKey] === 'error' && <span className="text-[11px] text-red-500">Keine Vorschau</span>}
-                    </div>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <img src={current.downloadUrl} alt={current.name} className="max-w-full max-h-full object-contain rounded shadow-sm" loading="lazy" />
-                    </div>
-                  )
-                ) : <div className="text-[11px] text-gray-400">Keine Vorschau</div>}
-                {files.length>1 && (
+              <div className="relative bg-white aspect-[210/297] overflow-hidden touch-pan-y w-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+                {currentImg ? (
+                  <img src={currentImg} alt={p.title} className="absolute inset-0 w-full h-full object-contain" />
+                ) : (
+                  <div className="text-[11px] text-gray-400">{pdf? (thumbs[thumbKey]==='error' ? 'Keine Vorschau' : 'Lade Vorschau…') : 'Keine Vorschau'}</div>
+                )}
+                {count>1 && (
                   <>
-                    <button onClick={()=>setActive(p._id,-1)} className="absolute left-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">‹</button>
-                    <button onClick={()=>setActive(p._id,1)} className="absolute right-1 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-xs px-1 py-0.5 rounded shadow">›</button>
+                    <button onClick={()=>setActive(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200 z-10">‹</button>
+                    <button onClick={()=>setActive(1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200 z-10">›</button>
                     <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
-                      {files.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
+                      {previews.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
                     </div>
                   </>
                 )}
+              </div>
+              {/* ZIP Download direkt unter dem Bild */}
+              <div className="px-4 pt-3">
+                <button onClick={()=> {
+                  const a=document.createElement('a');
+                  a.href=`/api/shop/products/${p._id}/download-zip`;
+                  a.download=`${p.title.replace(/[^a-zA-Z0-9._-]+/g,'_')}.zip`;
+                  document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);
+                }} className="w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">Alle Dateien (ZIP)</button>
               </div>
               <div className="flex-1 flex flex-col p-4 gap-2">
                 <h3 className="font-semibold text-base leading-tight line-clamp-2" title={p.title}>{p.title}</h3>
                 {p.description && <p className="text-xs text-gray-600 whitespace-pre-line line-clamp-4">{p.description}</p>}
                 <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-500">
-                  {typeof p.price==='number' && <span className="font-medium text-gray-700">{p.price.toFixed(2)} €</span>}
-                  <span>{files.length} Datei{files.length!==1?'en':''}</span>
+                  {typeof p.price==='number' && (
+                    <span className="font-medium text-gray-700">
+                      {p.price.toFixed(2)} € {typeof totalPages==='number' && totalPages>0 && (<span className="font-normal text-gray-500">• {totalPages} Seiten</span>)}
+                    </span>
+                  )}
+                  <span>{(p.files||[]).filter(f=>!f.key?.startsWith('placeholder:')).length} Datei{((p.files||[]).filter(f=>!f.key?.startsWith('placeholder:')).length)!==1?'en':''}</span>
                 </div>
-                <button onClick={()=> {
-                  // Gesamtes Produkt als ZIP herunterladen
-                  const a=document.createElement('a');
-                  a.href=`/api/shop/products/${p._id}/download-zip`;
-                  a.download=`${p.title.replace(/[^a-zA-Z0-9._-]+/g,'_')}.zip`;
-                  document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);
-                }} className="mt-2 w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">Alle Dateien (ZIP)</button>
               </div>
             </div>
           );

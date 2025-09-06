@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { CATEGORIES } from '@/lib/categories';
 
 interface Product { _id:string; title:string; description?:string; category?:string; isPublished:boolean; files?: any[]; price?:number; }
-interface RawFile { id:string; name:string; key:string; size:number; url:string; createdAt:string; contentType?:string; }
+interface RawFile { id:string; name:string; key:string; size:number; url:string; createdAt:string; contentType?:string; assigned?:boolean; related?:boolean; }
 interface ExcelPreviewMaterial { title:string; category?:string; description?:string; price:number; files:string[]; normalizedCategory?:string; }
 
 // Neuer Admin Bereich: Produkte aus Raw-Dateien erstellen, Raw-Datei Bibliothek & Excel Import Preview
@@ -27,8 +27,14 @@ export default function AdminMaterialPage(){
   const [rawFiles, setRawFiles] = useState<RawFile[]>([]);
   const [rawPage, setRawPage] = useState(1);
   const [rawTotal, setRawTotal] = useState(0);
+  const [rawPageSize, setRawPageSize] = useState(20);
   const [rawSearch, setRawSearch] = useState('');
   const [rawUploading, setRawUploading] = useState(false);
+  const [rawFormat, setRawFormat] = useState('');
+  const [rawAssigned, setRawAssigned] = useState(''); // '', '1', '0'
+  const [rawYear, setRawYear] = useState('');
+  const [rawMonth, setRawMonth] = useState('');
+  const [rawDay, setRawDay] = useState('');
   const [selectedRawIds, setSelectedRawIds] = useState<string[]>([]);
   const [rawDeletingId, setRawDeletingId] = useState<string|null>(null);
 
@@ -40,16 +46,35 @@ export default function AdminMaterialPage(){
   const [excelToken, setExcelToken] = useState<string|null>(null);
   // PDF Preview
   const [pdfUrl,setPdfUrl] = useState<string|null>(null);
+  // Karussell-Index je Produkt (für Vorschau wie beim Lehrer)
+  const [activeIdx,setActiveIdx] = useState<Record<string,number>>({});
+  // Raw-Preview Cache: PDF-Basis -> Bild-URLs (aus Raw Files)
+  const [rawPreviews, setRawPreviews] = useState<Record<string,string[]>>({});
+  const pendingBasesRef = useRef<Set<string>>(new Set());
 
   const toggleRaw = (id:string)=> setSelectedRawIds(ids=> ids.includes(id)? ids.filter(x=>x!==id): [...ids,id]);
 
   const loadRaw = useCallback(async(page=1)=>{
     try {
-      const r = await fetch(`/api/shop/raw-files?page=${page}&limit=30&q=${encodeURIComponent(rawSearch)}`);
+      const qs = new URLSearchParams();
+      qs.set('page', String(page));
+      qs.set('limit', String(rawPageSize));
+      if(rawSearch) qs.set('q', rawSearch);
+      if(rawFormat) qs.set('format', rawFormat);
+      if(rawAssigned) qs.set('assigned', rawAssigned);
+      if(rawYear) qs.set('year', rawYear);
+      if(rawMonth) qs.set('month', rawMonth);
+      if(rawDay) qs.set('day', rawDay);
+      const r = await fetch(`/api/shop/raw-files?${qs.toString()}`);
       const d = await r.json();
-      if(r.ok && d.success){ setRawFiles(d.items); setRawTotal(d.total); setRawPage(d.page); }
+      if(r.ok && d.success){
+        setRawFiles(d.items);
+        setRawTotal(d.total);
+        setRawPage(d.page);
+        if(typeof d.pageSize === 'number' && d.pageSize>0) setRawPageSize(d.pageSize);
+      }
     } catch{/*ignore*/}
-  },[rawSearch]);
+  },[rawSearch, rawFormat, rawAssigned, rawYear, rawMonth, rawDay, rawPageSize]);
 
   async function load(){
     setLoading(true); setError(null);
@@ -91,6 +116,8 @@ export default function AdminMaterialPage(){
     } catch { alert('Netzwerkfehler'); }
   }
 
+  // Automatische Preview-Erzeugung entfernt
+
   async function uploadRawFile(file: File){
     setRawUploading(true);
     try {
@@ -100,6 +127,22 @@ export default function AdminMaterialPage(){
       if(!(r.ok && d.success)) alert(d.error||'Raw Upload fehlgeschlagen'); else loadRaw(rawPage);
     } catch { alert('Netzwerkfehler'); }
     setRawUploading(false);
+  }
+
+  async function uploadRawFiles(files: FileList){
+    const list = Array.from(files||[]);
+    if(!list.length) return;
+    setRawUploading(true);
+    for(const f of list){
+      try {
+        const form = new FormData(); form.append('file', f);
+        const r = await fetch('/api/shop/raw-files', { method:'POST', body: form });
+        // eslint-disable-next-line no-empty
+        await r.json().catch(()=>({}));
+      } catch {/* ignore single failures */}
+    }
+    setRawUploading(false);
+    loadRaw(1);
   }
 
   async function deleteRawFile(id:string){
@@ -175,6 +218,74 @@ export default function AdminMaterialPage(){
     // Für jedes Preview-Material versuchen wir zu matchen: Der Nutzer kann später Produkte einzeln editieren – hier nur Info.
   }
 
+  // Helper wie im Lehrer-Shop: Preview-Bilder aus Dateien ableiten
+  const isPdf = (f:any)=> /\.pdf$/i.test(f?.name||'') || (f?.contentType||'').includes('pdf');
+  const isImage = (f:any)=> /\.(png|jpe?g|webp|gif|svg)$/i.test(f?.name||'');
+  const toNFC = (s:string)=>{ try{ return s.normalize('NFC'); }catch{ return s; } };
+  const buildUmlautAlt = (s:string)=> s
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue')
+    .replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue')
+    .replace(/ß/g,'ss');
+  const esc = (s:string)=> s.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&');
+  function buildImageRegex(baseRaw:string){
+    const base = toNFC(baseRaw);
+    const baseEsc = esc(base);
+    const altEsc = esc(buildUmlautAlt(base));
+    const baseGroup = altEsc!==baseEsc? `(?:${baseEsc}|${altEsc})` : baseEsc;
+    // ^base[-_\s]*(?:seite|page)?[-_\s]*(?:\(?([0-9]+)\)?)[-_\s]*\.(png|jpe?g|webp)$
+    return new RegExp(`^${baseGroup}[-_\\s]*(?:seite|page)?[-_\\s]*(?:\\(?([0-9]+)\\)?)[-_\\s]*\\.(?:png|jpe?g|webp)$`,'i');
+  }
+  function getPreviewImages(p: Product): { images: string[]; pdf?: any }{
+    const files = (p.files||[]).filter((f:any)=> !String(f.key||'').startsWith('placeholder:'));
+    const pdf = files.find(isPdf);
+    const images = files.filter(isImage);
+    if(pdf){
+      const base = toNFC(String(pdf.name||'').replace(/\.(pdf)$/i,''));
+      const rx = buildImageRegex(base);
+      const relImgs = images
+        .map((img:any)=>{
+          const nm = String(img.name||'');
+          const m = nm.match(rx);
+          if(!m) return null as { url:string; idx:number } | null;
+          const idx = parseInt(m[1]||'0',10);
+          return Number.isFinite(idx) && img.downloadUrl? { url: img.downloadUrl as string, idx }: null;
+        })
+        .filter((x: { url:string; idx:number } | null): x is { url:string; idx:number } => !!x)
+        .sort((a,b)=> a.idx-b.idx)
+        .map(x=> x.url)
+      ;
+      if(relImgs.length) return { images: relImgs, pdf };
+      const filePreviews = Array.isArray((pdf as any).previewImages)? (pdf as any).previewImages: [];
+      if(filePreviews.length) return { images: filePreviews, pdf };
+      // Fallback: Raw-Files automatisch nach Schema
+      const cached = rawPreviews[base];
+      if(cached && cached.length) return { images: cached, pdf };
+      if(!pendingBasesRef.current.has(base)){
+        pendingBasesRef.current.add(base);
+        (async()=>{
+          try{
+            const qs = new URLSearchParams(); qs.set('q', base); qs.set('limit','200');
+            const r = await fetch(`/api/shop/raw-files?${qs.toString()}`, { cache:'no-store' });
+            const d = await r.json();
+            if(r.ok && d.success){
+              const rx2 = buildImageRegex(base);
+              const list = (d.items||[])
+                .map((it:any)=> ({ name: String(it.name||''), url: it.url }))
+                .map((it:any)=>{ const m=it.name.match(rx2); if(!m) return null as { url:string; idx:number } | null; const idx=parseInt(m[1]||'0',10); return Number.isFinite(idx)&&it.url? { url: it.url as string, idx }: null; })
+                .filter((x: { url:string; idx:number } | null): x is { url:string; idx:number } => !!x)
+                .sort((a:any,b:any)=> a.idx-b.idx)
+                .map((x:any)=> x.url as string);
+              if(list.length){ setRawPreviews(prev=> ({ ...prev, [base]: list })); }
+            }
+          } catch{/*ignore*/}
+        })();
+      }
+      return { images: [], pdf };
+    }
+    const anyImgs = images.map((i:any)=> i.downloadUrl!).filter(Boolean);
+    return { images: anyImgs };
+  }
+
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-8">
       <header className="space-y-2">
@@ -194,52 +305,96 @@ export default function AdminMaterialPage(){
 
       {tab==='manage' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
         <div className="flex flex-wrap gap-3 items-center justify-between">
-          <h2 className="font-semibold">Raw-Dateien</h2>
-          <div className="flex gap-2 items-center text-xs">
+          <h2 className="font-semibold">Alle Dateien</h2>
+          <div className="flex gap-2 items-center text-xs flex-wrap">
             <input value={rawSearch} onChange={e=>setRawSearch(e.target.value)} placeholder="Suche" className="border rounded px-2 py-1" />
-            <button onClick={()=>loadRaw(1)} className="px-2 py-1 border rounded bg-gray-50 hover:bg-gray-100">Suche</button>
+            <select value={rawFormat} onChange={e=>setRawFormat(e.target.value)} className="border rounded px-2 py-1">
+              <option value="">Format: alle</option>
+              <option value="pdf">PDF</option>
+              <option value="png">PNG</option>
+              <option value="jpg">JPG</option>
+              <option value="jpeg">JPEG</option>
+              <option value="webp">WEBP</option>
+              <option value="zip">ZIP</option>
+              <option value="docx">DOCX</option>
+            </select>
+            <select value={rawAssigned} onChange={e=>setRawAssigned(e.target.value)} className="border rounded px-2 py-1">
+              <option value="">Zuordnung: alle</option>
+              <option value="1">Nur zugeordnete</option>
+              <option value="0">Nur nicht zugeordnete</option>
+            </select>
+            <input value={rawYear} onChange={e=>setRawYear(e.target.value)} placeholder="Jahr" className="border rounded px-2 py-1 w-20" />
+            <input value={rawMonth} onChange={e=>setRawMonth(e.target.value)} placeholder="Monat" className="border rounded px-2 py-1 w-20" />
+            <input value={rawDay} onChange={e=>setRawDay(e.target.value)} placeholder="Tag" className="border rounded px-2 py-1 w-20" />
+            <button onClick={()=>loadRaw(1)} className="px-2 py-1 border rounded bg-gray-50 hover:bg-gray-100">Filter</button>
             <label className="cursor-pointer px-2 py-1 border rounded bg-indigo-50 hover:bg-indigo-100">
               + Upload
-              <input type="file" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadRawFile(f); e.target.value=''; }} />
+              <input multiple type="file" className="hidden" onChange={e=>{ const fl=e.target.files; if(fl && fl.length) uploadRawFiles(fl); e.target.value=''; }} />
             </label>
             {selectedRawIds.length>0 && (
               <button onClick={deleteSelectedRaw} className="px-2 py-1 border rounded bg-red-50 hover:bg-red-100 text-red-700" title="Ausgewählte löschen">Löschen ({selectedRawIds.length})</button>
             )}
             {rawUploading && <span>Upload…</span>}
+            {/* Pagination (20 pro Seite) */}
+            <div className="ml-auto flex items-center gap-1">
+              <button onClick={()=>{ const p=1; setRawPage(p); loadRaw(p); }} disabled={rawPage<=1} className="px-2 py-1 border rounded disabled:opacity-50">«</button>
+              <button onClick={()=>{ const p=Math.max(1, rawPage-1); setRawPage(p); loadRaw(p); }} disabled={rawPage<=1} className="px-2 py-1 border rounded disabled:opacity-50">‹</button>
+              <span className="px-2">Seite {rawPage} / {Math.max(1, Math.ceil(rawTotal / rawPageSize))}</span>
+              <button onClick={()=>{ const totalPages=Math.max(1, Math.ceil(rawTotal / rawPageSize)); const p=Math.min(totalPages, rawPage+1); setRawPage(p); loadRaw(p); }} disabled={rawPage >= Math.max(1, Math.ceil(rawTotal / rawPageSize))} className="px-2 py-1 border rounded disabled:opacity-50">›</button>
+              <button onClick={()=>{ const p=Math.max(1, Math.ceil(rawTotal / rawPageSize)); setRawPage(p); loadRaw(p); }} disabled={rawPage >= Math.max(1, Math.ceil(rawTotal / rawPageSize))} className="px-2 py-1 border rounded disabled:opacity-50">»</button>
+            </div>
           </div>
         </div>
-        <div className="grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {/* Drag & Drop Zone (3x höher) */}
+        <div
+          onDragOver={e=>{ e.preventDefault(); e.stopPropagation(); }}
+          onDrop={e=>{ e.preventDefault(); e.stopPropagation(); const files=e.dataTransfer?.files; if(files && files.length){ uploadRawFiles(files); } }}
+          className="mb-2 p-3 py-9 rounded border-2 border-dashed border-gray-300 text-center text-sm text-gray-600 bg-gray-50 hover:bg-gray-100"
+        >Dateien hierher ziehen zum Hochladen (Mehrfach-Upload)</div>
+        {/* Raw-Dateien als Zeilenliste, Klick lädt Datei herunter */}
+        <div className="border rounded divide-y">
           {rawFiles.map(f=>{
             const sel = selectedRawIds.includes(f.id);
             const usedByProduct = products.some(p=> (p.files||[]).some(file=> file.key===f.key || file.name===f.name));
+            const assigned = f.assigned || usedByProduct;
+            const highlightGreen = assigned || (!!f.related && /\.(png)$/i.test(f.name));
+            const leftColor = highlightGreen? 'border-emerald-500':'border-gray-300';
+            const nameColor = highlightGreen? 'text-emerald-700':'text-gray-800';
+            const handleDownload = ()=>{ try{ const a=document.createElement('a'); a.href=f.url; a.download=f.name||'download'; a.rel='noopener'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);} catch { window.open(f.url,'_blank'); } };
             return (
-              <div key={f.id} onClick={()=>!usedByProduct && toggleRaw(f.id)} className={`relative border rounded p-2 text-left flex flex-col gap-1 text-[11px] ${usedByProduct? 'opacity-70 cursor-not-allowed bg-gray-50':'cursor-pointer hover:bg-gray-50'} ${sel?'ring-2 ring-blue-500 bg-blue-50':''}`}>
+              <div key={f.id} className={`flex items-center gap-3 p-2 border-l-4 ${leftColor}`}>
+                {/* Auswahl für Sammellöschen */}
+                <input type="checkbox" checked={sel} onChange={(e)=>{ e.stopPropagation(); toggleRaw(f.id); }} className="shrink-0" />
+                <div className="flex-1 flex items-center gap-4 min-w-0">
+                  <button
+                    type="button"
+                    onClick={(e)=>{ e.stopPropagation(); handleDownload(); }}
+                    className={`truncate font-medium text-left underline-offset-2 hover:underline focus:underline ${nameColor}`}
+                    title={f.name}
+                  >{f.name}</button>
+                  <span className="text-gray-500 shrink-0">{Math.round(f.size/1024)} KB</span>
+                  <span className="text-gray-400 shrink-0">{new Date(f.createdAt).toLocaleDateString()}</span>
+                  {highlightGreen && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">zugeordnet</span>}
+                </div>
+                {/* Einzel-Löschen (falls nicht in Produkt) */}
                 <button
                   onClick={(e)=>{ e.stopPropagation(); if(usedByProduct) return; deleteRawFile(f.id); }}
                   title={usedByProduct? 'In Produkt verwendet – nicht löschbar':'Löschen'}
-                  className={`absolute top-1 right-1 text-xs px-1 ${usedByProduct? 'text-gray-400':'text-red-600 hover:text-red-800'}`}
+                  className={`text-xs px-1 ${usedByProduct? 'text-gray-400':'text-red-600 hover:text-red-800'}`}
                   disabled={rawDeletingId===f.id || usedByProduct}
                 >{rawDeletingId===f.id? '…':'×'}</button>
-                <span className="font-medium truncate pr-4" title={f.name}>{f.name}</span>
-                <span className="text-gray-500">{Math.round(f.size/1024)} KB</span>
-                <span className="text-gray-400">{new Date(f.createdAt).toLocaleDateString()}</span>
-                {usedByProduct && <span className="text-[10px] text-emerald-700">in Produkt</span>}
-                <div className="flex gap-1 flex-wrap mt-1">
-                  <a href={f.url} target="_blank" onClick={e=> e.stopPropagation()} className="px-1 py-0.5 border rounded text-[10px] hover:bg-white bg-gray-100">Öffnen</a>
-                  {f.contentType?.includes('pdf') && (
-                    <button onClick={(e)=>{ e.stopPropagation(); setPdfUrl(f.url); }} className="px-1 py-0.5 border rounded text-[10px] bg-indigo-50 hover:bg-indigo-100">Vorschau</button>
-                  )}
-                  <a href={f.url} download onClick={e=> e.stopPropagation()} className="px-1 py-0.5 border rounded text-[10px] bg-gray-50 hover:bg-gray-100">Download</a>
-                </div>
               </div>
             );
           })}
         </div>
-        {rawTotal>rawFiles.length && (
-          <div className="flex justify-center mt-2">
-            <button onClick={()=>{ loadRaw(rawPage+1); }} className="text-xs px-3 py-1 border rounded">Mehr…</button>
-          </div>
-        )}
+        {/* Untere Pagination */}
+        <div className="flex justify-center mt-2 gap-2 text-xs">
+          <button onClick={()=>{ const p=1; setRawPage(p); loadRaw(p); }} disabled={rawPage<=1} className="px-2 py-1 border rounded disabled:opacity-50">« Erste</button>
+          <button onClick={()=>{ const p=Math.max(1, rawPage-1); setRawPage(p); loadRaw(p); }} disabled={rawPage<=1} className="px-2 py-1 border rounded disabled:opacity-50">‹ Zurück</button>
+          <span className="px-2 py-1">Seite {rawPage} von {Math.max(1, Math.ceil(rawTotal / rawPageSize))} • {rawPageSize} pro Seite</span>
+          <button onClick={()=>{ const totalPages=Math.max(1, Math.ceil(rawTotal / rawPageSize)); const p=Math.min(totalPages, rawPage+1); setRawPage(p); loadRaw(p); }} disabled={rawPage >= Math.max(1, Math.ceil(rawTotal / rawPageSize))} className="px-2 py-1 border rounded disabled:opacity-50">Weiter ›</button>
+          <button onClick={()=>{ const p=Math.max(1, Math.ceil(rawTotal / rawPageSize)); setRawPage(p); loadRaw(p); }} disabled={rawPage >= Math.max(1, Math.ceil(rawTotal / rawPageSize))} className="px-2 py-1 border rounded disabled:opacity-50">Letzte »</button>
+        </div>
   </section>}
 
   {tab==='excel' && <section className="bg-white border rounded shadow-sm p-5 space-y-3">
@@ -258,6 +413,7 @@ export default function AdminMaterialPage(){
         </div>
         {excelPreview && (
           <div className="text-[11px] overflow-auto">
+            <p className="mb-2 text-gray-600">Hinweis: Beim Excel-Import werden Leerzeichen und Unterstriche in Dateinamen gleich behandelt.</p>
             <p className="mb-1 font-medium">Preview ({excelPreview.length} Materialien)</p>
             <table className="w-full text-[11px] border">
               <thead className="bg-gray-50">
@@ -299,55 +455,59 @@ export default function AdminMaterialPage(){
 
       {tab==='preview' && <section className="bg-white border rounded shadow-sm p-5 space-y-4">
         <h2 className="font-semibold">Shop Vorschau (alle Produkte)</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map(p=> (
-            <div key={p._id} className="border rounded p-4 bg-white flex flex-col gap-2 text-sm">
-              <div className="font-semibold flex justify-between items-center">
-                <span className="truncate pr-2" title={p.title}>{p.title}</span>
-                <div className="flex items-center gap-2">
-                  {typeof p.price==='number' && <span className="text-xs text-gray-500">{p.price.toFixed(2)} €</span>}
+  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          {products.map(p=>{
+            const { images, pdf } = getPreviewImages(p);
+            const previews = images;
+            const count = previews.length;
+            const idx = Math.min(activeIdx[p._id]||0, Math.max(0, count-1));
+            const setActive = (dir:number)=> setActiveIdx(prev=>{ const cur = prev[p._id]||0; if(!count) return prev; const next = ((cur+dir)%count + count) % count; return { ...prev, [p._id]: next }; });
+            const currentImg = count? previews[idx] : undefined;
+            return (
+              <div key={p._id} className="group bg-white border rounded shadow-sm flex flex-col overflow-hidden">
+                <div className="relative bg-white aspect-[210/297] overflow-hidden w-full">
+                  {currentImg ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={currentImg} alt={p.title} className="absolute inset-0 w-full h-full object-contain" />
+                  ) : (
+                    <div className="text-[11px] text-gray-400">Keine Vorschau</div>
+                  )}
+                  {count>1 && (
+                    <>
+                      <button onClick={()=>setActive(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200 z-10">‹</button>
+                      <button onClick={()=>setActive(1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white text-base px-3 py-2 rounded shadow-md border border-gray-200 z-10">›</button>
+                      <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1">
+                        {previews.map((_,i)=>(<span key={i} className={`w-2 h-2 rounded-full ${i===idx?'bg-indigo-600':'bg-gray-300'}`} />))}
+                      </div>
+                    </>
+                  )}
+                  {/* Produkt löschen oben rechts */}
                   <button
                     onClick={async()=>{ if(!confirm(`Produkt "${p.title}" löschen?`)) return; try{ const r=await fetch(`/api/shop/products/${p._id}`,{ method:'DELETE' }); const d=await r.json(); if(!(r.ok && d.success)) alert(d.error||'Löschen fehlgeschlagen'); else setProducts(prev=> prev.filter(x=> x._id!==p._id)); } catch { alert('Netzwerkfehler'); } }}
-                    className="text-xs text-red-600 hover:text-red-800 px-1 py-0.5 border border-red-200 rounded"
+                    className="absolute top-1 right-1 text-xs text-red-600 hover:text-red-800 px-1 py-0.5 border border-red-200 rounded"
                     title="Produkt löschen"
                   >✕</button>
                 </div>
-              </div>
-              {p.category && <div className="text-[11px] text-indigo-700">{p.category}</div>}
-              <div className="text-[11px] text-gray-500">{p.files?.filter(f=>!f.key?.startsWith('placeholder:')).length || 0} echte Dateien / {p.files?.length||0} gesamt</div>
-              {p.description && <p className="text-[11px] text-gray-600 line-clamp-3 whitespace-pre-line">{p.description}</p>}
-              <div className="flex flex-col gap-1 mt-auto">
-                <div className="flex flex-wrap gap-1">
-                  {(p.files||[]).slice(0,4).map(f=> (
-                    <button
-                      key={f.key}
-                      onClick={()=>{
-                        if(!f.downloadUrl) return;
-                        try {
-                          const a = document.createElement('a');
-                          a.href = f.downloadUrl;
-                          // Dateiname ohne Platzhalter-Prefix
-                          const baseName = f.name || 'download';
-                          a.setAttribute('download', baseName);
-                          a.rel = 'noopener';
-                          document.body.appendChild(a);
-                          a.click();
-                          setTimeout(()=> a.remove(), 0);
-                        } catch {
-                          // Fallback: normales Öffnen falls download Attribute nicht greift
-                          window.open(f.downloadUrl,'_blank');
-                        }
-                      }}
-                      className={`px-1 py-0.5 border rounded text-[10px] ${f.key.startsWith('placeholder:')?'border-orange-300 text-orange-600':'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                      title={f.name}
-                    >{f.name.slice(0,18)}</button>
-                  ))}
-                  {p.files && p.files.length>4 && <span className="text-[10px] text-gray-400">+{p.files.length-4}</span>}
+                {/* ZIP Download direkt unter dem Bild */}
+                <div className="px-4 pt-3">
+                  <button onClick={()=> {
+                    const a=document.createElement('a');
+                    a.href=`/api/shop/products/${p._id}/download-zip`;
+                    a.download=`${p.title.replace(/[^a-zA-Z0-9._-]+/g,'_')}.zip`;
+                    document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),0);
+                  }} className="w-full text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded py-1.5 font-medium">Alle Dateien (ZIP)</button>
                 </div>
-                {/* PDF-Vorschau entfernt (nicht benötigt) */}
+                <div className="flex-1 flex flex-col p-4 gap-2">
+                  <h3 className="font-semibold text-base leading-tight line-clamp-2" title={p.title}>{p.title}</h3>
+                  {p.description && <p className="text-xs text-gray-600 whitespace-pre-line line-clamp-4">{p.description}</p>}
+                  <div className="mt-auto flex items-center justify-between gap-2 text-xs text-gray-500">
+                    {typeof p.price==='number' && <span className="font-medium text-gray-700">{p.price.toFixed(2)} € {count>0 && <span className="font-normal text-gray-500">• {count} Seiten</span>}</span>}
+                    <span>{(p.files||[]).filter((f:any)=>!String(f.key||'').startsWith('placeholder:')).length} Datei{((p.files||[]).filter((f:any)=>!String(f.key||'').startsWith('placeholder:')).length)!==1?'en':''}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>}
       {pdfUrl && (

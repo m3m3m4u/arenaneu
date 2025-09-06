@@ -104,6 +104,27 @@ export async function shopDavMove(oldKey: string, newKey: string){
   return { url: shopWebdavPublicUrl(newKey), key: newKey };
 }
 
+// Datei direkt mit SHOP WebDAV laden (serverseitig, mit Auth)
+export async function shopDavGet(key: string): Promise<Uint8Array | null> {
+  const c = conf();
+  if(!c){
+    return null;
+  }
+  const target = `${c.url}/${encodeURIComponent(key).replace(/%2F/g,'/')}`;
+  let res: Response | null = null;
+  try {
+    res = await fetch(target, { headers: { Authorization: c.auth } });
+  } catch(e:any){
+    console.warn('[shopDavGet] Fetch Fehler', { target, err: e?.message });
+    return null;
+  }
+  if(!res.ok){
+    console.warn('[shopDavGet] nicht ok', { status: res.status, target });
+    return null;
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 async function ensureParentDir(key: string, baseUrl: string, auth: string){
   const idx = key.lastIndexOf('/');
   if(idx <= 0) return;

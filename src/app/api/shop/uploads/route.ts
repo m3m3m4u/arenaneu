@@ -12,8 +12,26 @@ export const runtime = 'nodejs';
 const SHOP_PREFIX = (process.env.WEBDAV_SHOP_PREFIX || 'shop').replace(/^[\/]+|[\/]+$/g,'');
 const BASE_PREFIX = SHOP_PREFIX ? SHOP_PREFIX + '/raw' : 'shop/raw';
 
+// Erlaubt Unicode-Buchstaben (inkl. ÄÖÜäöüß) und Ziffern sowie . _ -
+// Whitespace wird zu einem einzelnen Unterstrich zusammengezogen.
 function sanitize(name: string){
-  return name.replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/^_+/,'').slice(0,180) || 'datei';
+  try {
+    const normalized = (name || '').normalize('NFC');
+    const kept = normalized
+      // Ersetze alles außer Buchstaben/Ziffern/._- und Leerzeichen durch _
+      .replace(/[^\p{L}\p{N}._\-\s]+/gu, '_')
+      // Mehrfache Leerzeichen zu einem _
+      .replace(/\s+/g, '_')
+      // Führende/trailende Unterstriche entfernen
+      .replace(/^_+|_+$/g, '')
+      // Sicherheitskürzung
+      .slice(0, 180);
+    return kept || 'datei';
+  } catch {
+    // Fallback ohne Unicode-Property Escapes
+  // Erhalte deutsche Umlaute/ß im Fallback explizit
+  return (name || 'datei').replace(/[^a-zA-Z0-9._\-äöüÄÖÜß]+/g,'_').replace(/^_+|_+$/g,'').slice(0,180) || 'datei';
+  }
 }
 
 // Liste aller Dateien (nur WebDAV Varianten aktuell). Optional später S3.

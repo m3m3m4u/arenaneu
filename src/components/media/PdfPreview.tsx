@@ -29,22 +29,23 @@ export default function PdfPreview({ url, onClose }: PdfPreviewProps){
     (async()=>{
       try {
         setLoading(true); setError(undefined);
-        // @ts-ignore
-        const pdfjsLib = await import('pdfjs-dist');
-        // Worker setzen (Fallback CDN falls bundler Pfad nicht passt)
-        // @ts-ignore
-        if(pdfjsLib.GlobalWorkerOptions){
-          // @ts-ignore
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.2.67'}/pdf.worker.min.js`;
+  // pdfjs laden (ESM-Paket)
+  const pdfjsLib: any = await import('pdfjs-dist');
+        if(!pdfjsLib || !pdfjsLib.getDocument){
+          console.error('[PdfPreview] pdfjs getDocument nicht verfügbar. Verfügbare Keys:', pdfjsLib && Object.keys(pdfjsLib));
+          throw new Error('pdfjs getDocument nicht verfügbar');
         }
-        // @ts-ignore
-        const task = pdfjsLib.getDocument(url);
+        // Worker setzen (Fallback CDN falls bundler Pfad nicht passt)
+        if(pdfjsLib.GlobalWorkerOptions){
+          pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/pdf.worker.min.mjs', window.location.origin).toString();
+        }
+        const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true, withCredentials: false });
         const pdf = await task.promise;
         if(cancelled) return;
         pdfRef.current = pdf;
         setNumPages(pdf.numPages);
         await renderPage(1, pdf);
-      } catch(e:any){ if(!cancelled) setError('PDF konnte nicht geladen werden'); }
+      } catch(e:any){ console.error('[PdfPreview] Fehler', e); if(!cancelled) setError('PDF konnte nicht geladen werden'); }
       finally { if(!cancelled) setLoading(false); }
     })();
     return ()=>{ cancelled=true; };

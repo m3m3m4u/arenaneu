@@ -1,47 +1,53 @@
-﻿import mongoose, { Schema, models, model } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
-export interface FussballPlayerDoc {
+export interface IFussballPlayer {
   userId: string;
   username: string;
-  joinedAt: Date;
-  side: 'left' | 'right';
+  joinedAt: number;
+  side: 'left'|'right';
   ready: boolean;
   score: number;
 }
 
-export interface FussballLobbyDoc {
-  _id: mongoose.Types.ObjectId;
-  title: string;
+export interface IFussballLobby extends Document {
+  id: string; // kurze Lobby-ID
   lessonId?: string;
-  createdAt: Date;
+  title: string;
+  createdAt: number;
+  lastActivity: number;
   hostUserId: string;
-  status: 'waiting' | 'active' | 'finished' | 'aborted';
-  players: FussballPlayerDoc[];
-  lastActivity: Date;
+  status: 'waiting'|'active'|'finished'|'aborted';
+  players: IFussballPlayer[];
+  // Spielzustand (synchronisiert)
+  scores?: { left:number; right:number };
+  goals?: { left:number; right:number };
+  fieldIdx?: number;
+  turn?: 'left'|'right';
 }
 
-const PlayerSchema = new Schema<FussballPlayerDoc>({
-  userId: { type: String, required: true, index: true },
+const PlayerSchema = new Schema<IFussballPlayer>({
+  userId: { type: String, required: true },
   username: { type: String, required: true },
-  joinedAt: { type: Date, required: true, default: () => new Date() },
-  side: { type: String, enum: ['left', 'right'], required: true },
-  ready: { type: Boolean, required: true, default: false },
-  score: { type: Number, required: true, default: 0 },
+  joinedAt: { type: Number, required: true },
+  side: { type: String, enum: ['left','right'], required: true },
+  ready: { type: Boolean, default: false },
+  score: { type: Number, default: 0 },
 }, { _id: false });
 
-const LobbySchema = new Schema<FussballLobbyDoc>({
-  title: { type: String, required: true },
+const LobbySchema = new Schema<IFussballLobby>({
+  id: { type: String, required: true, unique: true, index: true },
   lessonId: { type: String },
-  createdAt: { type: Date, required: true, default: () => new Date() },
+  title: { type: String, required: true },
+  createdAt: { type: Number, required: true, index: true },
+  lastActivity: { type: Number, required: true, index: true },
   hostUserId: { type: String, required: true },
-  status: { type: String, enum: ['waiting','active','finished','aborted'], required: true, default: 'waiting', index: true },
-  players: { type: [PlayerSchema], required: true, default: [] },
-  lastActivity: { type: Date, required: true, default: () => new Date(), index: true },
+  status: { type: String, enum: ['waiting','active','finished','aborted'], default: 'waiting', index: true },
+  players: { type: [PlayerSchema], default: [] },
+  scores: { type: Object, default: { left:0, right:0 } },
+  goals: { type: Object, default: { left:0, right:0 } },
+  fieldIdx: { type: Number, default: 3 },
+  turn: { type: String, enum: ['left','right'], default: 'left' },
 });
 
-LobbySchema.index({ status: 1, createdAt: -1 });
-LobbySchema.index({ lastActivity: -1 });
-
-const FussballLobbyModel = models.FussballLobby || model<FussballLobbyDoc>('FussballLobby', LobbySchema);
-
-export default FussballLobbyModel;
+// Sicherstellen, dass Modell nicht doppelt registriert wird (Hot-Reload in Dev)
+export default (mongoose.models.FussballLobby as mongoose.Model<IFussballLobby>) || mongoose.model<IFussballLobby>('FussballLobby', LobbySchema);

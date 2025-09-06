@@ -15,7 +15,7 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
   // Parse lesson content similar to single-snake logic
   const content = (lesson.content as LessonContent | undefined) || {};
   const targetScore: number = Number(content.targetScore) || 15;
-  const difficulty: 'einfach'|'mittel'|'schwer' = content.difficulty === 'schwer' ? 'schwer' : (content.difficulty === 'einfach' ? 'einfach' : 'mittel');
+  const difficulty = (content.difficulty === 'schwer' ? 'schwer' : (content.difficulty === 'einfach' ? 'einfach' : 'mittel'));
   const MIN_TICK = 300, MAX_TICK = 1500;
   const defaultByDiff = difficulty === 'schwer' ? 400 : (difficulty === 'einfach' ? 600 : 500);
   const requested = Number((content as any).initialSpeedMs);
@@ -97,7 +97,7 @@ export default function TwoSnakeGame({ lesson, courseId, completedLessons, setCo
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Vereinheitlichtes Layout: immer Seiten-Controls (Laptop & iPad identisch)
-  const layoutMode: 'sides' = 'sides';
+  const layoutMode = 'sides' as const;
   // Dynamische Breite des Spielfelds (Skalierung wenn wenig vertikaler Platz – z.B. iPad Tastatur)
   const [boardWidthPx, setBoardWidthPx] = useState<number>(COLS * CELL);
 

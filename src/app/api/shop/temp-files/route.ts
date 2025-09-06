@@ -44,7 +44,21 @@ export async function POST(req: Request){
 			const originalName = typeof f.name === 'string' && f.name.trim() ? f.name : 'upload.bin';
 			const arrayBuf = await f.arrayBuffer();
 			const buf = new Uint8Array(arrayBuf);
-			const safeName = originalName.replace(/[^a-zA-Z0-9._-]+/g,'_');
+			// Unicode-freundliche Sanitisierung: Umlaute & Buchstaben behalten, sonst ersetzen
+			const safeName = (()=>{
+				try{
+					const normalized = originalName.normalize('NFC');
+					const kept = normalized
+						.replace(/[^\p{L}\p{N}._\-\s]+/gu, '_')
+						.replace(/\s+/g, '_')
+						.replace(/^_+|_+$/g, '')
+						.slice(0,180);
+					return kept || 'upload.bin';
+				} catch{
+					// Fallback: erhalte deutsche Umlaute/ß explizit
+					return originalName.replace(/[^a-zA-Z0-9._\-äöüÄÖÜß]+/g,'_').replace(/^_+|_+$/g,'').slice(0,180) || 'upload.bin';
+				}
+			})();
 			let rand = 'xxxx';
 			try {
 				let rb: any;

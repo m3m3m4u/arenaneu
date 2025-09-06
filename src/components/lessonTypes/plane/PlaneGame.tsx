@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import useFullscreenTouchLock from '@/lib/useFullscreenTouchLock';
 import type { Lesson, LessonContent } from '../types';
 import { useSession } from 'next-auth/react';
 import { finalizeLesson } from '../../../lib/lessonCompletion';
@@ -99,7 +100,8 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const bgReadyRef = useRef(false);
   // Touch/Swipe
-  const touchStartRef = useRef<{x:number;y:number;time:number}|null>(null);
+  // Touch: kein Swipe/Drag mehr – Tap obere/untere Bildschirmhälfte => Up/Down Impuls
+  const lastTapRef = useRef<number>(0);
 
   // Frage-Reihenfolge
   const questionOrderRef = useRef<number[]>([]);
@@ -135,11 +137,17 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
   },[nextQuestion]);
 
   // Fullscreen
-  const toggleFullscreen = () => {
+  const enterFullscreen = async ()=>{
     const el = wrapperRef.current; if(!el) return;
-    if(!document.fullscreenElement){ el.requestFullscreen?.(); } else { document.exitFullscreen?.(); }
+    try { await (el as any).requestFullscreen?.({ navigationUI: 'hide' } as any); }
+    catch { try { await (el as any).requestFullscreen?.(); } catch {/* ignore */} }
   };
+  const exitFullscreen = ()=>{ try{ document.exitFullscreen?.(); } catch{} };
+  const toggleFullscreen = ()=>{ if(!document.fullscreenElement) enterFullscreen(); else exitFullscreen(); };
   useEffect(()=>{ const handler=()=> setIsFullscreen(!!document.fullscreenElement); document.addEventListener('fullscreenchange', handler); return ()=> document.removeEventListener('fullscreenchange', handler); },[]);
+
+  // Systemgesten im Fullscreen konsequent blocken (iOS Safari, Android Chrome)
+  useFullscreenTouchLock(isFullscreen, { edgeWidth: 40, topEdgeHeight: 40 });
 
   // Input
   useEffect(()=>{
@@ -478,15 +486,14 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
   return (
     <div
       ref={wrapperRef}
-      className={isFullscreen ? 'w-screen h-screen bg-black relative overflow-hidden' : 'w-full py-4'}
-      onTouchStart={(e)=>{ const t=e.touches[0]; touchStartRef.current={ x:t.clientX, y:t.clientY, time: performance.now() }; }}
-      onTouchMove={(e)=>{ if(!touchStartRef.current) return; if(!isFullscreen) return; const t=e.touches[0]; const dy=t.clientY - touchStartRef.current.y; if(dy>25){ try{ e.preventDefault(); }catch{} } }}
-      onTouchEnd={(e)=>{ const s=touchStartRef.current; if(!s) return; const t=(e.changedTouches&&e.changedTouches[0])? e.changedTouches[0] : (e.touches[0]||null); if(!t){ touchStartRef.current=null; return; } const dx=t.clientX-s.x; const dy=t.clientY-s.y; const adx=Math.abs(dx), ady=Math.abs(dy); if(ady>36 && ady>adx){ if(dy<0){ // nach oben wischen
-            keysRef.current.ArrowUp = true; keysRef.current.ArrowDown = false; setTimeout(()=>{ keysRef.current.ArrowUp=false; }, 140);
-          } else { // nach unten wischen (kein Fullscreen Exit, nur Move)
-            keysRef.current.ArrowDown = true; keysRef.current.ArrowUp = false; setTimeout(()=>{ keysRef.current.ArrowDown=false; }, 140);
-          } }
-          touchStartRef.current=null; }}
+      className={isFullscreen ? 'fixed inset-0 z-50 bg-black overflow-hidden' : 'w-full py-4'}
+      onTouchStart={(e)=>{ const t=e.touches[0]; if(!t) return; const canvas=canvasRef.current; if(!canvas) return; const rect=canvas.getBoundingClientRect(); const y=t.clientY-rect.top; const half = rect.height/2; if(y<0||y>rect.height) return; // Tap-to-start
+        if(!running && !gameOver && !finished){ start(); }
+        if(!paused){ if(y < half){ keysRef.current.ArrowUp=true; keysRef.current.ArrowDown=false; setTimeout(()=>{ keysRef.current.ArrowUp=false; }, 160); } else { keysRef.current.ArrowDown=true; keysRef.current.ArrowUp=false; setTimeout(()=>{ keysRef.current.ArrowDown=false; }, 160); } }
+        if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      onTouchMove={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      onTouchEnd={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
+      onWheel={(e)=>{ if(isFullscreen){ try{ e.preventDefault(); }catch{} } }}
       style={{touchAction: isFullscreen ? 'none' : 'manipulation'}}
     >
       <div className={isFullscreen ? 'relative w-full h-full' : 'mx-auto w-full'} style={ isFullscreen ? {width:'100%', height:'100%'} : {width:'100%'} }>
@@ -547,7 +554,7 @@ export default function PlaneGame({ lesson, courseId, completedLessons, setCompl
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/55 text-center text-white p-4">
             <h2 className="text-2xl font-bold mb-3">✈️ Flugzeug Quiz</h2>
             <p className="mb-3 max-w-sm text-xs sm:text-sm">Steuere mit ↑ / ↓ durch die richtige Antwort-Wolke. Enter oder Button startet.</p>
-            <button onClick={start} className="px-5 py-2 rounded bg-amber-400 hover:bg-amber-500 text-black font-semibold text-xs shadow">Start (Enter)</button>
+            <button onClick={start} onTouchStart={(e)=>{ e.preventDefault(); start(); }} className="px-5 py-2 rounded bg-amber-400 hover:bg-amber-500 text-black font-semibold text-xs shadow">Start (Enter)</button>
             <p className="mt-4 text-[10px] text-white/70">Punkte-Ziel: {targetScore}</p>
           </div>
         )}
