@@ -151,8 +151,8 @@ export default function AutoGame({ lesson, courseId, completedLessons, setComple
   useEffect(()=>{
     const img = new Image();
     img.onload = ()=> { carImgRef.current = img; setCarReady(true); };
-    img.onerror = ()=> { console.warn('AutoGame: /media/auto.png konnte nicht geladen werden'); };
-    img.src = '/media/auto.png';
+    img.onerror = ()=> { console.warn('AutoGame: /media/auto3.png konnte nicht geladen werden'); };
+    img.src = '/media/auto3.png';
   },[]);
 
   // Vollbild / Resize Handling
