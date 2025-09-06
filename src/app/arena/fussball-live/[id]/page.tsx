@@ -33,7 +33,7 @@ export default function FussballLivePage(){
   const [loadingQs, setLoadingQs] = useState<boolean>(true);
   const [errorQs, setErrorQs] = useState<string|undefined>();
   const [history,setHistory] = useState<Array<{id:string; correct:boolean}>>([]);
-  // Team-Score und Zugseite (welches Team ist am Zug)
+  // Synchronisierter Zustand vom Server
   const [scores, setScores] = useState<{left:number; right:number}>({ left: 0, right: 0 });
   const [goals, setGoals] = useState<{left:number; right:number}>({ left: 0, right: 0 });
   const [turn, setTurn] = useState<'left'|'right'>('left');
@@ -87,25 +87,25 @@ export default function FussballLivePage(){
   },[id]);
 
   const answeringRef = useRef(false);
-  function answer(idx:number){
+  async function answer(idx:number){
     if(!current || answeringRef.current) return;
     answeringRef.current = true;
     setLocked(true);
     const isCorrect = idx === current.correct;
     setAnswerState({ picked:idx, correct:isCorrect });
-    // Punktewertung: richtig -> Punkt für Team am Zug; falsch -> Punkt für das andere Team
-  // exactly one team gets a point per answer
-  const target: 'left'|'right' = isCorrect ? turn : (turn==='left' ? 'right' : 'left');
-  setScores(prev=> ({ ...prev, [target]: prev[target] + 1 }));
-    setHistory(h=>[...h,{ id: current.id, correct: isCorrect }]);
-    // Nach der Antwort wechselt der Zug zum anderen Team
-    setTimeout(()=>{
-      setLocked(false);
-      setAnswerState({ picked:null, correct:null });
-      setTurn(t=> t==='left'?'right':'left');
-      pickNext();
-      answeringRef.current = false;
-    }, isCorrect? 800 : 1300);
+    try{
+      const r = await fetch(`/api/fussball/lobbies/${encodeURIComponent(id)}/answer`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ correct: isCorrect }) });
+      const j = await r.json();
+      if(j?.success && j.state){ setScores(j.state.scores); setGoals(j.state.goals); setFieldIdx(j.state.fieldIdx); setTurn(j.state.turn); }
+    } finally {
+      setHistory(h=>[...h,{ id: current.id, correct: isCorrect }]);
+      setTimeout(()=>{
+        setLocked(false);
+        setAnswerState({ picked:null, correct:null });
+        pickNext();
+        answeringRef.current = false;
+      }, isCorrect? 800 : 1300);
+    }
   }
 
   // Platzhalter Spielfeld: später echte Canvas / Engine
@@ -127,32 +127,20 @@ export default function FussballLivePage(){
     return ()=>{ cancelled = true; };
   },[FIELD_IMAGES, fieldIdx]);
 
-  // Feldposition abhängig vom aktuellen Vorsprung bewegen; bei 1/7 -> Tor und Reset
-  const handlingGoalRef = useRef(false);
+  // Server-Sync: Zustand pollen, damit beide Geräte synchron bleiben
   useEffect(()=>{
-    if(handlingGoalRef.current) return;
-    const rawLead = scores.left - scores.right; // >0: links führt, <0: rechts führt
-    const steps = Math.min(3, Math.floor(Math.abs(rawLead) / STEP));
-    const desiredIdx = rawLead > 0
-      ? Math.max(LEFT_GOAL_INDEX, NEUTRAL_INDEX - steps)
-      : rawLead < 0
-        ? Math.min(RIGHT_GOAL_INDEX, NEUTRAL_INDEX + steps)
-        : NEUTRAL_INDEX;
-    // Tor erreicht?
-    if(desiredIdx === LEFT_GOAL_INDEX || desiredIdx === RIGHT_GOAL_INDEX){
-      handlingGoalRef.current = true;
-      // Tor für führendes Team verbuchen
-      setGoals(g=> desiredIdx===LEFT_GOAL_INDEX ? ({ ...g, left: g.left + 1 }) : ({ ...g, right: g.right + 1 }));
-      // Punkte zurücksetzen und Feld neutralisieren
-      setTimeout(()=>{
-        setScores({ left: 0, right: 0 });
-        setFieldIdx(NEUTRAL_INDEX);
-        handlingGoalRef.current = false;
-      }, 100); // kurzer Tick, damit UI Torzustand erkennen kann
-      return;
+    let alive = true; let t:any;
+    async function tick(){
+      try{
+        const r = await fetch(`/api/fussball/lobbies/${encodeURIComponent(id)}/state`, { cache:'no-store' });
+        const j = await r.json();
+        if(!alive) return;
+        if(j?.success && j.state){ setScores(j.state.scores); setGoals(j.state.goals); setFieldIdx(j.state.fieldIdx); setTurn(j.state.turn); }
+      } finally { if(alive){ t = setTimeout(tick, 600); } }
     }
-    setFieldIdx(desiredIdx);
-  },[scores.left, scores.right]);
+    tick();
+    return ()=>{ alive=false; if(t) clearTimeout(t); };
+  },[id]);
 
   return (
     <main className="max-w-7xl mx-auto p-4 md:p-6">

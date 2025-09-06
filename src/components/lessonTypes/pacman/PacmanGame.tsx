@@ -274,6 +274,10 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
 
   const restart=()=>{ setScore(0); setLives(MAX_LIVES); setGameOver(false); setFinished(false); centerPlayer(); resetGhosts(); loadQuestion(); };
 
+  // Touch-/Klicksteuerung (D-Pad)
+  const setDir = (x:number,y:number)=>{ playerRef.current.nextDir = { x, y }; };
+  const touchSetDir = (e: React.TouchEvent, x:number, y:number)=>{ try{ e.preventDefault(); }catch{} setDir(x,y); };
+
   return (<div
     ref={wrapperRef}
     className={isFullscreen? 'fixed inset-0 z-50 flex flex-col items-center bg-[#05070d] overflow-hidden':'w-full flex flex-col items-center gap-2 bg-transparent overflow-hidden'}
@@ -288,6 +292,15 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
         <div className="flex justify-between items-start gap-4">
           <div className={isFullscreen? 'text-[1.45rem] font-semibold text-white leading-snug whitespace-pre-wrap pr-2':'text-[1.25rem] font-semibold text-white leading-snug whitespace-pre-wrap pr-2'}>{questionText||'—'}</div>
           <div className={`flex items-start gap-3 flex-wrap text-white font-semibold ${isFullscreen? 'text-[0.85rem]':'text-[0.72rem]'}`}>
+            {/* D-Pad Pfeilsteuerung für Touchgeräte */}
+            <div className="flex flex-col items-center select-none mr-2">
+              <button onClick={()=>setDir(0,-1)} onTouchStart={(e)=>touchSetDir(e,0,-1)} className="px-3 py-2 rounded bg-[#394a63] hover:bg-[#455b79] active:bg-[#50678a] text-white text-sm" aria-label="Nach oben">▲</button>
+              <div className="flex gap-2 mt-1">
+                <button onClick={()=>setDir(-1,0)} onTouchStart={(e)=>touchSetDir(e,-1,0)} className="px-3 py-2 rounded bg-[#394a63] hover:bg-[#455b79] active:bg-[#50678a] text-white text-sm" aria-label="Nach links">◀</button>
+                <button onClick={()=>setDir(0,1)} onTouchStart={(e)=>touchSetDir(e,0,1)} className="px-3 py-2 rounded bg-[#394a63] hover:bg-[#455b79] active:bg-[#50678a] text-white text-sm" aria-label="Nach unten">▼</button>
+                <button onClick={()=>setDir(1,0)} onTouchStart={(e)=>touchSetDir(e,1,0)} className="px-3 py-2 rounded bg-[#394a63] hover:bg-[#455b79] active:bg-[#50678a] text-white text-sm" aria-label="Nach rechts">▶</button>
+              </div>
+            </div>
             <span>Punkte: <span className="font-bold">{score}</span>/<span className="opacity-80">{targetScore}</span></span>
             <span className="flex items-center gap-1">Leben: {Array.from({length:MAX_LIVES}).map((_,i)=>(<span key={i} className={i<lives? 'text-red-400':'text-gray-600'}>❤</span>))}</span>
             <button onClick={()=> setPaused(p=>!p)} className={`rounded border font-semibold tracking-wide transition ${isFullscreen? 'px-5 py-2 text-[0.9rem]':'px-3 py-1 text-[0.65rem]'} ${paused? 'bg-lime-400 text-[#102] border-lime-500':'bg-[#2d3d55] text-white border-[#456282] hover:bg-[#38506e]'}`}>{paused? 'Weiter':'Pause'}</button>

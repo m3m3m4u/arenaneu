@@ -5,6 +5,10 @@ import FussballLobbyModel, { IFussballLobby } from '@/models/FussballLobby';
 interface LobbyRecord extends FussballLobbyConfig {
   id: string;
   lastActivity: number;
+  scores?: { left:number; right:number };
+  goals?: { left:number; right:number };
+  fieldIdx?: number;
+  turn?: 'left'|'right';
 }
 
 const lobbies = new Map<string, LobbyRecord>();
@@ -24,7 +28,11 @@ export async function createLobby(hostUserId: string, username: string, title: s
     status: 'waiting',
   // Host ist automatisch bereit
   players: [ { userId: hostUserId, username, joinedAt: Date.now(), side: 'left', ready: true, score:0 } ],
-    lastActivity: Date.now()
+  lastActivity: Date.now(),
+  scores: { left:0, right:0 },
+  goals: { left:0, right:0 },
+  fieldIdx: 3,
+  turn: 'left'
   };
   if(useDb){
     try {
@@ -39,7 +47,7 @@ export async function createLobby(hostUserId: string, username: string, title: s
 
 export async function getLobby(id: string){
   if(useDb){
-    try { await dbConnect(); const doc = await FussballLobbyModel.findOne({ id }).lean(); return doc as unknown as LobbyRecord | undefined; } catch { /* ignore */ }
+  try { await dbConnect(); const doc = await FussballLobbyModel.findOne({ id }).lean(); return doc as unknown as LobbyRecord | undefined; } catch { /* ignore */ }
   }
   return lobbies.get(id);
 }
@@ -57,7 +65,7 @@ export async function joinLobby(id: string, userId: string, username: string){
     lobby.status = 'active';
   }
   if(useDb){
-    try { await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { players: lobby.players, lastActivity: lobby.lastActivity, status: lobby.status } }); } catch { /* ignore */ }
+  try { await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { players: lobby.players, lastActivity: lobby.lastActivity, status: lobby.status } }); } catch { /* ignore */ }
   } else {
     lobbies.set(id, lobby);
   }
@@ -113,6 +121,46 @@ export function setTitle(id: string, userId: string, title: string){
   if(lobby.hostUserId !== userId) return { error:'NO_PERMISSION' } as const;
   lobby.title = title.slice(0,60) || lobby.title; lobby.lastActivity = Date.now();
   return { lobby } as const;
+}
+
+export async function getState(id: string){
+  const lobby = await getLobby(id) as LobbyRecord | undefined; if(!lobby) return { error:'NOT_FOUND' } as const;
+  const scores = lobby.scores || { left:0, right:0 };
+  const goals = lobby.goals || { left:0, right:0 };
+  const fieldIdx = typeof lobby.fieldIdx==='number'? lobby.fieldIdx : 3;
+  const turn = lobby.turn || 'left';
+  return { state: { scores, goals, fieldIdx, turn } } as const;
+}
+
+export async function applyAnswer(id: string, isCorrect: boolean, answeredBy: 'left'|'right'){
+  const lobby = await getLobby(id) as LobbyRecord | undefined; if(!lobby) return { error:'NOT_FOUND' } as const;
+  const turn = lobby.turn || 'left';
+  const target: 'left'|'right' = isCorrect ? turn : (turn==='left' ? 'right' : 'left');
+  const scores = { left: lobby.scores?.left||0, right: lobby.scores?.right||0 };
+  scores[target] += 1;
+  // Bildindex nach 3-Punkte-Vorsprung verschieben, Tor bei 1/7
+  const STEP = 3; const LEFT_GOAL_INDEX = 0; const RIGHT_GOAL_INDEX = 6; const NEUTRAL_INDEX = 3;
+  const rawLead = scores.left - scores.right;
+  const steps = Math.min(3, Math.floor(Math.abs(rawLead) / STEP));
+  let desiredIdx = NEUTRAL_INDEX;
+  if(rawLead > 0) desiredIdx = Math.max(LEFT_GOAL_INDEX, NEUTRAL_INDEX - steps);
+  else if(rawLead < 0) desiredIdx = Math.min(RIGHT_GOAL_INDEX, NEUTRAL_INDEX + steps);
+  let goals = { left: lobby.goals?.left||0, right: lobby.goals?.right||0 };
+  if(desiredIdx===LEFT_GOAL_INDEX || desiredIdx===RIGHT_GOAL_INDEX){
+    if(desiredIdx===LEFT_GOAL_INDEX) goals.left += 1; else goals.right += 1;
+    // Reset nach Tor
+    lobby.scores = { left:0, right:0 };
+    lobby.fieldIdx = NEUTRAL_INDEX;
+    lobby.goals = goals;
+  } else {
+    lobby.scores = scores;
+    lobby.fieldIdx = desiredIdx;
+  }
+  lobby.turn = (turn==='left' ? 'right':'left');
+  lobby.lastActivity = Date.now();
+  if(useDb){ try{ await dbConnect(); await FussballLobbyModel.updateOne({ id }, { $set: { scores: lobby.scores, goals: lobby.goals, fieldIdx: lobby.fieldIdx, turn: lobby.turn, lastActivity: lobby.lastActivity } }); } catch{}
+  } else { lobbies.set(id, lobby); }
+  return { state: { scores: lobby.scores!, goals: lobby.goals!, fieldIdx: lobby.fieldIdx!, turn: lobby.turn! } } as const;
 }
 
 // Periodic cleanup

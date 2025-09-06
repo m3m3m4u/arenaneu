@@ -18,6 +18,11 @@ export interface IFussballLobby extends Document {
   hostUserId: string;
   status: 'waiting'|'active'|'finished'|'aborted';
   players: IFussballPlayer[];
+  // Spielzustand (synchronisiert)
+  scores?: { left:number; right:number };
+  goals?: { left:number; right:number };
+  fieldIdx?: number;
+  turn?: 'left'|'right';
 }
 
 const PlayerSchema = new Schema<IFussballPlayer>({
@@ -38,6 +43,10 @@ const LobbySchema = new Schema<IFussballLobby>({
   hostUserId: { type: String, required: true },
   status: { type: String, enum: ['waiting','active','finished','aborted'], default: 'waiting', index: true },
   players: { type: [PlayerSchema], default: [] },
+  scores: { type: Object, default: { left:0, right:0 } },
+  goals: { type: Object, default: { left:0, right:0 } },
+  fieldIdx: { type: Number, default: 3 },
+  turn: { type: String, enum: ['left','right'], default: 'left' },
 });
 
 // Sicherstellen, dass Modell nicht doppelt registriert wird (Hot-Reload in Dev)
