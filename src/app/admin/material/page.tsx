@@ -42,6 +42,7 @@ export default function AdminMaterialPage(){
   const [pdfUrl,setPdfUrl] = useState<string|null>(null);
   // Generierung von Datei-Vorschauen
   const [genKey, setGenKey] = useState<string|null>(null);
+  const [clientThumbs, setClientThumbs] = useState<Record<string,string>>({}); // key->dataURL/URL
 
   const toggleRaw = (id:string)=> setSelectedRawIds(ids=> ids.includes(id)? ids.filter(x=>x!==id): [...ids,id]);
 
@@ -345,17 +346,18 @@ export default function AdminMaterialPage(){
                 <div className="grid grid-cols-2 gap-2">
                   {(p.files||[]).map(f=>{
                     const previews: string[] = Array.isArray((f as any).previewImages) ? (f as any).previewImages : [];
+                    const clientThumb = clientThumbs[f.key];
                     const isPdf = (f.contentType||'').includes('pdf') || /\.pdf$/i.test(f.name||'');
                     return (
                       <div key={f.key} className="border rounded p-2 flex gap-2 items-center">
-                        {previews.length>0 ? (
+                        {previews.length>0 || clientThumb ? (
                           <div className="flex items-center gap-1 overflow-x-auto max-w-[180px] pr-1">
-                            {previews.slice(0,6).map((src,idx)=> (
+                            {(clientThumb ? [clientThumb, ...previews] : previews).slice(0,6).map((src,idx)=> (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img key={idx} src={src} alt={`${f.name} p${idx+1}`} className="w-12 h-16 object-cover rounded border bg-white flex-shrink-0" />
                             ))}
-                            {previews.length>6 && (
-                              <span className="text-[10px] text-gray-600 px-1">+{previews.length-6}</span>
+                            {(previews.length + (clientThumb?1:0))>6 && (
+                              <span className="text-[10px] text-gray-600 px-1">+{(previews.length + (clientThumb?1:0))-6}</span>
                             )}
                           </div>
                         ) : (
@@ -376,6 +378,36 @@ export default function AdminMaterialPage(){
                                 disabled={genKey===f.key}
                                 className="px-1 py-0.5 border rounded text-[10px] bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50"
                               >{genKey===f.key? 'Erzeuge…':'Vorschau erzeugen'}</button>
+                            )}
+                            {isPdf && previews.length===0 && f.downloadUrl && (
+                              <button
+                                onClick={async()=>{
+                                  // Clientseitige Thumbs: rendere 1 Seite und speichere serverseitig als previewImages[0]
+                                  // Dynamischer Import, um Bundle zu schonen
+                                  try{
+                                    // On-the-fly PdfThumbs verwenden
+                                    const mod:any = await import('@/components/media/PdfThumbs');
+                                    const pdfjs: any = await import('pdfjs-dist');
+                                    pdfjs.GlobalWorkerOptions.workerSrc = new URL('/api/pdf-worker', window.location.origin).toString();
+                                    const task = pdfjs.getDocument({ url: f.downloadUrl, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true });
+                                    const pdf = await task.promise;
+                                    const page = await pdf.getPage(1);
+                                    const viewport = page.getViewport({ scale: 0.3 });
+                                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); if(!ctx) return;
+                                    canvas.width = viewport.width; canvas.height = viewport.height;
+                                    await (page as any).render({ canvasContext: ctx, canvas, viewport }).promise;
+                                    const dataUrl = canvas.toDataURL('image/png');
+                                    setClientThumbs(t=> ({ ...t, [f.key]: dataUrl }));
+                                    // Server speichern (speichert in DB als previewImages[0])
+                                    try {
+                                      await fetch('/api/shop/product-thumbnail', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ key: f.key, productId: p._id, dataUrl }) });
+                                      // Reload Produktliste, damit echte URL erscheint
+                                      setTimeout(()=> load(), 300);
+                                    } catch{}
+                                  }catch(e){ console.warn('Client-Thumb fehlgeschlagen', e); }
+                                }}
+                                className="px-1 py-0.5 border rounded text-[10px] bg-amber-50 hover:bg-amber-100"
+                              >Client-Preview</button>
                             )}
                             {isPdf && (
                               <button
