@@ -147,16 +147,11 @@ export default function FussballLivePage(){
       <header className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold">⚽ Fußball Match</h1>
-          <p className="text-xs text-gray-500">Lobby ID: <span className="font-mono">{id}</span></p>
           {exerciseTitle && <p className="text-xs text-gray-500">Übung: <span className="font-medium">{exerciseTitle}</span></p>}
         </div>
         <div className="md:col-span-2">
           {/* Großer Spielstand (Tore) – einzige Anzeige */}
           <div className="w-full bg-white border rounded shadow-sm p-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">Zug:</span>
-              <span className="px-2 py-0.5 rounded bg-gray-100 border text-sm">{turn==='left' ? 'Links' : 'Rechts'}</span>
-            </div>
             <div className="flex items-center gap-6">
               <div className="text-center">
                 <div className="text-[11px] text-gray-500">Tore Links</div>
@@ -217,36 +212,77 @@ export default function FussballLivePage(){
               <div className="text-sm text-gray-500">{loadingQs? 'Lade Fragen…' : (questions.length? 'Lade nächste Frage…' : 'Keine Fragen gefunden')}</div>
             )}
           </div>
-          <div className="p-3 rounded bg-amber-50 border border-amber-300 text-amber-800 text-xs leading-relaxed">
-            Gewichtete Wiederholung aktiv: Falsch beantwortete Fragen tauchen wahrscheinlicher erneut auf. Diese Logik ist lokal – später serverseitig synchronisiert.
-          </div>
         </div>
         {/* Rechte Spalte: Spielfeld mit Foto-Hintergrund im Original-Seitenverhältnis */}
-        <div
-          className="relative border rounded bg-black shadow-inner overflow-hidden"
-          style={{ aspectRatio: fieldWH ? `${fieldWH.w}/${fieldWH.h}` : '16/9' }}
-        >
-          <Image src={FIELD_IMAGES[fieldIdx % FIELD_IMAGES.length]} alt="Spielfeld" fill priority sizes="(max-width: 1024px) 100vw, 50vw" className="object-contain" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
-          <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/50 text-white backdrop-blur">
-            Spielfeld: {fieldIdx + 1}/{FIELD_IMAGES.length}
-          </div>
-          {/* Manuelle Bildwechsel entfernt – Position ergibt sich aus Vorsprung */}
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
-            {questions.map(q=>{ const statsQ = correctCounts[q.id]; const wrong = statsQ?.wrong||0; const asked = statsQ?.asked||0; return (
-              <div key={q.id} className="flex flex-col items-center">
-                <span className="w-2 h-2 rounded-full" style={{ background: wrong? '#dc2626': (asked? '#16a34a':'#9ca3af') }} />
-                <span className="text-[8px] text-white/70 mt-0.5">{asked}</span>
-              </div>
-            ); })}
-          </div>
-        </div>
+        <FieldView
+          images={FIELD_IMAGES}
+          fieldIdx={fieldIdx}
+          fieldWH={fieldWH}
+          questions={questions}
+          correctCounts={correctCounts}
+        />
       </div>
     </main>
   );
 }
 
 // (Das frühere SVG-Pitch wurde durch Foto-Hintergründe ersetzt)
+
+// Komponente: Spielfeld mit 40% kleinerer Darstellung und Vollbildmodus
+function FieldView({ images, fieldIdx, fieldWH, questions, correctCounts }:{ images:string[]; fieldIdx:number; fieldWH:{w:number;h:number}|null; questions:MCQuestion[]; correctCounts:Record<string,{asked:number; wrong:number}> }){
+  const containerRef = useRef<HTMLDivElement|null>(null);
+  const [isFs,setIsFs]=useState(false);
+  // 40% kleiner: wir skalieren die Breite relativ runter (0.6)
+  const scale = 0.6; // 60% der normalen Größe
+  const enterFs = async()=>{
+    try{
+      const el = containerRef.current;
+      if(!el) return;
+      if(el.requestFullscreen){ await el.requestFullscreen(); setIsFs(true); }
+      // Safari iOS: kein echtes Fullscreen API; wir machen Fallback via CSS (handled durch :fullscreen)
+    }catch{}
+  };
+  const exitFs = async()=>{
+    try{ if(document.fullscreenElement){ await document.exitFullscreen(); } setIsFs(false); }catch{}
+  };
+  useEffect(()=>{
+    const h=()=> setIsFs(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', h);
+    return ()=> document.removeEventListener('fullscreenchange', h);
+  },[]);
+  const aspect = fieldWH ? `${fieldWH.w}/${fieldWH.h}` : '16/9';
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-end">
+        {!isFs ? (
+          <button onClick={enterFs} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">Vollbild</button>
+        ) : (
+          <button onClick={exitFs} className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50">Vollbild beenden</button>
+        )}
+      </div>
+      <div
+        ref={containerRef}
+        className="relative border rounded bg-black shadow-inner overflow-hidden mx-auto"
+        style={{ aspectRatio: aspect, width: isFs? '100%' : `${Math.round(100*scale)}%` }}
+      >
+        <Image src={images[fieldIdx % images.length]} alt="Spielfeld" fill priority sizes="100vw" className="object-contain" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/30 pointer-events-none" />
+        <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/50 text-white backdrop-blur">
+          Spielfeld: {fieldIdx + 1}/{images.length}
+        </div>
+        {/* Manuelle Bildwechsel entfernt – Position ergibt sich aus Vorsprung */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
+          {questions.map(q=>{ const statsQ = correctCounts[q.id]; const wrong = statsQ?.wrong||0; const asked = statsQ?.asked||0; return (
+            <div key={q.id} className="flex flex-col items-center">
+              <span className="w-2 h-2 rounded-full" style={{ background: wrong? '#dc2626': (asked? '#16a34a':'#9ca3af') }} />
+              <span className="text-[8px] text-white/70 mt-0.5">{asked}</span>
+            </div>
+          ); })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Daten aus Lobby/Exercise laden
 async function fetchLobby(lobbyId: string){

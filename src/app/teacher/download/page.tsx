@@ -13,6 +13,9 @@ export default function TeacherDownloadShop(){
   const [activeIdx,setActiveIdx] = useState<Record<string,number>>({}); // ProduktID -> Index des aktiven Preview-Bildes
   // Thumbnails für PDF (erste Seite) – key => dataURL | 'error'
   const [thumbs,setThumbs] = useState<Record<string,string>>({});
+  // Raw-Preview Cache: PDF-Basis -> Liste der Bild-URLs (aus Raw Files)
+  const [rawPreviews, setRawPreviews] = useState<Record<string, string[]>>({});
+  const pendingBasesRef = useRef<Set<string>>(new Set());
   // Einfache Warteschlange, um gleichzeitige PDF-Decodes zu begrenzen
   const queueRef = useRef<string[]>([]);
   const busyRef = useRef(false);
@@ -135,9 +138,37 @@ export default function TeacherDownloadShop(){
         .map(x=> x.url!)
       ;
       if(relImgs.length) return { images: relImgs, pdf };
+      // Fallback 1: serverseitig gespeicherte previewImages am PDF
       // Fallback: serverseitig gespeicherte previewImages am PDF
       const filePreviews = Array.isArray(pdf.previewImages) ? pdf.previewImages : [];
       if(filePreviews.length) return { images: filePreviews, pdf };
+      // Fallback 2: Raw-Files automatisch per Namensschema <Base>-N.(png|jpg|webp)
+      const cached = rawPreviews[base];
+      if(cached && cached.length){ return { images: cached, pdf }; }
+      // Asynchron laden, wenn noch nicht unterwegs
+      if(!pendingBasesRef.current.has(base)){
+        pendingBasesRef.current.add(base);
+        // Wir holen alle Raw-Files mit q=Base und filtern clientseitig strikt auf das Schema
+        (async()=>{
+          try{
+            const params = new URLSearchParams();
+            params.set('q', base);
+            params.set('limit','100');
+            const r = await fetch(`/api/shop/raw-files?${params.toString()}`, { cache:'no-store' });
+            const d = await r.json();
+            if(r.ok && d.success && Array.isArray(d.items)){
+              const matcher = new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i');
+              const list = d.items
+                .map((it:any)=> ({ name: String(it.name||''), url: it.url }))
+                .filter((it:any)=> matcher.test(it.name) && it.url)
+                .map((it:any)=> ({ url: it.url, idx: parseInt((it.name.match(/-(\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
+                .sort((a:any,b:any)=> a.idx-b.idx)
+                .map((x:any)=> x.url as string);
+              if(list.length){ setRawPreviews(prev=> ({ ...prev, [base]: list })); }
+            }
+          } catch {/* ignore */}
+        })();
+      }
       return { images: [], pdf };
     }
     // Kein PDF: zeige vorhandene Bilder

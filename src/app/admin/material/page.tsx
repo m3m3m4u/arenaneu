@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { CATEGORIES } from '@/lib/categories';
 
 interface Product { _id:string; title:string; description?:string; category?:string; isPublished:boolean; files?: any[]; price?:number; }
@@ -46,6 +46,9 @@ export default function AdminMaterialPage(){
   const [pdfUrl,setPdfUrl] = useState<string|null>(null);
   // Karussell-Index je Produkt (für Vorschau wie beim Lehrer)
   const [activeIdx,setActiveIdx] = useState<Record<string,number>>({});
+  // Raw-Preview Cache: PDF-Basis -> Bild-URLs (aus Raw Files)
+  const [rawPreviews, setRawPreviews] = useState<Record<string,string[]>>({});
+  const pendingBasesRef = useRef<Set<string>>(new Set());
 
   const toggleRaw = (id:string)=> setSelectedRawIds(ids=> ids.includes(id)? ids.filter(x=>x!==id): [...ids,id]);
 
@@ -226,6 +229,29 @@ export default function AdminMaterialPage(){
       if(relImgs.length) return { images: relImgs, pdf };
       const filePreviews = Array.isArray((pdf as any).previewImages)? (pdf as any).previewImages: [];
       if(filePreviews.length) return { images: filePreviews, pdf };
+      // Fallback: Raw-Files automatisch nach Schema
+      const cached = rawPreviews[base];
+      if(cached && cached.length) return { images: cached, pdf };
+      if(!pendingBasesRef.current.has(base)){
+        pendingBasesRef.current.add(base);
+        (async()=>{
+          try{
+            const qs = new URLSearchParams(); qs.set('q', base); qs.set('limit','100');
+            const r = await fetch(`/api/shop/raw-files?${qs.toString()}`, { cache:'no-store' });
+            const d = await r.json();
+            if(r.ok && d.success){
+              const matcher = new RegExp('^'+base.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$')+'-(\\d+)\.(png|jpe?g|webp)$','i');
+              const list = (d.items||[])
+                .map((it:any)=> ({ name: String(it.name||''), url: it.url }))
+                .filter((it:any)=> matcher.test(it.name) && it.url)
+                .map((it:any)=> ({ url: it.url, idx: parseInt((it.name.match(/-(\\d+)\.(png|jpe?g|webp)$/i)||[])[1]||'0',10) }))
+                .sort((a:any,b:any)=> a.idx-b.idx)
+                .map((x:any)=> x.url as string);
+              if(list.length){ setRawPreviews(prev=> ({ ...prev, [base]: list })); }
+            }
+          } catch{/*ignore*/}
+        })();
+      }
       return { images: [], pdf };
     }
     const anyImgs = images.map((i:any)=> i.downloadUrl!).filter(Boolean);
