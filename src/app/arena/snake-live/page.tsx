@@ -270,81 +270,88 @@ export default function SnakeLivePage(){
 
       {(mode==='host' || mode==='guest') && (
         <div className="mt-6">
-          {!locked ? (
-            <div className="mb-4">
-              <div className="text-sm text-gray-700 mb-2">Übung wählen (danach gesperrt)</div>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {exercises.map(ex => (
-                  <button key={ex._id} onClick={()=>{ setSelectedId(ex._id); setLocked(true); if(room?.id) publish(room.id, { type:'exercise', id: ex._id }); }} className="text-left border rounded p-3 hover:bg-gray-50">
-                    <div className="font-medium truncate" title={ex.title}>{ex.title}</div>
-                    <div className="text-xs text-gray-500">{ex.category || 'Übung'}</div>
-                  </button>
-                ))}
+          {mode==='host' ? (
+            !locked ? (
+              <div className="mb-4">
+                <div className="text-sm text-gray-700 mb-2">Übung wählen (danach gesperrt)</div>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {exercises.map(ex => (
+                    <button key={ex._id} onClick={()=>{ setSelectedId(ex._id); setLocked(true); if(room?.id) publish(room.id, { type:'exercise', id: ex._id }); }} className="text-left border rounded p-3 hover:bg-gray-50">
+                      <div className="font-medium truncate" title={ex.title}>{ex.title}</div>
+                      <div className="text-xs text-gray-500">{ex.category || 'Übung'}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="mb-4 text-sm text-gray-600">Auswahl gesperrt.</div>
-          )}
-
-          {current ? (
-            mode==='host' ? (
-              <TwoSnakeGame lesson={current as any} courseId={current.courseId || 'exercise-pool'} completedLessons={[]} setCompletedLessons={()=>{}} disableCompletion canStart={guestJoined} onExposeControls={handleExpose} onState={handleState} localControlA={true} localControlB={false} />
             ) : (
-              <div className="w-full flex flex-col lg:flex-row gap-6">
-                <div className="lg:w-80 p-4 bg-white border rounded space-y-3 h-fit">
-                  <div className="text-sm"><span className="font-medium">Ziel:</span> {hostState?.targetScore ?? 15} Punkte</div>
-                  <div className="text-sm space-y-1">
-                    <div>Spieler A: <span className="font-semibold text-emerald-700">{hostState?.scoreA ?? 0}</span></div>
-                    <div>Spieler B: <span className="font-semibold text-blue-700">{hostState?.scoreB ?? 0}</span></div>
-                  </div>
-                  {hostState?.currentQuestion && (
-                    <div className="text-sm">
-                      <div className="text-gray-700 whitespace-pre-wrap break-words">{hostState.currentQuestion.question}</div>
-                      {Array.isArray(hostState.foods) && hostState.foods.length===4 && (
-                        <ul className="mt-2 space-y-1 text-xs">
-                          {hostState.foods.map((f:any,i:number)=> (
-                            <li key={i} className="flex items-center gap-2">
-                              <span className="inline-block w-4 h-4 rounded-sm border" style={{background:f.color}}></span>
-                              <span className="flex-1 break-words">{f.answer}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                  {!hostState?.running && (
-                    <div className="text-[11px] text-gray-600">Warte, bis das Spiel gestartet wird.</div>
-                  )}
-                  <div className="text-[11px] text-gray-600 border rounded p-2 bg-gray-50 leading-snug">
-                    Steuerung: Pfeiltasten (Spieler B). Der Host überträgt den Spielstand live.
-                  </div>
-                  <div className="pt-3 border-t mt-2">
-                    <div className="text-xs text-gray-500 mb-2">Steuerung B (Pfeile)</div>
-                    <div className="grid grid-cols-3 gap-2 w-56 select-none">
-                      <div />
-                      <button onClick={()=> room && publish(room.id, { type:'control', player:'B', dir:'up' })} className="px-3 py-2 rounded-md border bg-gray-50">↑</button>
-                      <div />
-                      <button onClick={()=> room && publish(room.id, { type:'control', player:'B', dir:'left' })} className="px-3 py-2 rounded-md border bg-gray-50">←</button>
-                      <div />
-                      <button onClick={()=> room && publish(room.id, { type:'control', player:'B', dir:'right' })} className="px-3 py-2 rounded-md border bg-gray-50">→</button>
-                      <div />
-                      <button onClick={()=> room && publish(room.id, { type:'control', player:'B', dir:'down' })} className="px-3 py-2 rounded-md border bg-gray-50">↓</button>
-                      <div />
-                    </div>
-                    <div className="mt-3">
-                      <button onClick={()=> room && publish(room.id, { type: hostState?.running ? 'pause' : 'start' })} className="px-3 py-1 text-xs rounded border bg-white hover:bg-gray-50">{hostState?.running ? 'Pause' : 'Start'}</button>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex-1 flex justify-center items-start">
-                  <div className="inline-block relative w-full">
-                    <canvas ref={guestCanvasRef} width={COLS*CELL} height={ROWS*CELL} className="border rounded bg-white block" style={{ aspectRatio:'1/1', width:'100%', maxWidth: COLS*CELL }} />
-                  </div>
-                </div>
-              </div>
+              <div className="mb-4 text-sm text-gray-600">Auswahl gesperrt.</div>
             )
           ) : (
-            <div className="p-6 border rounded bg-gray-50 text-sm text-gray-600">Bitte Übung wählen.</div>
+            <div className="mb-4 text-sm text-gray-600">Der Host wählt die Übung. Du wirst automatisch verbunden.</div>
+          )}
+
+          {mode==='host' ? (
+            current ? (
+              <TwoSnakeGame lesson={current as any} courseId={current.courseId || 'exercise-pool'} completedLessons={[]} setCompletedLessons={()=>{}} disableCompletion canStart={guestJoined} onExposeControls={handleExpose} onState={handleState} localControlA={true} localControlB={false} />
+            ) : (
+              <div className="p-6 border rounded bg-gray-50 text-sm text-gray-600">Bitte als Host eine Übung auswählen.</div>
+            )
+          ) : (
+            // Gast: immer die Spielansicht anzeigen; falls Host noch nichts gewählt hat, erscheinen Warte-Hinweise
+            <div className="w-full flex flex-col lg:flex-row gap-6">
+              <div className="lg:w-80 p-4 bg-white border rounded space-y-3 h-fit">
+                <div className="text-sm"><span className="font-medium">Ziel:</span> {hostState?.targetScore ?? 15} Punkte</div>
+                <div className="text-sm space-y-1">
+                  <div>Spieler A: <span className="font-semibold text-emerald-700">{hostState?.scoreA ?? 0}</span></div>
+                  <div>Spieler B: <span className="font-semibold text-blue-700">{hostState?.scoreB ?? 0}</span></div>
+                </div>
+                {hostState?.currentQuestion ? (
+                  <div className="text-sm">
+                    <div className="text-gray-700 whitespace-pre-wrap break-words">{hostState.currentQuestion.question}</div>
+                    {Array.isArray(hostState.foods) && hostState.foods.length===4 && (
+                      <ul className="mt-2 space-y-1 text-xs">
+                        {hostState.foods.map((f:any,i:number)=> (
+                          <li key={i} className="flex items-center gap-2">
+                            <span className="inline-block w-4 h-4 rounded-sm border" style={{background:f.color}}></span>
+                            <span className="flex-1 break-words">{f.answer}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-gray-600">Warte auf Host, dass die Übung gewählt und das Spiel gestartet wird…</div>
+                )}
+                {!hostState?.running && (
+                  <div className="text-[11px] text-gray-600">Warte, bis das Spiel gestartet wird.</div>
+                )}
+                <div className="text-[11px] text-gray-600 border rounded p-2 bg-gray-50 leading-snug">
+                  Steuerung: Pfeiltasten (Spieler B). Der Host überträgt den Spielstand live.
+                </div>
+                <div className="pt-3 border-t mt-2">
+                  <div className="text-xs text-gray-500 mb-2">Steuerung B (Pfeile)</div>
+                  <div className="grid grid-cols-3 gap-2 w-56 select-none">
+                    <div />
+                    <button onClick={()=> room && publish(room.id, { type:'control', player:'B', dir:'up' })} className="px-3 py-2 rounded-md border bg-gray-50">↑</button>
+                    <div />
+                    <button onClick={()=> room && publish(room.id, { type:'control', player:'B', dir:'left' })} className="px-3 py-2 rounded-md border bg-gray-50">←</button>
+                    <div />
+                    <button onClick={()=> room && publish(room.id, { type:'control', player:'B', dir:'right' })} className="px-3 py-2 rounded-md border bg-gray-50">→</button>
+                    <div />
+                    <button onClick={()=> room && publish(room.id, { type:'control', player:'B', dir:'down' })} className="px-3 py-2 rounded-md border bg-gray-50">↓</button>
+                    <div />
+                  </div>
+                  <div className="mt-3">
+                    <button onClick={()=> room && publish(room.id, { type: hostState?.running ? 'pause' : 'start' })} className="px-3 py-1 text-xs rounded border bg-white hover:bg-gray-50">{hostState?.running ? 'Pause' : 'Start'}</button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 flex justify-center items-start">
+                <div className="inline-block relative w-full">
+                  <canvas ref={guestCanvasRef} width={COLS*CELL} height={ROWS*CELL} className="border rounded bg-white block" style={{ aspectRatio:'1/1', width:'100%', maxWidth: COLS*CELL }} />
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}

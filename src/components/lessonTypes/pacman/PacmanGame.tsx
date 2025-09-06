@@ -102,9 +102,16 @@ export default function PacmanGame({ lesson, courseId, completedLessons, setComp
           if (!s) return '/pacman/maze_template.csv';
           // Absolute http(s) oder data:-URL direkt nutzen
           if (/^(https?:)?\/\//i.test(s) || s.startsWith('data:')) return s;
-          // Root-relativ bereitstellen
+          // Root-relativ belassen
           if (s.startsWith('/')) return s;
-          // Nur Dateiname/relativ: unter /pacman/ erwarten
+          // Normalisierung für häufige Eingaben:
+          // - "pacman/foo.csv" => "/pacman/foo.csv"
+          // - "public/pacman/foo.csv" => "/pacman/foo.csv"
+          // - "foo.csv" => "/pacman/foo.csv"
+          const lower = s.toLowerCase();
+          if (lower.startsWith('public/')) s = s.slice('public/'.length);
+          if (lower.startsWith('pacman/')) return '/' + s.replace(/\\+/g,'/');
+          if (s.includes('/')) return '/' + s.replace(/\\+/g,'/');
           return '/pacman/' + s;
         }
       } catch {}
