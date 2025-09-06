@@ -2,7 +2,7 @@
 // Wir tippen minimal, um TS-Fehler zu vermeiden.
 let S3Client: any, PutObjectCommand: any, ListObjectsV2Command: any, DeleteObjectCommand: any, CopyObjectCommand: any, HeadObjectCommand: any;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   const m = require('@aws-sdk/client-s3');
   S3Client = m.S3Client;
   PutObjectCommand = m.PutObjectCommand;

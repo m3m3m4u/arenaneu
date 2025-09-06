@@ -77,7 +77,7 @@ export default function AdminMaterialPage(){
     const form = new FormData(); form.append('file', file);
     setUploadingProductFile(id);
     try {
-      const r = await fetch(`/api/shop/products/${id}/files`, { method:'POST', body: form });
+      const r = await fetch(`/api/shop/products/${id}/files?syncPreview=1`, { method:'POST', body: form });
       const d = await r.json();
       if(!(r.ok && d.success)){ alert(d.error||'Upload fehlgeschlagen'); }
       else await load();

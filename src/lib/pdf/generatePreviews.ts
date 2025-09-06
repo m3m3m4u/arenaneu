@@ -59,7 +59,7 @@ export async function generatePdfPreviewImagesForShopFile(productId: string, fil
     const maxPages = Math.max(1, Math.min(20, opts?.maxPages ?? 8));
     const dpi = Math.max(72, Math.min(300, opts?.dpi ?? 150)); // sinnvolle Web-Vorschau
 
-    // Quelle laden: bevorzugt direkt über WebDAV/S3-Client statt /medien-Proxy
+  // Quelle laden: bevorzugt direkt über WebDAV/S3-Client statt /medien-Proxy
     let buf: Uint8Array | null = null;
     if (isShopWebdavEnabled()) {
       buf = await shopDavGet(fileKey);
@@ -121,6 +121,66 @@ export async function generatePdfPreviewImagesForShopFile(productId: string, fil
     return { urls, pages: numPages };
   } catch (e) {
     console.error('[generatePreviews] Fehler', (e as any)?.message);
+    return null;
+  }
+}
+
+// Variante: Erzeuge Previews direkt aus gelieferten PDF-Bytes (vermeidet Race nach Upload)
+export async function generatePdfPreviewImagesForShopFileBytes(
+  productId: string,
+  fileKey: string,
+  fileName: string | undefined,
+  pdfBytes: Uint8Array,
+  opts?: { maxPages?: number; dpi?: number }
+): Promise<{ urls: string[]; pages: number } | null> {
+  await dbConnect();
+  const prod: any = await ShopProduct.findById(productId);
+  if (!prod) return null;
+  const file = prod.files.find((f: any) => f.key === fileKey);
+  if (!file) return null;
+  try {
+    const pdfjsLib: PdfModule = (await import('pdfjs-dist')) as any;
+    let createCanvas: ((w: number, h: number) => any) | null = null;
+    try {
+      const req = (eval as unknown as (s: string)=>any)('require');
+      createCanvas = req('@napi-rs/canvas').createCanvas;
+    } catch (e) {
+      console.warn('[generatePreviews] Canvas Backend nicht verfügbar – Überspringe Server-Rendering.');
+      return null;
+    }
+    const maxPages = Math.max(1, Math.min(20, opts?.maxPages ?? 8));
+    const dpi = Math.max(72, Math.min(300, opts?.dpi ?? 150));
+
+    const task = (pdfjsLib as any).getDocument({ data: pdfBytes, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true });
+    const pdf = await task.promise;
+    const numPages: number = pdf.numPages || 1;
+
+    const urls: string[] = [];
+    const baseName = (fileName || 'datei').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/\.(pdf|PDF)$/,'');
+    const baseKey = `thumbnails/${prod._id}`;
+    const scale = dpi / 72;
+
+    for (let p = 1; p <= Math.min(numPages, maxPages); p++) {
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale });
+      const canvas = createCanvas!(Math.max(1, Math.floor(viewport.width)), Math.max(1, Math.floor(viewport.height)));
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const renderContext = { canvasContext: ctx, viewport, background: 'white' } as any;
+      await page.render(renderContext).promise;
+      const png: Buffer = canvas.toBuffer('image/png');
+      const targetKey = `${baseKey}/${baseName}_p${p}.png`;
+      const url = await uploadImage(targetKey, png as unknown as Uint8Array, 'image/png');
+      if (url) urls.push(url);
+    }
+
+    file.previewImages = urls;
+    file.pages = numPages;
+    await prod.save();
+    return { urls, pages: numPages };
+  } catch (e) {
+    console.error('[generatePreviews] Fehler(bytes)', (e as any)?.message);
     return null;
   }
 }

@@ -33,7 +33,7 @@ export default function TeacherShopPage(){
     const form = new FormData(); form.append('file', file);
     setUploadingId(id);
     try {
-      const res = await fetch(`/api/shop/products/${id}/files`, { method:'POST', body: form });
+      const res = await fetch(`/api/shop/products/${id}/files?syncPreview=1`, { method:'POST', body: form });
       const d = await res.json();
       if(!(res.ok && d.success)){ alert(d.error||'Upload fehlgeschlagen'); }
       else await load();

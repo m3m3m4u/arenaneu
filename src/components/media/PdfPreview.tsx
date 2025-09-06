@@ -29,20 +29,16 @@ export default function PdfPreview({ url, onClose }: PdfPreviewProps){
     (async()=>{
       try {
         setLoading(true); setError(undefined);
-        // pdfjs laden (ESM-Paket)
-        // @ts-ignore
-        const pdfjsLib: any = await import('pdfjs-dist');
+  // pdfjs laden (ESM-Paket)
+  const pdfjsLib: any = await import('pdfjs-dist');
         if(!pdfjsLib || !pdfjsLib.getDocument){
           console.error('[PdfPreview] pdfjs getDocument nicht verfügbar. Verfügbare Keys:', pdfjsLib && Object.keys(pdfjsLib));
           throw new Error('pdfjs getDocument nicht verfügbar');
         }
         // Worker setzen (Fallback CDN falls bundler Pfad nicht passt)
-        // @ts-ignore
         if(pdfjsLib.GlobalWorkerOptions){
-          // @ts-ignore
           pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/api/pdf-worker', window.location.origin).toString();
         }
-        // @ts-ignore
         const task = pdfjsLib.getDocument({ url, useSystemFonts: true, enableXfa: false, disableCreateObjectURL: true, withCredentials: false });
         const pdf = await task.promise;
         if(cancelled) return;

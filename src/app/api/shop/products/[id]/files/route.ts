@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/authOptions';
 import { s3Put, isS3Enabled } from '@/lib/storage';
 import { isWebdavEnabled, davPut, webdavPublicUrl } from '@/lib/webdavClient';
 import { isShopWebdavEnabled, shopDavPut, shopWebdavPublicUrl } from '@/lib/webdavShopClient';
-import { generatePdfPreviewImagesForShopFile } from '@/lib/pdf/generatePreviews';
+import { generatePdfPreviewImagesForShopFile, generatePdfPreviewImagesForShopFileBytes } from '@/lib/pdf/generatePreviews';
 
 export const runtime = 'nodejs'; // benötigt für Buffer
 
@@ -18,6 +18,9 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
     if(!session || !['teacher','admin','author'].includes(role)){
       return NextResponse.json({ success:false, error:'Kein Zugriff' }, { status:403 });
     }
+  const url = new URL(req.url);
+  const syncPreviewParam = url.searchParams.get('syncPreview');
+  const wantSyncPreview = syncPreviewParam === '1' || /true|yes|on/i.test(syncPreviewParam||'');
     const contentType = req.headers.get('content-type')||'';
     if(!/^multipart\/form-data/i.test(contentType)){
       return NextResponse.json({ success:false, error:'multipart/form-data erwartet' }, { status:400 });
@@ -27,6 +30,9 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
     if(!file || !(file instanceof File)){
       return NextResponse.json({ success:false, error:'Datei fehlt' }, { status:400 });
     }
+  // Optional auch aus Form lesen (falls Clients lieber Feld mitsenden)
+  const syncPreviewField = form.get('syncPreview');
+  const wantSync = wantSyncPreview || (typeof syncPreviewField === 'string' && (/^1$|true|yes|on/i.test(syncPreviewField)));
     const doc = await ShopProduct.findById(ctx.params.id);
     if(!doc){ return NextResponse.json({ success:false, error:'Produkt nicht gefunden' }, { status:404 }); }
     const arrayBuffer = await file.arrayBuffer();
@@ -67,17 +73,26 @@ export async function POST(req: Request, ctx: { params: { id: string }} ){
   doc.files.push({ key, name: file.name, size: bytes.length, contentType: file.type, createdAt: new Date() });
     await doc.save();
 
-    // Fire-and-forget: Vorschaugenerierung für PDFs
+    // Vorschau-Generierung für PDFs: optional synchron warten
+    let previewResult: { urls: string[]; pages: number } | null = null;
     if(isPdf){
-      // nicht blockierend, aber geloggt
-  // @ts-ignore _id ist ObjectId; zur Sicherheit String bauen
-  const pid = String((doc as any)._id);
-  generatePdfPreviewImagesForShopFile(pid, key, file.name).catch(e=>{
-        console.warn('PDF Preview Gen Fehlgeschlagen', (e as any)?.message);
-      });
+      // @ts-ignore _id ist ObjectId; zur Sicherheit String bauen
+      const pid = String((doc as any)._id);
+      if(wantSync){
+        try {
+          // Verwende die Upload-Bytes direkt, um Race-Conditions zu vermeiden
+          previewResult = await generatePdfPreviewImagesForShopFileBytes(pid, key, file.name, bytes);
+        } catch(e){
+          console.warn('Sync PDF Preview Gen Fehlgeschlagen', (e as any)?.message);
+        }
+      } else {
+        void generatePdfPreviewImagesForShopFile(pid, key, file.name).catch(e=>{
+          console.warn('PDF Preview Gen Fehlgeschlagen', (e as any)?.message);
+        });
+      }
     }
 
-    return NextResponse.json({ success:true, file: { key, url: finalUrl }, previewQueued: !!isPdf });
+    return NextResponse.json({ success:true, file: { key, url: finalUrl }, previewQueued: !!(isPdf && !previewResult), preview: previewResult });
   } catch(e){
     console.error('Upload file error', e);
     return NextResponse.json({ success:false, error:'Upload fehlgeschlagen' }, { status:500 });
